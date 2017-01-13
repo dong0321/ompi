@@ -173,10 +173,6 @@ BEGIN_C_DECLS
 #define ORTE_RML_TAG_HEARTBEAT_REQUEST      62
 /* error propagate  */                      
 #define ORTE_RML_TAG_PROPAGATE              63
- 
-/* memory profile */
-#define ORTE_RML_TAG_MEMPROFILE             61
- 
 
 #define ORTE_RML_TAG_MAX                   100
 
