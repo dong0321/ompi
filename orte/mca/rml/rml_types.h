@@ -166,10 +166,10 @@ BEGIN_C_DECLS
 /* stacktrace for debug */
 #define ORTE_RML_TAG_STACK_TRACE            60
 
-/* heartbeat request */                     61
-#define ORTE_RML_TAG_HEARTBEAT_REQUEST
-/* error propagate  */                      62
-#define ORTE_RML_TAG_PROPAGATE
+/* heartbeat request */                     
+#define ORTE_RML_TAG_HEARTBEAT_REQUEST      62
+/* error propagate  */                      
+#define ORTE_RML_TAG_PROPAGATE              63
 
 #define ORTE_RML_TAG_MAX                   100
 
