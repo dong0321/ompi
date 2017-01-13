@@ -13,9 +13,9 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2013-2016 Intel, Inc.  All rights reserved.
- * Copyright (c) 2014      Research Organization for Information Science
+ * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2015      Cisco Systems, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -39,7 +39,7 @@
 #endif
 
 #include "opal/mca/event/event.h"
-#include "opal/mca/pmix/pmix.h"
+#include "opal/mca/pmix/base/base.h"
 #include "opal/util/arch.h"
 #include "opal/util/os_path.h"
 #include "opal/util/output.h"
@@ -77,7 +77,6 @@ int orte_ess_base_app_setup(bool db_restrict_local)
 {
     int ret;
     char *error = NULL;
-    opal_value_t kv;
 
     /*
      * stdout/stderr buffering
@@ -136,10 +135,7 @@ int orte_ess_base_app_setup(bool db_restrict_local)
                              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                              (NULL == orte_process_info.tmpdir_base) ? "UNDEF" : orte_process_info.tmpdir_base,
                              orte_process_info.nodename));
-        if (ORTE_SUCCESS != (ret = orte_session_dir(true,
-                                                    orte_process_info.tmpdir_base,
-                                                    orte_process_info.nodename,
-                                                    ORTE_PROC_MY_NAME))) {
+        if (ORTE_SUCCESS != (ret = orte_session_dir(true, ORTE_PROC_MY_NAME))) {
             ORTE_ERROR_LOG(ret);
             error = "orte_session_dir";
             goto error;
@@ -149,29 +145,6 @@ int orte_ess_base_app_setup(bool db_restrict_local)
            proc-specific session directory. */
         opal_output_set_output_file_info(orte_process_info.proc_session_dir,
                                          "output-", NULL, NULL);
-        /* store the session directory location */
-        OBJ_CONSTRUCT(&kv, opal_value_t);
-        kv.key = strdup(OPAL_PMIX_NSDIR);
-        kv.type = OPAL_STRING;
-        kv.data.string = strdup(orte_process_info.job_session_dir);
-        if (OPAL_SUCCESS != (ret = opal_pmix.store_local(ORTE_PROC_MY_NAME, &kv))) {
-            ORTE_ERROR_LOG(ret);
-            OBJ_DESTRUCT(&kv);
-            error = "opal pmix put job sessiondir";
-            goto error;
-        }
-        OBJ_DESTRUCT(&kv);
-        OBJ_CONSTRUCT(&kv, opal_value_t);
-        kv.key = strdup(OPAL_PMIX_PROCDIR);
-        kv.type = OPAL_STRING;
-        kv.data.string = strdup(orte_process_info.proc_session_dir);
-        if (OPAL_SUCCESS != (ret = opal_pmix.store_local(ORTE_PROC_MY_NAME, &kv))) {
-            ORTE_ERROR_LOG(ret);
-            OBJ_DESTRUCT(&kv);
-            error = "opal pmix put proc sessiondir";
-            goto error;
-        }
-        OBJ_DESTRUCT(&kv);
     }
     /* Setup the communication infrastructure */
     /*
@@ -226,12 +199,6 @@ int orte_ess_base_app_setup(bool db_restrict_local)
     if (ORTE_SUCCESS != (ret = orte_grpcomm_base_select())) {
         ORTE_ERROR_LOG(ret);
         error = "orte_grpcomm_base_select";
-        goto error;
-    }
-    /* enable communication via the rml */
-    if (ORTE_SUCCESS != (ret = orte_rml.enable_comm())) {
-        ORTE_ERROR_LOG(ret);
-        error = "orte_rml.enable_comm";
         goto error;
     }
     /* setup the routed info  */
@@ -316,6 +283,10 @@ int orte_ess_base_app_finalize(void)
     (void) mca_base_framework_close(&orte_routed_base_framework);
 
     (void) mca_base_framework_close(&orte_rml_base_framework);
+    if (NULL != opal_pmix.finalize) {
+        opal_pmix.finalize();
+        (void) mca_base_framework_close(&opal_pmix_base_framework);
+    }
     (void) mca_base_framework_close(&orte_oob_base_framework);
     (void) mca_base_framework_close(&orte_state_base_framework);
 

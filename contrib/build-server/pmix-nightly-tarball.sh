@@ -7,8 +7,8 @@
 #####
 
 # e-mail address to send results to
-results_addr=testing@lists.open-mpi.org
-#results_addr=rhc@open-mpi.org
+#results_addr=testing@lists.open-mpi.org
+results_addr=rhc@open-mpi.org
 
 # svn repository uri
 master_code_uri=https://github.com/pmix/master.git
@@ -36,8 +36,8 @@ fi
 build_root=$HOME/pmix/nightly-tarball-build-root
 
 # Coverity stuff
-coverity_token=`cat /home/common/mpiteam/coverity/pmix-token.txt`
-coverity_configure_args="--with-libevent=/home/common/local"
+coverity_token=`cat $HOME/coverity/pmix-token.txt`
+coverity_configure_args="--with-libevent=$HOME_PREFIX"
 
 export PATH=$HOME_PREFIX/bin:$PATH
 export LD_LIBRARY_PATH=$HOME_PREFIX/lib:$LD_LIBRARY_PATH

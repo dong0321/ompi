@@ -275,13 +275,13 @@ static opal_cmd_line_init_t cmd_line_init[] = {
      * available - included for backwards compatibility
      */
     { "rmaps_ppr_pernode", '\0', "pernode", "pernode", 0,
-      NULL, OPAL_CMD_LINE_TYPE_BOOL,
+      &orte_cmd_options.pernode, OPAL_CMD_LINE_TYPE_BOOL,
       "Launch one process per available node" },
     { "rmaps_ppr_n_pernode", '\0', "npernode", "npernode", 1,
-        NULL, OPAL_CMD_LINE_TYPE_INT,
+        &orte_cmd_options.npernode, OPAL_CMD_LINE_TYPE_INT,
         "Launch n processes per node on all allocated nodes" },
     { "rmaps_ppr_n_pernode", '\0', "N", NULL, 1,
-        NULL, OPAL_CMD_LINE_TYPE_INT,
+        &orte_cmd_options.npernode, OPAL_CMD_LINE_TYPE_INT,
         "Launch n processes per node on all allocated nodes (synonym for npernode)" },
 
     /* declare hardware threads as independent cpus */
@@ -291,7 +291,7 @@ static opal_cmd_line_init_t cmd_line_init[] = {
 
     /* include npersocket for backwards compatibility */
     { "rmaps_ppr_n_persocket", '\0', "npersocket", "npersocket", 1,
-      NULL, OPAL_CMD_LINE_TYPE_INT,
+      &orte_cmd_options.npersocket, OPAL_CMD_LINE_TYPE_INT,
       "Launch n processes per socket on all allocated nodes" },
 
     /* Mapping options */
@@ -943,7 +943,9 @@ static int setup_fork(orte_job_t *jdata,
 
     /* forcibly set the local tmpdir base and top session dir to match ours */
     opal_setenv("OMPI_MCA_orte_tmpdir_base", orte_process_info.tmpdir_base, true, &app->env);
+    /* TODO: should we use PMIx key to pass this data? */
     opal_setenv("OMPI_MCA_orte_top_session_dir", orte_process_info.top_session_dir, true, &app->env);
+    opal_setenv("OMPI_MCA_orte_jobfam_session_dir", orte_process_info.jobfam_session_dir, true, &app->env);
 
     /* MPI-3 requires we provide some further info to the procs,
      * so we pass them as envars to avoid introducing further
@@ -1101,24 +1103,8 @@ static int setup_child(orte_job_t *jdata,
         ORTE_FLAG_SET(child, ORTE_PROC_FLAG_IOF_COMPLETE);
     }
 
-    /* construct the proc's session dir name */
-    if (NULL != orte_process_info.tmpdir_base) {
-        value = strdup(orte_process_info.tmpdir_base);
-    } else {
-        value = NULL;
-    }
-    param = NULL;
-    if (ORTE_SUCCESS != (rc = orte_session_dir_get_name(&param, &value, NULL,
-                                                        orte_process_info.nodename,
-                                                        &child->name))) {
-        ORTE_ERROR_LOG(rc);
-        if (NULL != value) {
-            free(value);
-        }
-        return rc;
-    }
-    free(value);
     /* pass an envar so the proc can find any files it had prepositioned */
+    param = orte_process_info.proc_session_dir;
     opal_setenv("OMPI_FILE_LOCATION", param, true, &app->env);
 
     /* if the user wanted the cwd to be the proc's session dir, then
@@ -1131,12 +1117,10 @@ static int setup_child(orte_job_t *jdata,
             /* doesn't exist with correct permissions, and/or we can't
              * create it - either way, we are done
              */
-            free(param);
             return rc;
         }
         /* change to it */
         if (0 != chdir(param)) {
-            free(param);
             return ORTE_ERROR;
         }
         /* It seems that chdir doesn't
@@ -1153,6 +1137,5 @@ static int setup_child(orte_job_t *jdata,
         /* update the initial wdir value too */
         opal_setenv("OMPI_MCA_initial_wdir", param, true, &app->env);
     }
-    free(param);
     return ORTE_SUCCESS;
 }

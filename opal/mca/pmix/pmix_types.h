@@ -75,6 +75,7 @@ BEGIN_C_DECLS
 #define OPAL_PMIX_TMPDIR                        "pmix.tmpdir"           // (char*) top-level tmp dir assigned to session
 #define OPAL_PMIX_NSDIR                         "pmix.nsdir"            // (char*) sub-tmpdir assigned to namespace
 #define OPAL_PMIX_PROCDIR                       "pmix.pdir"             // (char*) sub-nsdir assigned to proc
+#define OPAL_PMIX_TDIR_RMCLEAN                  "pmix.tdir.rmclean"     // (bool)  Resource Manager will clean session directories
 
 /* information about relative ranks as assigned by the RM */
 #define OPAL_PMIX_JOBID                         "pmix.jobid"            // (uint32_t) jobid assigned by scheduler
@@ -111,6 +112,7 @@ BEGIN_C_DECLS
 #define OPAL_PMIX_LOCAL_SIZE                    "pmix.local.size"       // (uint32_t) #procs in this job on this node
 #define OPAL_PMIX_NODE_SIZE                     "pmix.node.size"        // (uint32_t) #procs across all jobs on this node
 #define OPAL_PMIX_MAX_PROCS                     "pmix.max.size"         // (uint32_t) max #procs for this job
+#define OPAL_PMIX_NUM_NODES                     "pmix.num.nodes"        // (uint32_t) #nodes in this nspace
 
 /* topology info */
 #define OPAL_PMIX_NET_TOPO                      "pmix.ntopo"            // (char*) xml-representation of network topology
@@ -199,6 +201,10 @@ BEGIN_C_DECLS
                                                                         //     procs in job on same node
 #define OPAL_PMIX_QUERY_AUTHORIZATIONS          "pmix.qry.auths"        // return operations tool is authorized to perform"
 
+/* log attributes */
+#define OPAL_PMIX_LOG_STDERR                    "pmix.log.stderr"        // (bool) log data to stderr
+#define OPAL_PMIX_LOG_STDOUT                    "pmix.log.stdout"        // (bool) log data to stdout
+#define OPAL_PMIX_LOG_SYSLOG                    "pmix.log.syslog"        // (bool) log data to syslog - defaults to ERROR priority unless
 
 /* define a scope for data "put" by PMI per the following:
  *

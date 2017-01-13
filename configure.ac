@@ -22,6 +22,7 @@
 # Copyright (c) 2013-2014 Intel, Inc.  All rights reserved.
 # Copyright (c) 2014-2016 Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2016      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -134,7 +135,8 @@ m4_ifdef([project_ompi],
           AC_SUBST(libmpi_usempi_tkr_so_version)
           AC_SUBST(libmpi_usempi_ignore_tkr_so_version)
           AC_SUBST(libmpi_usempif08_so_version)
-          AC_SUBST(libmpi_java_so_version)])
+          AC_SUBST(libmpi_java_so_version)
+          AC_SUBST(libompitrace_so_version)])
 m4_ifdef([project_orte],
          [AC_SUBST(libopen_rte_so_version)])
 m4_ifdef([project_oshmem],
@@ -250,6 +252,7 @@ m4_ifdef([project_oshmem],
 OPAL_CONFIGURE_OPTIONS
 OPAL_CHECK_OS_FLAVORS
 OPAL_CHECK_CUDA
+OPAL_CHECK_PMIX
 m4_ifdef([project_orte], [ORTE_CONFIGURE_OPTIONS])
 m4_ifdef([project_ompi], [OMPI_CONFIGURE_OPTIONS])
 m4_ifdef([project_oshmem], [OSHMEM_CONFIGURE_OPTIONS])
@@ -277,6 +280,8 @@ fi
 OPAL_SET_LIB_PREFIX([])
 m4_ifdef([project_orte],
           [ORTE_SET_LIB_PREFIX([])])
+m4_ifdef([project_ompi],
+          [OMPI_SET_LIB_NAME([])])
 
 ############################################################################
 # Libtool: part one
@@ -581,7 +586,7 @@ AC_CHECK_HEADERS([alloca.h aio.h arpa/inet.h dirent.h \
     libutil.h memory.h netdb.h netinet/in.h netinet/tcp.h \
     poll.h pthread.h pty.h pwd.h sched.h \
     strings.h stropts.h linux/ethtool.h linux/sockios.h \
-    net/if.h sys/fcntl.h sys/ipc.h sys/shm.h \
+    sys/fcntl.h sys/ipc.h sys/shm.h \
     sys/ioctl.h sys/mman.h sys/param.h sys/queue.h \
     sys/resource.h sys/select.h sys/socket.h sys/sockio.h \
     sys/stat.h sys/statfs.h sys/statvfs.h sys/time.h sys/tree.h \

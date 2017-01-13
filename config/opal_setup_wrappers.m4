@@ -11,9 +11,10 @@ dnl                         University of Stuttgart.  All rights reserved.
 dnl Copyright (c) 2004-2005 The Regents of the University of California.
 dnl                         All rights reserved.
 dnl Copyright (c) 2006-2010 Oracle and/or its affiliates.  All rights reserved.
-dnl Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
+dnl Copyright (c) 2009-2016 Cisco Systems, Inc.  All rights reserved.
 dnl Copyright (c) 2015-2016 Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
+dnl Copyright (c) 2016      IBM Corporation.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -247,7 +248,7 @@ m4_ifdef([project_ompi],[
 # (because if script A sources script B, and B calls "exit", then both
 # B and A will exit).  Instead, we have to send the output to a file
 # and then source that.
-$OPAL_TOP_BUILDDIR/libtool --tag=FC--config > $rpath_outfile
+$OPAL_TOP_BUILDDIR/libtool --tag=FC --config > $rpath_outfile
 
 chmod +x $rpath_outfile
 . ./$rpath_outfile
@@ -262,7 +263,7 @@ EOF
     chmod +x $rpath_script
     wl_fc=`./$rpath_script`
     rm -f $rpath_script
-    
+
     LDFLAGS="$LDFLAGS_save ${wl_fc}--enable-new-dtags"
     AC_LANG_PUSH([Fortran])
     AC_LINK_IFELSE([AC_LANG_SOURCE([[program test
@@ -500,7 +501,7 @@ AC_DEFUN([OPAL_SETUP_WRAPPER_FINAL],[
       # support.  However, we do want it to fail if there is no C++
       # compiler.
        if test "$WANT_MPI_CXX_SUPPORT" = "1" ; then
-          OMPI_WRAPPER_CXX_LIB="-lmpi_cxx"
+          OMPI_WRAPPER_CXX_LIB="-l${with_libmpi_name}_cxx"
           OMPI_WRAPPER_CXX_REQUIRED_FILE=""
        elif test "$CXX" = "none"; then
           OMPI_WRAPPER_CXX_LIB=""

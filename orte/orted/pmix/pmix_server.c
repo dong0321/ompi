@@ -57,6 +57,7 @@
 #include "opal/util/show_help.h"
 #include "opal/util/error.h"
 #include "opal/util/output.h"
+#include "opal/util/os_path.h"
 #include "opal/util/argv.h"
 
 #include "orte/mca/errmgr/errmgr.h"
@@ -98,6 +99,7 @@ static opal_pmix_server_module_t pmix_server = {
     .disconnect = pmix_server_disconnect_fn,
     .register_events = pmix_server_register_events_fn,
     .deregister_events = pmix_server_deregister_events_fn,
+    .notify_event = pmix_server_notify_event,
     .query = pmix_server_query_fn,
     .tool_connected = pmix_tool_connected_fn,
     .log = pmix_server_log_fn
@@ -261,9 +263,10 @@ int pmix_server_init(void)
     kv = OBJ_NEW(opal_value_t);
     kv->key = strdup(OPAL_PMIX_SERVER_TMPDIR);
     kv->type = OPAL_STRING;
-    kv->data.string = strdup(orte_process_info.tmpdir_base);
+    kv->data.string = opal_os_path(false, orte_process_info.jobfam_session_dir, NULL);
     opal_list_append(&info, &kv->super);
-    /* use the same for the system temp directory */
+    /* use the same for the system temp directory - this is
+     * where the system-level tool connections will go */
     kv = OBJ_NEW(opal_value_t);
     kv->key = strdup(OPAL_PMIX_SYSTEM_TMPDIR);
     kv->type = OPAL_STRING;
@@ -272,10 +275,7 @@ int pmix_server_init(void)
 
     /* setup the local server */
     if (ORTE_SUCCESS != (rc = opal_pmix.server_init(&pmix_server, &info))) {
-        ORTE_ERROR_LOG(rc);
-        /* memory cleanup will occur when finalize is called */
-        orte_show_help("help-orterun.txt", "orterun:pmix-failed", true,
-                       orte_process_info.proc_session_dir);
+        /* pmix will provide a nice show_help output here */
         return rc;
     }
     OPAL_LIST_DESTRUCT(&info);
