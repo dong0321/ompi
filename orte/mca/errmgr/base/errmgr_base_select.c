@@ -38,6 +38,13 @@ int orte_errmgr_base_select(void)
     int exit_status = OPAL_SUCCESS;
     orte_errmgr_base_component_t *best_component = NULL;
     orte_errmgr_base_module_t *best_module = NULL;
+    /*{
+                  char name[255];
+                            gethostname(name,255);
+                                      printf("ssh -t zhongdong@%s gdb -p %d\n", name, getpid());
+                                                int c=1;
+                                                          while (c){}
+                                                              }*/
 
     /*
      * Select the best component
