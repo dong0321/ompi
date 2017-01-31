@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -8,11 +8,11 @@
  * $HEADER$
  */
 #include <src/include/pmix_config.h>
-#include <pmix/rename.h>
 
 #include <pmix.h>
-#include <pmix/pmix_common.h>
+#include <pmix_common.h>
 #include <pmix_server.h>
+#include <pmix_rename.h>
 
 #include "src/util/error.h"
 #include "src/util/output.h"
@@ -59,7 +59,7 @@ PMIX_CLASS_INSTANCE(pmix_rshift_caddy_t,
                     rscon, rsdes);
 
 
-static void regevents_cbfunc(struct pmix_peer_t *peer, pmix_usock_hdr_t *hdr,
+static void regevents_cbfunc(struct pmix_peer_t *peer, pmix_ptl_hdr_t *hdr,
                              pmix_buffer_t *buf, void *cbdata)
 {
     pmix_rshift_caddy_t *rb = (pmix_rshift_caddy_t*)cbdata;
@@ -152,9 +152,13 @@ static pmix_status_t _send_to_server(pmix_rshift_caddy_t *rcd)
             return rc;
         }
     }
-    PMIX_ACTIVATE_SEND_RECV(&pmix_client_globals.myserver, msg, regevents_cbfunc, rcd);
+    rc = pmix_ptl.send_recv(&pmix_client_globals.myserver, msg, regevents_cbfunc, rcd);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(msg);
+    }
 
-    return PMIX_SUCCESS;
+    return rc;
 }
 
 static pmix_status_t _add_hdlr(pmix_list_t *list, pmix_list_item_t *item,
@@ -234,7 +238,7 @@ static pmix_status_t _add_hdlr(pmix_list_t *list, pmix_list_item_t *item,
     /* if we are a client, and we haven't already registered a handler of this
      * type with our server, or if we have directives, then we need to notify
      * the server */
-    if (!pmix_globals.server &&
+    if (PMIX_PROC_SERVER != pmix_globals.proc_type &&
        (need_register || 0 < pmix_list_get_size(xfer))) {
         pmix_output_verbose(2, pmix_globals.debug_output,
                             "pmix: _add_hdlr sending to server");
@@ -254,7 +258,7 @@ static pmix_status_t _add_hdlr(pmix_list_t *list, pmix_list_item_t *item,
     /* if we are a server and are registering for events, then we only contact
      * our host if we want environmental events */
 
-    if (pmix_globals.server && cd->enviro &&
+    if (PMIX_PROC_SERVER == pmix_globals.proc_type && cd->enviro &&
         NULL != pmix_host_server.register_events) {
             pmix_output_verbose(2, pmix_globals.debug_output,
                                 "pmix: _add_hdlr registering with server");
@@ -337,6 +341,7 @@ static void reg_event_hdlr(int sd, short args, void *cbdata)
         }
         if (PMIX_ERR_WOULD_BLOCK == rc) {
             /* the callback will provide our response */
+            PMIX_RELEASE(cd);
             return;
         }
         goto ack;
@@ -351,6 +356,7 @@ static void reg_event_hdlr(int sd, short args, void *cbdata)
         sing->code = cd->codes[0];
         index = pmix_globals.events.nhdlrs;
         sing->index = index;
+        sing->evhdlr = cd->evhdlr;
         ++pmix_globals.events.nhdlrs;
         sing->cbobject = cbobject;
         rc = _add_hdlr(&pmix_globals.events.single_events, &sing->super,
@@ -360,15 +366,16 @@ static void reg_event_hdlr(int sd, short args, void *cbdata)
             PMIX_ERR_WOULD_BLOCK != rc) {
                 /* unable to register */
             --pmix_globals.events.nhdlrs;
-        rc = PMIX_ERR_EVENT_REGISTRATION;
-        index = UINT_MAX;
+            rc = PMIX_ERR_EVENT_REGISTRATION;
+            index = UINT_MAX;
+            goto ack;
+        }
+        if (PMIX_ERR_WOULD_BLOCK == rc) {
+            /* the callback will provide our response */
+            PMIX_RELEASE(cd);
+            return;
+        }
         goto ack;
-    }
-    if (PMIX_ERR_WOULD_BLOCK == rc) {
-        /* the callback will provide our response */
-        return;
-    }
-    goto ack;
     }
 
     /* must be a multi-code registration */
@@ -381,6 +388,7 @@ static void reg_event_hdlr(int sd, short args, void *cbdata)
     memcpy(multi->codes, cd->codes, cd->ncodes * sizeof(pmix_status_t));
     index = pmix_globals.events.nhdlrs;
     multi->index = index;
+    multi->evhdlr = cd->evhdlr;
     ++pmix_globals.events.nhdlrs;
     multi->cbobject = cbobject;
     rc = _add_hdlr(&pmix_globals.events.multi_events, &multi->super,
@@ -390,12 +398,13 @@ static void reg_event_hdlr(int sd, short args, void *cbdata)
         PMIX_ERR_WOULD_BLOCK != rc) {
             /* unable to register */
         --pmix_globals.events.nhdlrs;
-    rc = PMIX_ERR_EVENT_REGISTRATION;
-    index = UINT_MAX;
-    goto ack;
+        rc = PMIX_ERR_EVENT_REGISTRATION;
+        index = UINT_MAX;
+        goto ack;
     }
     if (PMIX_ERR_WOULD_BLOCK == rc) {
-            /* the callback will provide our response */
+        /* the callback will provide our response */
+        PMIX_RELEASE(cd);
         return;
     }
 
@@ -447,7 +456,7 @@ static void dereg_event_hdlr(int sd, short args, void *cbdata)
 
     /* if I am not the server, then I need to notify the server
      * to remove my registration */
-    if (!pmix_globals.server) {
+    if (PMIX_PROC_SERVER != pmix_globals.proc_type) {
         msg = PMIX_NEW(pmix_buffer_t);
         if (PMIX_SUCCESS != (rc = pmix_bfrop.pack(msg, &cmd, 1, PMIX_CMD))) {
             PMIX_RELEASE(msg);
@@ -562,8 +571,11 @@ static void dereg_event_hdlr(int sd, short args, void *cbdata)
 
   report:
     if (NULL != msg) {
-        /* push the message into our event base to send to the server */
-        PMIX_ACTIVATE_SEND_RECV(&pmix_client_globals.myserver, msg, NULL, NULL);
+        /* send to the server */
+        rc = pmix_ptl.send_recv(&pmix_client_globals.myserver, msg, NULL, NULL);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
     }
 
   cleanup:

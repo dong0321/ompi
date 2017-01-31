@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 Intel, Inc. All rights reserved
+ * Copyright (c) 2015-2017 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,11 +21,13 @@
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/mca/filem/filem.h"
 #include "orte/mca/grpcomm/grpcomm.h"
-#include "orte/mca/iof/iof.h"
+#include "orte/mca/iof/base/base.h"
 #include "orte/mca/odls/odls_types.h"
 #include "orte/mca/plm/base/base.h"
 #include "orte/mca/ras/base/base.h"
 #include "orte/mca/rmaps/base/base.h"
+#include "orte/mca/rml/rml.h"
+#include "orte/mca/rml/base/rml_contact.h"
 #include "orte/mca/routed/routed.h"
 #include "orte/util/nidmap.h"
 #include "orte/util/session_dir.h"
@@ -258,28 +260,18 @@ static void vm_ready(int fd, short args, void *cbdata)
             return;
         }
         /* construct a nodemap with everything in it */
-        if (ORTE_SUCCESS != (rc = orte_util_encode_nodemap(&bo, false))) {
+        if (ORTE_SUCCESS != (rc = orte_util_encode_nodemap(buf))) {
             ORTE_ERROR_LOG(rc);
             OBJ_RELEASE(buf);
             return;
         }
-
-        /* store it */
-        boptr = &bo;
-        if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, &boptr, 1, OPAL_BYTE_OBJECT))) {
-            ORTE_ERROR_LOG(rc);
-            OBJ_RELEASE(buf);
-            return;
-        }
-        /* release the data since it has now been copied into our buffer */
-        free(bo.bytes);
 
         /* pack a flag indicating wiring info is provided */
         flag = 1;
         opal_dss.pack(buf, &flag, 1, OPAL_INT8);
         /* get wireup info for daemons per the selected routing module */
         wireup = OBJ_NEW(opal_buffer_t);
-        if (ORTE_SUCCESS != (rc = orte_routed.get_wireup_info(wireup))) {
+        if (ORTE_SUCCESS != (rc = orte_rml_base_get_contact_info(ORTE_PROC_MY_NAME->jobid, wireup))) {
             ORTE_ERROR_LOG(rc);
             OBJ_RELEASE(wireup);
             OBJ_RELEASE(buf);
@@ -346,6 +338,7 @@ static void check_complete(int fd, short args, void *cbdata)
     orte_node_t *node;
     orte_job_map_t *map;
     orte_std_cntr_t index;
+    char *rtmod;
 
     opal_output_verbose(2, orte_state_base_framework.framework_output,
                         "%s state:dvm:check_job_complete on job %s",
@@ -357,7 +350,8 @@ static void check_complete(int fd, short args, void *cbdata)
         OPAL_OUTPUT_VERBOSE((2, orte_state_base_framework.framework_output,
                              "%s state:dvm:check_job_complete - received NULL job, checking daemons",
                              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
-        if (0 == orte_routed.num_routes()) {
+        rtmod = orte_rml.get_routed(orte_mgmt_conduit);
+        if (0 == orte_routed.num_routes(rtmod)) {
             /* orteds are done! */
             OPAL_OUTPUT_VERBOSE((2, orte_state_base_framework.framework_output,
                                  "%s orteds complete - exiting",
@@ -405,7 +399,7 @@ static void check_complete(int fd, short args, void *cbdata)
                 continue;
             }
             OPAL_OUTPUT_VERBOSE((2, orte_state_base_framework.framework_output,
-                                 "%s releasing procs from node %s",
+                                 "%s state:dvm releasing procs from node %s",
                                  ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                                  node->name));
             for (i = 0; i < node->procs->size; i++) {
@@ -419,7 +413,7 @@ static void check_complete(int fd, short args, void *cbdata)
                 node->slots_inuse--;
                 node->num_procs--;
                 OPAL_OUTPUT_VERBOSE((2, orte_state_base_framework.framework_output,
-                                     "%s releasing proc %s from node %s",
+                                     "%s state:dvm releasing proc %s from node %s",
                                      ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                                      ORTE_NAME_PRINT(&proc->name), node->name));
                 /* set the entry in the node array to NULL */
@@ -456,5 +450,10 @@ static void check_complete(int fd, short args, void *cbdata)
 static void cleanup_job(int sd, short args, void *cbdata)
 {
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
+    orte_job_t *jdata = caddy->jdata;
+
+    /* remove this object from the job array */
+    opal_hash_table_set_value_uint32(orte_job_data, jdata->jobid, NULL);
+
     OBJ_RELEASE(caddy);
 }

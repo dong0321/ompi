@@ -216,7 +216,48 @@ Master (not on release branches yet)
   Alastair McKinstry for reporting.
 
 
-1.10.3 - DATE
+1.10.5 - 19 Dec 2016
+------
+- Update UCX APIs
+- Fix bug in darray that caused MPI/IO failures
+- Use a MPI_Get_library_version() like string to tag the debugger DLL.
+  Thanks to Alastair McKinstry for the report
+- Fix multi-threaded race condition in coll/libnbc
+- Several fixes to OSHMEM
+- Fix bug in UCX support due to uninitialized field
+- Fix MPI_Ialltoallv with MPI_IN_PLACE and without MPI param check
+- Correctly reset receive request type before init. Thanks Chris Pattison
+  for the report and test case.
+- Fix bug in iallgather[v]
+- Fix concurrency issue with MPI_Comm_accept. Thanks to Pieter Noordhuis
+  for the patch
+- Fix ompi_coll_base_{gather,scatter}_intra_binomial
+- Fixed an issue with MPI_Type_get_extent returning the wrong extent
+  for distributed array datatypes.
+- Re-enable use of rtdtsc instruction as a monotonic clock source if
+  the processor has a core-invariant tsc. This is a partial fix for a
+  performance regression introduced in Open MPI v1.10.3.
+
+
+1.10.4 - 01 Sept 2016
+------
+
+- Fix assembler support for MIPS
+- Improve memory handling for temp buffers in collectives
+- Fix [all]reduce with non-zero lower bound datatypes
+  Thanks Hristo Iliev for the report
+- Fix non-standard ddt handling. Thanks Yuki Matsumoto for the report
+- Various libnbc fixes. Thanks Yuki Matsumoto for the report
+- Fix typos in request RMA bindings for Fortran. Thanks to @alazzaro
+  and @vondele for the assist
+- Various bug fixes and enhancements to collective support
+- Fix predefined types mapping in hcoll
+- Revive the coll/sync component to resolve unexpected message issues
+  during tight loops across collectives
+- Fix typo in wrapper compiler for Fortran static builds
+
+
+1.10.3 - 15 June 2016
 ------
 
 - Minor manpage cleanups

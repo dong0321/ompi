@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2013-2015 Intel, Inc. All rights reserved
+ * Copyright (c) 2013-2016 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -32,7 +32,7 @@
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/util/output.h"
-#include <pmix.h>
+#include "include/pmix_common.h"
 
 enum { TABLE_INIT = 1, TABLE_GROW = 2 };
 
@@ -265,7 +265,7 @@ bool pmix_pointer_array_test_and_set_item (pmix_pointer_array_t *table,
     if ( index == table->lowest_free ) {
         int i;
 
-	table->lowest_free = table->size;
+        table->lowest_free = table->size;
         for ( i=index; i<table->size; i++) {
             if ( NULL == table->addr[i] ){
                 table->lowest_free = i;

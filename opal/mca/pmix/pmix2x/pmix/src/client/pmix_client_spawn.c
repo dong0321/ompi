@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2014      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2015 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2014      Artem Y. Polyakov <artpol84@gmail.com>.
@@ -18,9 +18,10 @@
 #include <src/include/pmix_config.h>
 
 #include <src/include/types.h>
-#include <pmix/autogen/pmix_stdint.h>
+#include <src/include/pmix_stdint.h>
 
 #include <pmix.h>
+#include <pmix_rename.h>
 
 #include "src/include/pmix_globals.h"
 
@@ -50,13 +51,13 @@
 #include "src/util/argv.h"
 #include "src/util/error.h"
 #include "src/util/output.h"
-#include "src/util/progress_threads.h"
-#include "src/usock/usock.h"
-#include "src/sec/pmix_sec.h"
+#include "src/mca/ptl/ptl.h"
 
 #include "pmix_client_ops.h"
+#include "src/include/pmix_jobdata.h"
 
-static void wait_cbfunc(struct pmix_peer_t *pr, pmix_usock_hdr_t *hdr,
+static void wait_cbfunc(struct pmix_peer_t *pr,
+                        pmix_ptl_hdr_t *hdr,
                         pmix_buffer_t *buf, void *cbdata);
 static void spawn_cbfunc(pmix_status_t status, char nspace[], void *cbdata);
 
@@ -169,18 +170,22 @@ PMIX_EXPORT pmix_status_t PMIx_Spawn_nb(const pmix_info_t job_info[], size_t nin
     cb->cbdata = cbdata;
 
     /* push the message into our event base to send to the server */
-    PMIX_ACTIVATE_SEND_RECV(&pmix_client_globals.myserver, msg, wait_cbfunc, cb);
+    if (PMIX_SUCCESS != (rc = pmix_ptl.send_recv(&pmix_client_globals.myserver, msg, wait_cbfunc, (void*)cb))){
+        PMIX_RELEASE(msg);
+        PMIX_RELEASE(cb);
+    }
 
-    return PMIX_SUCCESS;
+    return rc;
 }
 
 /* callback for wait completion */
-static void wait_cbfunc(struct pmix_peer_t *pr, pmix_usock_hdr_t *hdr,
+static void wait_cbfunc(struct pmix_peer_t *pr,
+                        pmix_ptl_hdr_t *hdr,
                         pmix_buffer_t *buf, void *cbdata)
 {
     pmix_cb_t *cb = (pmix_cb_t*)cbdata;
     char nspace[PMIX_MAX_NSLEN+1];
-    char *n2;
+    char *n2 = NULL;
     pmix_status_t rc, ret;
     int32_t cnt;
 
@@ -204,10 +209,15 @@ static void wait_cbfunc(struct pmix_peer_t *pr, pmix_usock_hdr_t *hdr,
             PMIX_ERROR_LOG(rc);
             ret = rc;
         }
+        pmix_output_verbose(1, pmix_globals.debug_output,
+                        "pmix:client recv '%s'", n2);
+
         if (NULL != n2) {
             (void)strncpy(nspace, n2, PMIX_MAX_NSLEN);
+#if !(defined(PMIX_ENABLE_DSTORE) && (PMIX_ENABLE_DSTORE == 1))
             /* extract and process any proc-related info for this nspace */
-            pmix_client_process_nspace_blob(nspace, buf);
+            pmix_job_data_htable_store(nspace, buf);
+#endif
             free(n2);
         }
     }
@@ -227,4 +237,3 @@ static void spawn_cbfunc(pmix_status_t status, char nspace[], void *cbdata)
     }
     cb->active = false;
 }
-

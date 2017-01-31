@@ -17,7 +17,7 @@
  *                         reserved.
  * Copyright (c) 2013-2015 NVIDIA Corporation.  All rights reserved.
  * Copyright (c) 2014-2015 Intel, Inc. All rights reserved.
- * Copyright (c) 2014-2015 Research Organization for Information Science
+ * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
  *
@@ -97,13 +97,11 @@ static int mca_btl_tcp_component_open(void);
 static int mca_btl_tcp_component_close(void);
 
 opal_event_base_t* mca_btl_tcp_event_base = NULL;
-#if MCA_BTL_TCP_SUPPORT_PROGRESS_THREAD
 int mca_btl_tcp_progress_thread_trigger = -1;
 int mca_btl_tcp_pipe_to_progress[2] = { -1, -1 };
 static opal_thread_t mca_btl_tcp_progress_thread = { { 0 } };
 opal_list_t mca_btl_tcp_ready_frag_pending_queue = { { 0 } };
 opal_mutex_t mca_btl_tcp_ready_frag_mutex = OPAL_MUTEX_STATIC_INIT;
-#endif  /* MCA_BTL_TCP_SUPPORT_PROGRESS_THREAD */
 
 mca_btl_tcp_component_t mca_btl_tcp_component = {
     .super = {
@@ -259,7 +257,8 @@ static int mca_btl_tcp_component_register(void)
         " used to reduce the number of syscalls, by replacing them with memcpy."
         " Every read will read the expected data plus the amount of the"
                                     " endpoint_cache", 30*1024, OPAL_INFO_LVL_4, &mca_btl_tcp_component.tcp_endpoint_cache);
-    mca_btl_tcp_param_register_int ("use_nagle", "Whether to use Nagle's algorithm or not (using Nagle's algorithm may increase short message latency)", 0, OPAL_INFO_LVL_4, &mca_btl_tcp_component.tcp_not_use_nodelay);
+    mca_btl_tcp_param_register_int ("use_nagle", "Whether to use Nagle's algorithm or not (using Nagle's algorithm may increase short message latency)",
+                                    0, OPAL_INFO_LVL_4, &mca_btl_tcp_component.tcp_not_use_nodelay);
     mca_btl_tcp_param_register_int( "port_min_v4",
                                     "The minimum port where the TCP BTL will try to bind (default 1024)",
                                     1024, OPAL_INFO_LVL_2, &mca_btl_tcp_component.tcp_port_min);
@@ -291,17 +290,6 @@ static int mca_btl_tcp_component_register(void)
     /* Check if we should support async progress */
     mca_btl_tcp_param_register_int ("progress_thread", NULL, 0, OPAL_INFO_LVL_1,
                                      &mca_btl_tcp_component.tcp_enable_progress_thread);
-#if !defined(MCA_BTL_TCP_SUPPORT_PROGRESS_THREAD)
-    if( mca_btl_tcp_component.tcp_enable_progress_thread ) {
-        opal_show_help("help-mpi-btl-tcp.txt",
-                       "unsuported progress thread",
-                       true, "progress thread",
-                       opal_process_info.nodename,
-                       mca_btl_tcp_component.tcp_if_seq,
-                       "Progress thread support compiled out");
-     }
-#endif  /* !defined(MCA_BTL_TCP_SUPPORT_PROGRESS_THREAD) */
-
     mca_btl_tcp_component.report_all_unfound_interfaces = false;
     (void) mca_base_component_var_register(&mca_btl_tcp_component.super.btl_version,
                                            "warn_all_unfound_interfaces",
@@ -362,13 +350,11 @@ static int mca_btl_tcp_component_open(void)
     OBJ_CONSTRUCT(&mca_btl_tcp_component.tcp_frag_user, opal_free_list_t);
     opal_proc_table_init(&mca_btl_tcp_component.tcp_procs, 16, 256);
 
-#if  MCA_BTL_TCP_SUPPORT_PROGRESS_THREAD
     OBJ_CONSTRUCT(&mca_btl_tcp_component.tcp_frag_eager_mutex, opal_mutex_t);
     OBJ_CONSTRUCT(&mca_btl_tcp_component.tcp_frag_max_mutex, opal_mutex_t);
     OBJ_CONSTRUCT(&mca_btl_tcp_component.tcp_frag_user_mutex, opal_mutex_t);
     OBJ_CONSTRUCT(&mca_btl_tcp_ready_frag_mutex, opal_mutex_t);
     OBJ_CONSTRUCT(&mca_btl_tcp_ready_frag_pending_queue, opal_list_t);
-#endif  /*  MCA_BTL_TCP_SUPPORT_PROGRESS_THREAD */
 
     /* if_include and if_exclude need to be mutually exclusive */
     if (OPAL_SUCCESS !=
@@ -394,8 +380,44 @@ static int mca_btl_tcp_component_open(void)
 
 static int mca_btl_tcp_component_close(void)
 {
-    opal_list_item_t* item;
-    opal_list_item_t* next;
+    mca_btl_tcp_event_t *event, *next;
+
+    /**
+     * If we have a progress thread we should shut it down before
+     * moving forward with the TCP tearing down process.
+     */
+    if( (NULL != mca_btl_tcp_event_base) &&
+        (mca_btl_tcp_event_base != opal_sync_event_base) ) {
+        /* Turn of the progress thread before moving forward */
+        if( -1 != mca_btl_tcp_progress_thread_trigger ) {
+            void* ret = NULL;  /* not currently used */
+
+            mca_btl_tcp_progress_thread_trigger = 0;
+            /* Let the progress thread know that we're going away */
+            if( -1 != mca_btl_tcp_pipe_to_progress[1] ) {
+                close(mca_btl_tcp_pipe_to_progress[1]);
+                mca_btl_tcp_pipe_to_progress[1] = -1;
+            }
+            /* wait until the TCP progress thread completes */
+            opal_thread_join(&mca_btl_tcp_progress_thread, &ret);
+            assert( -1 == mca_btl_tcp_progress_thread_trigger );
+        }
+        opal_event_del(&mca_btl_tcp_component.tcp_recv_thread_async_event);
+        opal_event_base_free(mca_btl_tcp_event_base);
+        mca_btl_tcp_event_base = NULL;
+
+        /* Close the remaining pipes */
+        if( -1 != mca_btl_tcp_pipe_to_progress[0] ) {
+            close(mca_btl_tcp_pipe_to_progress[0]);
+            mca_btl_tcp_pipe_to_progress[0] = -1;
+        }
+    }
+
+    OBJ_DESTRUCT(&mca_btl_tcp_component.tcp_frag_eager_mutex);
+    OBJ_DESTRUCT(&mca_btl_tcp_component.tcp_frag_max_mutex);
+
+    OBJ_DESTRUCT(&mca_btl_tcp_ready_frag_mutex);
+    OBJ_DESTRUCT(&mca_btl_tcp_ready_frag_pending_queue);
 
     if (NULL != mca_btl_tcp_component.tcp_btls) {
         free(mca_btl_tcp_component.tcp_btls);
@@ -416,13 +438,14 @@ static int mca_btl_tcp_component_close(void)
 
     /* remove all pending events. Do not lock the tcp_events list as
        the event themselves will unregister during the destructor. */
-    for(item =  opal_list_get_first(&mca_btl_tcp_component.tcp_events);
-        item != opal_list_get_end(&mca_btl_tcp_component.tcp_events);
-        item = next) {
-        mca_btl_tcp_event_t* event = (mca_btl_tcp_event_t*)item;
-        next = opal_list_get_next(item);
+    OPAL_LIST_FOREACH_SAFE(event, next, &mca_btl_tcp_component.tcp_events, mca_btl_tcp_event_t) {
         opal_event_del(&event->event);
         OBJ_RELEASE(event);
+    }
+
+    if (NULL != mca_btl_tcp_component.tcp_local) {
+        opal_proc_table_remove_value(&mca_btl_tcp_component.tcp_procs, opal_proc_local_get()->proc_name);
+        OBJ_RELEASE(mca_btl_tcp_component.tcp_local);
     }
 
     /* release resources */
@@ -435,40 +458,6 @@ static int mca_btl_tcp_component_close(void)
 #if OPAL_CUDA_SUPPORT
     mca_common_cuda_fini();
 #endif /* OPAL_CUDA_SUPPORT */
-
-#if MCA_BTL_TCP_SUPPORT_PROGRESS_THREAD
-    OBJ_DESTRUCT(&mca_btl_tcp_component.tcp_frag_eager_mutex);
-    OBJ_DESTRUCT(&mca_btl_tcp_component.tcp_frag_max_mutex);
-
-    if( (NULL != mca_btl_tcp_event_base) &&
-        (mca_btl_tcp_event_base != opal_sync_event_base) ) {
-        /* Turn of the progress thread before moving forward */
-        if( -1 != mca_btl_tcp_progress_thread_trigger ) {
-            mca_btl_tcp_progress_thread_trigger = 0;
-            /* Let the progress thread know that we're going away */
-            if( -1 != mca_btl_tcp_pipe_to_progress[1] ) {
-                close(mca_btl_tcp_pipe_to_progress[1]);
-                mca_btl_tcp_pipe_to_progress[1] = -1;
-            }
-            while( -1 != mca_btl_tcp_progress_thread_trigger ) {
-                /*event_base_loopbreak(mca_btl_tcp_event_base);*/
-                sched_yield();
-                usleep(100); /* give app a chance to re-enter library */
-             }
-        }
-        opal_event_del(&mca_btl_tcp_component.tcp_recv_thread_async_event);
-        opal_event_base_free(mca_btl_tcp_event_base);
-        mca_btl_tcp_event_base = NULL;
-
-        /* Close the remaining pipes */
-        if( -1 != mca_btl_tcp_pipe_to_progress[0] ) {
-            close(mca_btl_tcp_pipe_to_progress[0]);
-            mca_btl_tcp_pipe_to_progress[0] = -1;
-        }
-    }
-    OBJ_DESTRUCT(&mca_btl_tcp_ready_frag_mutex);
-    OBJ_DESTRUCT(&mca_btl_tcp_ready_frag_pending_queue);
-#endif
 
     return OPAL_SUCCESS;
 }
@@ -490,6 +479,7 @@ static int mca_btl_tcp_create(int if_kindex, const char* if_name)
             return OPAL_ERR_OUT_OF_RESOURCE;
         memcpy(btl, &mca_btl_tcp_module, sizeof(mca_btl_tcp_module));
         OBJ_CONSTRUCT(&btl->tcp_endpoints, opal_list_t);
+        OBJ_CONSTRUCT(&btl->tcp_endpoints_mutex, opal_mutex_t);
         mca_btl_tcp_component.tcp_btls[mca_btl_tcp_component.tcp_num_btls++] = btl;
 
         /* initialize the btl */
@@ -786,7 +776,6 @@ static int mca_btl_tcp_component_create_instances(void)
     return ret;
 }
 
-#if MCA_BTL_TCP_SUPPORT_PROGRESS_THREAD
 static void* mca_btl_tcp_progress_thread_engine(opal_object_t *obj)
 {
     opal_thread_t* current_thread = (opal_thread_t*)obj;
@@ -813,7 +802,6 @@ static void mca_btl_tcp_component_event_async_handler(int fd, short unused, void
         opal_event_add(event, 0);
     }
 }
-#endif
 
 /*
  * Create a listen socket and bind to all interfaces
@@ -1032,6 +1020,8 @@ static int mca_btl_tcp_component_create_listen(uint16_t af_family)
                 mca_btl_tcp_progress_thread_trigger = -1;  /* thread not started */
                 goto move_forward_with_no_thread;
             }
+            /* We have async progress, the rest of the library should now protect itself against races */
+            opal_set_using_threads(true);
         }
     }
     else {
@@ -1295,12 +1285,12 @@ static void mca_btl_tcp_component_accept_handler( int incoming_sd,
  */
 static void mca_btl_tcp_component_recv_handler(int sd, short flags, void* user)
 {
+    mca_btl_tcp_event_t *event = (mca_btl_tcp_event_t *)user;
     opal_process_name_t guid;
     struct sockaddr_storage addr;
-    int retval;
-    mca_btl_tcp_proc_t* btl_proc;
     opal_socklen_t addr_len = sizeof(addr);
-    mca_btl_tcp_event_t *event = (mca_btl_tcp_event_t *)user;
+    mca_btl_tcp_proc_t* btl_proc;
+    int retval;
 
     OBJ_RELEASE(event);
 
@@ -1339,6 +1329,6 @@ static void mca_btl_tcp_component_recv_handler(int sd, short flags, void* user)
         return;
     }
 
-    /* are there any existing peer instances will to accept this connection */
+    /* are there any existing peer instances willing to accept this connection */
     (void)mca_btl_tcp_proc_accept(btl_proc, (struct sockaddr*)&addr, sd);
 }

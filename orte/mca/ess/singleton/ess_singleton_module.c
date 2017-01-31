@@ -12,9 +12,11 @@
  *                         All rights reserved.
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2013-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2016      Research Organization for Information Science
+ *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -74,7 +76,6 @@ static bool added_transport_keys=false;
 static bool added_num_procs = false;
 static bool added_app_ctx = false;
 static bool added_pmix_envs = false;
-static char *pmixenvars[4];
 static bool progress_thread_running = false;
 
 static int fork_hnp(void);
@@ -83,11 +84,8 @@ static int rte_init(void)
 {
     int rc, ret;
     char *error = NULL;
-    char *envar, *ev1, *ev2;
-    uint64_t unique_key[2];
-    char *string_key;
     opal_value_t *kv;
-    char *val;
+    char *val = NULL;
     int u32, *u32ptr;
     uint16_t u16, *u16ptr;
     orte_process_name_t name;
@@ -163,6 +161,8 @@ static int rte_init(void)
         /* ensure we use the isolated pmix component */
         opal_setenv (OPAL_MCA_PREFIX"pmix", "isolated", true, &environ);
     } else {
+        /* we want to use PMIX_NAMESPACE that will be sent by the hnp as a jobid */
+        opal_setenv(OPAL_MCA_PREFIX"orte_launch", "1", true, &environ);
         /* spawn our very own HNP to support us */
         if (ORTE_SUCCESS != (rc = fork_hnp())) {
             ORTE_ERROR_LOG(rc);
@@ -235,13 +235,17 @@ static int rte_init(void)
      * MPI-3 required info key
      */
     if (NULL == getenv(OPAL_MCA_PREFIX"orte_ess_num_procs")) {
-        asprintf(&ev1, OPAL_MCA_PREFIX"orte_ess_num_procs=%d", orte_process_info.num_procs);
-        putenv(ev1);
+        char * num_procs;
+        asprintf(&num_procs, "%d", orte_process_info.num_procs);
+        opal_setenv(OPAL_MCA_PREFIX"orte_ess_num_procs", num_procs, true, &environ);
+        free(num_procs);
         added_num_procs = true;
     }
     if (NULL == getenv("OMPI_APP_CTX_NUM_PROCS")) {
-        asprintf(&ev2, "OMPI_APP_CTX_NUM_PROCS=%d", orte_process_info.num_procs);
-        putenv(ev2);
+        char * num_procs;
+        asprintf(&num_procs, "%d", orte_process_info.num_procs);
+        opal_setenv("OMPI_APP_CTX_NUM_PROCS", num_procs, true, &environ);
+        free(num_procs);
         added_app_ctx = true;
     }
 
@@ -261,19 +265,7 @@ static int rte_init(void)
      * we can use the jobfam and stepid as unique keys
      * because they are unique values assigned by the RM
      */
-    if (NULL == getenv(OPAL_MCA_PREFIX"orte_precondition_transports")) {
-        unique_key[0] = ORTE_JOB_FAMILY(ORTE_PROC_MY_NAME->jobid);
-        unique_key[1] = ORTE_LOCAL_JOBID(ORTE_PROC_MY_NAME->jobid);
-        if (NULL == (string_key = orte_pre_condition_transports_print(unique_key))) {
-            ORTE_ERROR_LOG(ORTE_ERR_OUT_OF_RESOURCE);
-            return ORTE_ERR_OUT_OF_RESOURCE;
-        }
-        asprintf(&envar, OPAL_MCA_PREFIX"orte_precondition_transports=%s", string_key);
-        putenv(envar);
-        added_transport_keys = true;
-        /* cannot free the envar as that messes up our environ */
-        free(string_key);
-    }
+    assert (NULL != getenv(OPAL_MCA_PREFIX"orte_precondition_transports"));
 
     /* retrieve our topology */
     OPAL_MODEX_RECV_VALUE(ret, OPAL_PMIX_LOCAL_TOPO,
@@ -342,13 +334,6 @@ static int rte_init(void)
     if (ORTE_SUCCESS != (rc = orte_ess_base_app_setup(true))) {
         ORTE_ERROR_LOG(rc);
         return rc;
-    }
-
-    /* push our hostname so others can find us, if they need to */
-    OPAL_MODEX_SEND_VALUE(ret, OPAL_PMIX_GLOBAL, OPAL_PMIX_HOSTNAME, orte_process_info.nodename, OPAL_STRING);
-    if (ORTE_SUCCESS != ret) {
-        error = "db store hostname";
-        goto error;
     }
 
     return ORTE_SUCCESS;
@@ -564,6 +549,8 @@ static int fork_hnp(void)
         exit(1);
 
     } else {
+        int count;
+
         free(cmd);
         /* I am the parent - wait to hear something back and
          * report results
@@ -579,14 +566,24 @@ static int fork_hnp(void)
         orted_uri = (char*)malloc(buffer_length);
         memset(orted_uri, 0, buffer_length);
 
-        while (chunk == (rc = read(p[0], &orted_uri[num_chars_read], chunk))) {
-            /* we read an entire buffer - better get more */
-            num_chars_read += chunk;
-            orted_uri = realloc((void*)orted_uri, buffer_length+ORTE_URI_MSG_LGTH);
-            memset(&orted_uri[buffer_length], 0, ORTE_URI_MSG_LGTH);
-            buffer_length += ORTE_URI_MSG_LGTH;
+        while (0 != (rc = read(p[0], &orted_uri[num_chars_read], chunk))) {
+            if (rc < 0 && (EAGAIN == errno || EINTR == errno)) {
+                continue;
+            } else if (rc < 0) {
+                num_chars_read = -1;
+                break;
+            }
+            /* we read something - better get more */
+            num_chars_read += rc;
+            chunk -= rc;
+            if (0 == chunk) {
+                chunk = ORTE_URI_MSG_LGTH;
+                orted_uri = realloc((void*)orted_uri, buffer_length+chunk);
+                memset(&orted_uri[buffer_length], 0, chunk);
+                buffer_length += chunk;
+            }
         }
-        num_chars_read += rc;
+        close(p[0]);
 
         if (num_chars_read <= 0) {
             /* we didn't get anything back - this is bad */
@@ -629,15 +626,14 @@ static int fork_hnp(void)
         orte_process_info.my_hnp_uri = orted_uri;
 
         /* split the pmix_uri into its parts */
-        argv = opal_argv_split(cptr, ',');
-        if (4 != opal_argv_count(argv)) {
-            opal_argv_free(argv);
-            return ORTE_ERR_BAD_PARAM;
-        }
+        argv = opal_argv_split(cptr, '*');
+        count = opal_argv_count(argv);
         /* push each piece into the environment */
-        for (i=0; i < 4; i++) {
-            pmixenvars[i] = strdup(argv[i]);
-            putenv(pmixenvars[i]);
+        for (i=0; i < count; i++) {
+            char *c = strchr(argv[i], '=');
+            assert(NULL != c);
+            *c++ = '\0';
+            opal_setenv(argv[i], c, true, &environ);
         }
         opal_argv_free(argv);
         added_pmix_envs = true;

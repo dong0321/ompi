@@ -12,7 +12,7 @@
  * Copyright (c) 2006-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2014-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  *
  * $COPYRIGHT$
  *
@@ -39,6 +39,8 @@ typedef enum {
     MCA_OOB_TCP_USER
 } mca_oob_tcp_msg_type_t;
 
+#define ORTE_MAX_RTD_SIZE  31
+
 /* header for tcp msgs */
 typedef struct {
     /* the originator of the message - if we are routing,
@@ -60,6 +62,8 @@ typedef struct {
     uint32_t seq_num;
     /* number of bytes in message */
     uint32_t nbytes;
+    /* routed module to be used */
+    char routed[ORTE_MAX_RTD_SIZE+1];
 } mca_oob_tcp_hdr_t;
 /**
  * Convert the message header to host byte order

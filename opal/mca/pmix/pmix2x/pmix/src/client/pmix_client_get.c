@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2014      Artem Y. Polyakov <artpol84@gmail.com>.
@@ -18,11 +18,13 @@
 #include <src/include/pmix_config.h>
 
 #include <src/include/types.h>
-#include <pmix/autogen/pmix_stdint.h>
+#include <src/include/pmix_stdint.h>
 
 #include <pmix.h>
+#include <pmix_rename.h>
 
 #include "src/include/pmix_globals.h"
+#include "src/include/pmix_jobdata.h"
 
 #ifdef HAVE_STRING_H
 #include <string.h>
@@ -43,22 +45,26 @@
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
+
+#if PMIX_HAVE_ZLIB
+#include <zlib.h>
+#endif
 #include PMIX_EVENT_HEADER
 
 #include "src/class/pmix_list.h"
 #include "src/buffer_ops/buffer_ops.h"
 #include "src/util/argv.h"
+#include "src/util/compress.h"
 #include "src/util/error.h"
 #include "src/util/hash.h"
 #include "src/util/output.h"
-#include "src/util/progress_threads.h"
-#include "src/usock/usock.h"
-#include "src/sec/pmix_sec.h"
+#include "src/mca/ptl/ptl.h"
 #if defined(PMIX_ENABLE_DSTORE) && (PMIX_ENABLE_DSTORE == 1)
 #include "src/dstore/pmix_dstore.h"
 #endif /* PMIX_ENABLE_DSTORE */
 
 #include "pmix_client_ops.h"
+#include "src/include/pmix_jobdata.h"
 
 static pmix_buffer_t* _pack_get(char *nspace, pmix_rank_t rank,
                                const pmix_info_t info[], size_t ninfo,
@@ -66,10 +72,12 @@ static pmix_buffer_t* _pack_get(char *nspace, pmix_rank_t rank,
 
 static void _getnbfn(int sd, short args, void *cbdata);
 
-static void _getnb_cbfunc(struct pmix_peer_t *pr, pmix_usock_hdr_t *hdr,
-                         pmix_buffer_t *buf, void *cbdata);
+static void _getnb_cbfunc(struct pmix_peer_t *pr,
+                          pmix_ptl_hdr_t *hdr,
+                          pmix_buffer_t *buf, void *cbdata);
 
 static void _value_cbfunc(pmix_status_t status, pmix_value_t *kv, void *cbdata);
+
 
 PMIX_EXPORT pmix_status_t PMIx_Get(const pmix_proc_t *proc, const char key[],
                                    const pmix_info_t info[], size_t ninfo,
@@ -233,7 +241,8 @@ static pmix_buffer_t* _pack_get(char *nspace, pmix_rank_t rank,
 /* this callback is coming from the usock recv, and thus
  * is occurring inside of our progress thread - hence, no
  * need to thread shift */
-static void _getnb_cbfunc(struct pmix_peer_t *pr, pmix_usock_hdr_t *hdr,
+static void _getnb_cbfunc(struct pmix_peer_t *pr,
+                          pmix_ptl_hdr_t *hdr,
                          pmix_buffer_t *buf, void *cbdata)
 {
     pmix_cb_t *cb = (pmix_cb_t*)cbdata;
@@ -243,7 +252,10 @@ static void _getnb_cbfunc(struct pmix_peer_t *pr, pmix_usock_hdr_t *hdr,
     int32_t cnt;
     pmix_nspace_t *ns, *nptr;
     pmix_rank_t rank;
+#if (PMIX_ENABLE_DSTORE != 1)
     pmix_rank_t cur_rank;
+#endif
+    char *tmp;
 
     pmix_output_verbose(2, pmix_globals.debug_output,
                         "pmix: get_nb callback recvd");
@@ -255,7 +267,6 @@ static void _getnb_cbfunc(struct pmix_peer_t *pr, pmix_usock_hdr_t *hdr,
     }
     /* cache the rank */
     rank = cb->rank;
-    cur_rank = rank;
 
     /* unpack the status */
     cnt = 1;
@@ -283,12 +294,17 @@ static void _getnb_cbfunc(struct pmix_peer_t *pr, pmix_usock_hdr_t *hdr,
         goto done;
     }
 
-#if defined(PMIX_ENABLE_DSTORE) && (PMIX_ENABLE_DSTORE == 1)
-    rc = pmix_dstore_fetch(nptr->nspace, cb->rank, cb->key, &val);
+#if (defined(PMIX_ENABLE_DSTORE) && (PMIX_ENABLE_DSTORE == 1))
+    if (PMIX_SUCCESS != (rc = pmix_dstore_fetch(nptr->nspace, cb->rank, cb->key, &val))){
+        /* DO NOT error log this status - it is perfectly okay
+         * for a key not to be found */
+        goto done;
+    }
 #else
     /* we received the entire blob for this process, so
      * unpack and store it in the modex - this could consist
      * of buffers from multiple scopes */
+    cur_rank = rank;
     cnt = 1;
     while (PMIX_SUCCESS == (rc = pmix_bfrop.unpack(buf, &cur_rank, &cnt, PMIX_PROC_RANK))) {
         pmix_kval_t *cur_kval;
@@ -307,7 +323,12 @@ static void _getnb_cbfunc(struct pmix_peer_t *pr, pmix_usock_hdr_t *hdr,
                     return;
                 }
                 free(nspace);
-                pmix_client_process_nspace_blob(cb->nspace, bptr);
+                pmix_job_data_htable_store(cb->nspace, bptr);
+
+                /* Check if the key is in this blob */
+
+                pmix_hash_fetch(&nptr->internal, cb->rank, cb->key, &val);
+
             } else {
                 cnt = 1;
                 cur_kval = PMIX_NEW(pmix_kval_t);
@@ -356,6 +377,20 @@ done:
     if (NULL != cb && NULL != cb->value_cbfunc) {
         if (NULL == val) {
             rc = PMIX_ERR_NOT_FOUND;
+        } else {
+            /* if this is a compressed string, then uncompress it */
+            if (PMIX_COMPRESSED_STRING == val->type) {
+                pmix_util_uncompress_string(&tmp, (uint8_t*)val->data.bo.bytes, val->data.bo.size);
+                if (NULL == tmp) {
+                    PMIX_ERROR_LOG(PMIX_ERR_NOMEM);
+                    rc = PMIX_ERR_NOMEM;
+                    PMIX_VALUE_RELEASE(val);
+                    val = NULL;
+                } else {
+                    PMIX_VALUE_DESTRUCT(val);
+                    PMIX_VAL_ASSIGN(val, string, tmp);
+                }
+            }
         }
         cb->value_cbfunc(rc, val, cb->cbdata);
     }
@@ -393,6 +428,7 @@ static pmix_status_t process_val(pmix_value_t *val,
 {
     pmix_info_t *info;
     size_t n, nsize, nvals;
+    pmix_status_t rc;
 
     if (NULL == val) {
         /* this is an error */
@@ -411,23 +447,25 @@ static pmix_status_t process_val(pmix_value_t *val,
     }
     /* save the results */
     if (PMIX_DATA_ARRAY == val->type) {
-        info = (pmix_info_t*)val->data.darray.array;
-        nsize = val->data.darray.size;
+        info = (pmix_info_t*)val->data.darray->array;
+        nsize = val->data.darray->size;
     } else {
-        info = (pmix_info_t*)val->data.array.array;
-        nsize = val->data.array.size;
+        info = (pmix_info_t*)val->data.array->array;
+        nsize = val->data.array->size;
     }
     nvals = 0;
     for (n=0; n < nsize; n++) {
-        pmix_pointer_array_add(results, &info[n]);
+        if (PMIX_SUCCESS != (rc = pmix_pointer_array_add(results, &info[n]))) {
+            return rc;
+        }
         ++nvals;
     }
     if (PMIX_DATA_ARRAY == val->type) {
-        val->data.darray.array = NULL;  // protect the data
-        val->data.darray.size = 0;
+        val->data.darray->array = NULL;  // protect the data
+        val->data.darray->size = 0;
     } else {
-        val->data.array.array = NULL;
-        val->data.array.size = 0;
+        val->data.array->array = NULL;
+        val->data.array->size = 0;
     }
     /* increment the number of values */
     (*num_vals) += nvals;
@@ -445,6 +483,7 @@ static void _getnbfn(int fd, short flags, void *cbdata)
     pmix_status_t rc;
     pmix_nspace_t *ns, *nptr;
     size_t n, nvals;
+    char *tmp;
 
     pmix_output_verbose(2, pmix_globals.debug_output,
                         "pmix: getnbfn value for proc %s:%d key %s",
@@ -526,14 +565,25 @@ static void _getnbfn(int fd, short flags, void *cbdata)
         /* now let's package up the results */
         PMIX_VALUE_CREATE(val, 1);
         val->type = PMIX_DATA_ARRAY;
-        val->data.darray.type = PMIX_INFO;
-        val->data.darray.size = nvals;
+        val->data.darray->type = PMIX_INFO;
+        val->data.darray->size = nvals;
         PMIX_INFO_CREATE(iptr, nvals);
-        val->data.darray.array = (void*)iptr;
+        val->data.darray->array = (void*)iptr;
         for (n=0; n < (size_t)results.size && n < nvals; n++) {
             if (NULL != (info = (pmix_info_t*)pmix_pointer_array_get_item(&results, n))) {
                 (void)strncpy(iptr[n].key, info->key, PMIX_MAX_KEYLEN);
-                pmix_value_xfer(&iptr[n].value, &info->value);
+                /* if this is a compressed string, then uncompress it */
+                if (PMIX_COMPRESSED_STRING == info->value.type) {
+                    iptr[n].value.type = PMIX_STRING;
+                    pmix_util_uncompress_string(&iptr[n].value.data.string,
+                                                (uint8_t*)info->value.data.bo.bytes,
+                                                info->value.data.bo.size);
+                    if (NULL == iptr[n].value.data.string) {
+                        PMIX_ERROR_LOG(PMIX_ERR_NOMEM);
+                    }
+                } else {
+                    pmix_value_xfer(&iptr[n].value, &info->value);
+                }
                 PMIX_INFO_FREE(info, 1);
             }
         }
@@ -546,11 +596,55 @@ static void _getnbfn(int fd, short flags, void *cbdata)
         return;
     }
 
+#if defined(PMIX_ENABLE_DSTORE) && (PMIX_ENABLE_DSTORE == 1)
+    if (PMIX_SUCCESS == (rc = pmix_hash_fetch(&nptr->internal, cb->rank, cb->key, &val))) {
+        /* if this is a compressed string, then uncompress it */
+        if (PMIX_COMPRESSED_STRING == val->type) {
+            pmix_util_uncompress_string(&tmp, (uint8_t*)val->data.bo.bytes, val->data.bo.size);
+            if (NULL == tmp) {
+                PMIX_ERROR_LOG(PMIX_ERR_NOMEM);
+                rc = PMIX_ERR_NOMEM;
+                PMIX_VALUE_RELEASE(val);
+                val = NULL;
+            } else {
+                PMIX_VALUE_DESTRUCT(val);
+                PMIX_VAL_ASSIGN(val, string, tmp);
+            }
+        }
+        /* found it - we are in an event, so we can
+         * just execute the callback */
+        cb->value_cbfunc(rc, val, cb->cbdata);
+        /* cleanup */
+        if (NULL != val) {
+            PMIX_VALUE_RELEASE(val);
+        }
+        PMIX_RELEASE(cb);
+        return;
+    }
+#endif
+
     /* if the key is in the PMIx namespace, then they are looking for data
      * that was provided at startup */
     if (0 == strncmp(cb->key, "pmix", 4)) {
         /* should be in the internal hash table. */
+#if defined(PMIX_ENABLE_DSTORE) && (PMIX_ENABLE_DSTORE == 1)
+        if (PMIX_SUCCESS == (rc = pmix_dstore_fetch(cb->nspace, cb->rank, cb->key, &val))) {
+#else
         if (PMIX_SUCCESS == (rc = pmix_hash_fetch(&nptr->internal, cb->rank, cb->key, &val))) {
+#endif
+            /* if this is a compressed string, then uncompress it */
+            if (PMIX_COMPRESSED_STRING == val->type) {
+                pmix_util_uncompress_string(&tmp, (uint8_t*)val->data.bo.bytes, val->data.bo.size);
+                if (NULL == tmp) {
+                    PMIX_ERROR_LOG(PMIX_ERR_NOMEM);
+                    rc = PMIX_ERR_NOMEM;
+                    PMIX_VALUE_RELEASE(val);
+                    val = NULL;
+                } else {
+                    PMIX_VALUE_DESTRUCT(val);
+                    PMIX_VAL_ASSIGN(val, string, tmp);
+                }
+            }
             /* found it - we are in an event, so we can
              * just execute the callback */
             cb->value_cbfunc(rc, val, cb->cbdata);
@@ -567,12 +661,52 @@ static void _getnbfn(int fd, short flags, void *cbdata)
 
     /* otherwise, the data must be something they "put" */
 #if defined(PMIX_ENABLE_DSTORE) && (PMIX_ENABLE_DSTORE == 1)
-    if (PMIX_SUCCESS == (rc = pmix_dstore_fetch(nptr->nspace, cb->rank, cb->key, &val))) {
+    rc = PMIX_ERR_PROC_ENTRY_NOT_FOUND;
+    if ((0 == strncmp(pmix_globals.myid.nspace, nptr->nspace, PMIX_MAX_NSLEN + 1)) &&
+        ((pmix_globals.myid.rank == cb->rank) || (PMIX_RANK_UNDEF == cb->rank))){
+        /* if we asking the data about this or undefined process -
+           check local hash table first. All the data passed through
+           PMIx_Put settle down there */
+        rc = pmix_hash_fetch(&nptr->modex, pmix_globals.myid.rank, cb->key, &val);
+        assert( (PMIX_SUCCESS == rc) || (PMIX_ERR_PROC_ENTRY_NOT_FOUND == rc) ||
+                (PMIX_ERR_NOT_FOUND == rc) );
+        if( PMIX_SUCCESS != rc ){
+            if(pmix_globals.myid.rank == cb->rank){
+                rc = PMIX_ERR_NOT_FOUND;
+            }
+        }
+        /* in else case we supposed to get PMIX_ERR_PROC_ENTRY_NOT_FOUND because
+           we don't push data from the remote processes into the dstore */
+    }
+    /* try to take it from dstore */
+    if( PMIX_ERR_PROC_ENTRY_NOT_FOUND == rc ){
+        /* Two option possible here:
+           - we asking the key from UNDEF process and local proc
+             haven't pushed this data
+           - we askin the key from the particular process which is not us.
+         */
+        rc = pmix_dstore_fetch(nptr->nspace, cb->rank, cb->key, &val);
+    }
 #else
-    if (PMIX_SUCCESS == (rc = pmix_hash_fetch(&nptr->modex, cb->rank, cb->key, &val))) {
+    rc = pmix_hash_fetch(&nptr->modex, cb->rank, cb->key, &val);
 #endif /* PMIX_ENABLE_DSTORE */
+
+    if ( PMIX_SUCCESS == rc ) {
         pmix_output_verbose(2, pmix_globals.debug_output,
                             "pmix_get[%d]: value retrieved from dstore", __LINE__);
+        /* if this is a compressed string, then uncompress it */
+        if (PMIX_COMPRESSED_STRING == val->type) {
+            pmix_util_uncompress_string(&tmp, (uint8_t*)val->data.bo.bytes, val->data.bo.size);
+            if (NULL == tmp) {
+                PMIX_ERROR_LOG(PMIX_ERR_NOMEM);
+                rc = PMIX_ERR_NOMEM;
+                PMIX_VALUE_RELEASE(val);
+                val = NULL;
+            } else {
+                PMIX_VALUE_DESTRUCT(val);
+                PMIX_VAL_ASSIGN(val, string, tmp);
+            }
+        }
         /* found it - we are in an event, so we can
          * just execute the callback */
         cb->value_cbfunc(rc, val, cb->cbdata);
@@ -603,13 +737,23 @@ static void _getnbfn(int fd, short flags, void *cbdata)
                             "Unable to locally satisfy request for key=%s for rank = %d, namespace = %s",
                             cb->key, cb->rank, cb->nspace);
         cb->checked = true; // flag that we are going to check this again
+    } else if (PMIX_ERR_PROC_ENTRY_NOT_FOUND != rc) {
+        /* errors are fatal */
+        cb->value_cbfunc(rc, NULL, cb->cbdata);
+        /* protect the data */
+        cb->procs = NULL;
+        cb->key = NULL;
+        cb->info = NULL;
+        PMIX_RELEASE(cb);
+        return;
     }
 
   request:
     /* if we got here, then we don't have the data for this proc. If we
      * are a server, or we are a client and not connected, then there is
      * nothing more we can do */
-    if (pmix_globals.server || (!pmix_globals.server && !pmix_globals.connected)) {
+    if (PMIX_PROC_SERVER == pmix_globals.proc_type ||
+        (PMIX_PROC_SERVER != pmix_globals.proc_type && !pmix_globals.connected)) {
         cb->value_cbfunc(PMIX_ERR_NOT_FOUND, NULL, cb->cbdata);
         PMIX_RELEASE(cb);
         return;
@@ -619,7 +763,7 @@ static void _getnbfn(int fd, short flags, void *cbdata)
      * us to attempt to retrieve it from the server */
     for (n=0; n < cb->ninfo; n++) {
         if (0 == strcmp(cb->info[n].key, PMIX_OPTIONAL) &&
-            cb->info[n].value.data.flag) {
+            (PMIX_UNDEF == cb->info[n].value.type || cb->info[n].value.data.flag)) {
             /* they don't want us to try and retrieve it */
             pmix_output_verbose(2, pmix_globals.debug_output,
                                 "PMIx_Get key=%s for rank = %d, namespace = %s was not found - request was optional",
@@ -667,10 +811,13 @@ static void _getnbfn(int fd, short flags, void *cbdata)
                         pmix_globals.myid.nspace, pmix_globals.myid.rank,
                         cb->nspace, cb->rank, cb->key);
 
-    /* create a callback object as we need to pass it to the
-     * recv routine so we know which callback to use when
-     * the return message is recvd */
+    /* track the callback object */
     pmix_list_append(&pmix_client_globals.pending_requests, &cb->super);
-    /* push the message into our event base to send to the server */
-    PMIX_ACTIVATE_SEND_RECV(&pmix_client_globals.myserver, msg, _getnb_cbfunc, cb);
+    /* send to the server */
+    if (PMIX_SUCCESS != (rc = pmix_ptl.send_recv(&pmix_client_globals.myserver, msg, _getnb_cbfunc, (void*)cb))){
+        pmix_list_remove_item(&pmix_client_globals.pending_requests, &cb->super);
+        cb->value_cbfunc(PMIX_ERROR, NULL, cb->cbdata);
+        PMIX_RELEASE(cb);
+        return;
+    }
 }

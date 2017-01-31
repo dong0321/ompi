@@ -5,8 +5,8 @@
  *                         reserved.
  * Copyright (c) 2011-2015 INRIA.  All rights reserved.
  * Copyright (c) 2012-2015 Bordeaux Poytechnic Institute
- * Copyright (c) 2015      Intel, Inc. All rights reserved
- * Copyright (c) 2015      Research Organization for Information Science
+ * Copyright (c) 2015-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      Los Alamos National Security, LLC. All rights
  *                         reserved.
@@ -44,9 +44,9 @@
     while(0);
 
 #define FALLBACK()                  \
-    do { free(nodes_roots);			\
+    do { free(nodes_roots);         \
         free(local_procs);          \
-        hwloc_bitmap_free(set);     \
+        if( NULL != set) hwloc_bitmap_free(set);     \
         goto fallback; }            \
     while(0);
 
@@ -181,19 +181,16 @@ int mca_topo_treematch_dist_graph_create(mca_topo_base_module_t* topo_module,
             num_procs_in_node++;
     }
 
-    /* Get the ranks of the local procs in comm_old */
+    vpids = (int *)malloc(size * sizeof(int));
+    colors = (int *)malloc(size * sizeof(int));
     local_procs = (int *)malloc(num_procs_in_node * sizeof(int));
     for(i = idx = 0 ; i < size ; i++){
         proc = ompi_group_peer_lookup(comm_old->c_local_group, i);
         if (( i == rank ) ||
-            (OPAL_PROC_ON_LOCAL_NODE(proc->super.proc_flags)))
+            (OPAL_PROC_ON_LOCAL_NODE(proc->super.proc_flags))) {
             local_procs[idx++] = i;
-    }
+        }
 
-    vpids = (int *)malloc(size * sizeof(int));
-    colors = (int *)malloc(size * sizeof(int));
-    for(i = 0; i < size ; i++) {
-        proc = ompi_group_peer_lookup(comm_old->c_local_group, i);
         pval = &val;
         OPAL_MODEX_RECV_VALUE(err, OPAL_PMIX_NODEID, &(proc->super.proc_name), &pval, OPAL_UINT32);
         if( OPAL_SUCCESS != err ) {
@@ -220,22 +217,29 @@ int mca_topo_treematch_dist_graph_create(mca_topo_base_module_t* topo_module,
     }
 #endif
     /* clean-up dupes in the array */
-    for(i = 0; i < size ; i++)
-        if ( -1 ==  vpids[i] )
+    for(i = 0; i < size; i++) {
+        if( -1 ==  vpids[i] )
             continue;
-        else
-            for(j = i+1 ; j < size ; j++)
-                if( vpids[j] != -1 )
-                    if( vpids[i] == vpids[j] )
-                        vpids[j] = -1;
-    /* compute number of nodes */
-    for(i = 0; i < size ; i++)
-        if( vpids[i] != -1 )
-            num_nodes++;
+
+        num_nodes++; /* update the number of nodes */
+
+        for(j = i+1; j < size; j++)
+            if( vpids[i] == vpids[j] )
+                vpids[j] = -1;
+    }
+    if( 0 == num_nodes ) {
+        /* No useful info has been retrieved from the runtime. Fallback
+         * and create a duplicate of the original communicator */
+        free(vpids);
+        free(colors);
+        free(local_procs);
+        err = OMPI_SUCCESS;  /* return with success */
+        goto fallback;
+    }
     /* compute local roots ranks in comm_old */
     /* Only the global root needs to do this */
     if(0 == rank) {
-        nodes_roots = (int *)calloc(num_nodes,sizeof(int));
+        nodes_roots = (int *)calloc(num_nodes, sizeof(int));
         for(i = idx = 0; i < size ; i++)
             if( vpids[i] != -1 )
                 nodes_roots[idx++] = i;
@@ -252,7 +256,9 @@ int mca_topo_treematch_dist_graph_create(mca_topo_base_module_t* topo_module,
     /* Then, we need to know if the processes are bound */
     /* We make the hypothesis that all processes are in  */
     /* the same state : all bound or none bound */
-    assert(NULL != opal_hwloc_topology);
+    if (OPAL_SUCCESS != opal_hwloc_base_get_topology()) {
+        goto fallback;
+    }
     root_obj = hwloc_get_root_obj(opal_hwloc_topology);
     if (NULL == root_obj) goto fallback;
 
@@ -483,7 +489,7 @@ int mca_topo_treematch_dist_graph_create(mca_topo_base_module_t* topo_module,
                     displs = (int *)calloc(num_objs_total,sizeof(int));
                     displs[0] = 0;
                     for(i = 1; i < num_nodes ; i++)
-                        displs[i] = displs[i-1] + objs_per_node[i];
+                        displs[i] = displs[i-1] + objs_per_node[i-1];
 
                     memset(reqs,0,(num_nodes-1)*sizeof(MPI_Request));
                     memcpy(obj_mapping,obj_to_rank_in_comm,objs_per_node[0]*sizeof(int));
@@ -869,7 +875,7 @@ int mca_topo_treematch_dist_graph_create(mca_topo_base_module_t* topo_module,
         if( -1 == hwloc_err) goto fallback;
 
         /* Report new binding to ORTE/OPAL */
-        /*	hwloc_bitmap_list_asprintf(&orte_process_info.cpuset,set);   */
+        /*      hwloc_bitmap_list_asprintf(&orte_process_info.cpuset,set);   */
         err = hwloc_bitmap_snprintf (set_as_string,64,set);
 
 #ifdef __DEBUG__

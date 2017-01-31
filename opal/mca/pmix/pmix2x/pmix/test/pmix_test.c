@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.
@@ -35,6 +35,9 @@
 
 #include "server_callbacks.h"
 #include "utils.h"
+#include "src/include/pmix_globals.h"
+
+bool spawn_wait = false;
 
 int main(int argc, char **argv)
 {
@@ -175,6 +178,10 @@ int main(int argc, char **argv)
         test_fail = 1;
     }
 
+    if (0 != params.test_spawn) {
+        PMIX_WAIT_FOR_COMPLETION(spawn_wait);
+    }
+
     pmix_argv_free(client_argv);
     pmix_argv_free(client_env);
 
@@ -196,4 +203,3 @@ int main(int argc, char **argv)
 
     return test_fail;
 }
-

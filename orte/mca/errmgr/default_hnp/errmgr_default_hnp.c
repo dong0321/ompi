@@ -9,7 +9,7 @@
  * Copyright (c) 2011      Oracle and/or all its affiliates.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,6 +31,7 @@
 #include "opal/util/output.h"
 #include "opal/dss/dss.h"
 
+#include "orte/mca/iof/base/base.h"
 #include "orte/mca/rml/rml.h"
 #include "orte/mca/odls/odls.h"
 #include "orte/mca/odls/base/base.h"
@@ -141,6 +142,9 @@ static void job_errors(int fd, short args, void *cbdata)
         return;
     }
 
+    /* ensure we have an error exit status */
+    ORTE_UPDATE_EXIT_STATUS(ORTE_ERROR_DEFAULT_EXIT_CODE);
+
     /* if the jdata is NULL, then we abort as this
      * is reporting an unrecoverable error
      */
@@ -176,6 +180,7 @@ static void job_errors(int fd, short args, void *cbdata)
          */
         orte_routing_is_enabled = false;
         jdata->num_terminated = jdata->num_procs;
+        /* activate the terminated state so we can exit */
         ORTE_ACTIVATE_JOB_STATE(caddy->jdata, ORTE_JOB_STATE_TERMINATED);
         /* if it was a dynamic spawn, then we better tell them this didn't work */
         if (ORTE_JOBID_INVALID != jdata->originator.jobid) {
@@ -208,7 +213,8 @@ static void job_errors(int fd, short args, void *cbdata)
                                  ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                                  ORTE_JOBID_PRINT(jdata->jobid),
                                  ORTE_NAME_PRINT(&jdata->originator)));
-            if (0 > (ret = orte_rml.send_buffer_nb(&jdata->originator, answer,
+            if (0 > (ret = orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                                                   &jdata->originator, answer,
                                                    ORTE_RML_TAG_LAUNCH_RESP,
                                                    orte_rml_send_callback, NULL))) {
                 ORTE_ERROR_LOG(ret);
@@ -288,6 +294,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     orte_proc_state_t state = caddy->proc_state;
     int i;
     int32_t i32, *i32ptr;
+    char *rtmod;
 
     OPAL_OUTPUT_VERBOSE((1, orte_errmgr_base_framework.framework_output,
                          "%s errmgr:default_hnp: for proc %s state %s",
@@ -308,6 +315,7 @@ static void proc_errors(int fd, short args, void *cbdata)
         goto cleanup;
     }
     pptr = (orte_proc_t*)opal_pointer_array_get_item(jdata->procs, proc->vpid);
+    rtmod = orte_rml.get_routed(orte_mgmt_conduit);
 
     /* we MUST handle a communication failure before doing anything else
      * as it requires some special care to avoid normal termination issues
@@ -338,9 +346,9 @@ static void proc_errors(int fd, short args, void *cbdata)
                                  "%s Comm failure: daemons terminating - recording daemon %s as gone",
                                  ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ORTE_NAME_PRINT(proc)));
             /* remove from dependent routes, if it is one */
-            orte_routed.route_lost(proc);
+            orte_routed.route_lost(rtmod, proc);
             /* if all my routes and local children are gone, then terminate ourselves */
-            if (0 == orte_routed.num_routes()) {
+            if (0 == orte_routed.num_routes(rtmod)) {
                 for (i=0; i < orte_local_children->size; i++) {
                     if (NULL != (proct = (orte_proc_t*)opal_pointer_array_get_item(orte_local_children, i)) &&
                         ORTE_FLAG_TEST(pptr, ORTE_PROC_FLAG_ALIVE) && proct->state < ORTE_PROC_STATE_UNTERMINATED) {
@@ -361,7 +369,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                 OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                                      "%s Comm failure: %d routes remain alive",
                                      ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                                     (int)orte_routed.num_routes()));
+                                     (int)orte_routed.num_routes(rtmod)));
             }
             goto cleanup;
         }
@@ -410,7 +418,7 @@ static void proc_errors(int fd, short args, void *cbdata)
         }
         /* if all my routes and children are gone, then terminate
            ourselves nicely (i.e., this is a normal termination) */
-        if (0 == orte_routed.num_routes()) {
+        if (0 == orte_routed.num_routes(rtmod)) {
             OPAL_OUTPUT_VERBOSE((2, orte_errmgr_base_framework.framework_output,
                                  "%s errmgr:default:hnp all routes gone - exiting",
                                  ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
@@ -424,6 +432,13 @@ static void proc_errors(int fd, short args, void *cbdata)
     if (orte_get_attribute(&jdata->attributes, ORTE_JOB_CONTINUOUS_OP, NULL, OPAL_BOOL)) {
         /* always mark the waitpid as having fired */
         ORTE_ACTIVATE_PROC_STATE(&pptr->name, ORTE_PROC_STATE_WAITPID_FIRED);
+        /* if this is a remote proc, we won't hear anything more about it
+         * as the default behavior would be to terminate the job. So be sure to
+         * mark the IOF as having completed too so we correctly mark this proc
+         * as dead and notify everyone as required */
+        if (!ORTE_FLAG_TEST(pptr, ORTE_PROC_FLAG_LOCAL)) {
+            ORTE_ACTIVATE_PROC_STATE(&pptr->name, ORTE_PROC_STATE_IOF_COMPLETE);
+        }
         goto cleanup;
     }
 
@@ -627,7 +642,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             default_hnp_abort(jdata);
         }
         /* remove from dependent routes, if it is one */
-        orte_routed.route_lost(proc);
+        orte_routed.route_lost(rtmod, proc);
         break;
 
     case ORTE_PROC_STATE_UNABLE_TO_SEND_MSG:
@@ -635,6 +650,48 @@ static void proc_errors(int fd, short args, void *cbdata)
                              "%s errmgr:hnp: unable to send message to proc %s",
                              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                              ORTE_NAME_PRINT(proc)));
+        /* if this proc is one of my daemons, then we are truly
+         * hosed - so just exit out
+         */
+        if (ORTE_PROC_MY_NAME->jobid == proc->jobid) {
+            ORTE_ACTIVATE_JOB_STATE(NULL, ORTE_JOB_STATE_DAEMONS_TERMINATED);
+            break;
+        }
+        if (!ORTE_FLAG_TEST(jdata, ORTE_JOB_FLAG_ABORTED)) {
+            /* abnormal termination - abort, but only do it once
+             * to avoid creating a lot of confusion */
+            default_hnp_abort(jdata);
+        }
+        break;
+
+    case ORTE_PROC_STATE_NO_PATH_TO_TARGET:
+        OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
+                             "%s errmgr:hnp: no message path to proc %s",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                             ORTE_NAME_PRINT(proc)));
+        orte_show_help("help-errmgr-base.txt", "no-path", true,
+                       orte_process_info.nodename, pptr->node->name);
+        /* if this proc is one of my daemons, then we are truly
+         * hosed - so just exit out
+         */
+        if (ORTE_PROC_MY_NAME->jobid == proc->jobid) {
+            ORTE_ACTIVATE_JOB_STATE(NULL, ORTE_JOB_STATE_DAEMONS_TERMINATED);
+            break;
+        }
+        if (!ORTE_FLAG_TEST(jdata, ORTE_JOB_FLAG_ABORTED)) {
+            /* abnormal termination - abort, but only do it once
+             * to avoid creating a lot of confusion */
+            default_hnp_abort(jdata);
+        }
+        break;
+
+    case ORTE_PROC_STATE_FAILED_TO_CONNECT:
+        OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
+                             "%s errmgr:hnp: cannot connect to proc %s",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                             ORTE_NAME_PRINT(proc)));
+        orte_show_help("help-errmgr-base.txt", "no-connect", true,
+                       orte_process_info.nodename, pptr->node->name);
         /* if this proc is one of my daemons, then we are truly
          * hosed - so just exit out
          */

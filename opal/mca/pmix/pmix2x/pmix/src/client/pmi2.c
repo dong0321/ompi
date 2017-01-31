@@ -55,9 +55,10 @@ PMIX_EXPORT int PMI2_Init(int *spawned, int *size, int *rank, int *appnum)
 {
     pmix_status_t rc = PMIX_SUCCESS;
     pmix_value_t *val;
-    pmix_proc_t proc;
     pmix_info_t info[1];
     bool  val_optinal = 1;
+    pmix_proc_t proc = myproc;
+    proc.rank = PMIX_RANK_WILDCARD;
 
     if (PMIX_SUCCESS != PMIx_Init(&myproc, NULL, 0)) {
         return PMI2_ERR_INIT;
@@ -65,10 +66,6 @@ PMIX_EXPORT int PMI2_Init(int *spawned, int *size, int *rank, int *appnum)
 
     /* get the rank */
     *rank = myproc.rank;
-
-    /* getting internal key requires special rank value */
-    memcpy(&proc, &myproc, sizeof(myproc));
-    proc.rank = PMIX_RANK_UNDEF;
 
     /* set controlling parameters
      * PMIX_OPTIONAL - expect that these keys should be available on startup
@@ -187,7 +184,6 @@ PMIX_EXPORT int PMI2_Job_Spawn(int count, const char * cmds[],
         apps[i].cmd = strdup(cmds[i]);
         apps[i].maxprocs = maxprocs[i];
         apps[i].argv = pmix_argv_copy((char**)argvs[i]);
-        apps[i].argc = pmix_argv_count(apps[i].argv);
         apps[i].ninfo = info_keyval_sizes[i];
         apps[i].info = (pmix_info_t*)malloc(apps[i].ninfo * sizeof(pmix_info_t));
         /* copy the info objects */
@@ -257,6 +253,9 @@ PMIX_EXPORT int PMI2_Info_GetSize(int *size)
     pmix_value_t *val;
     pmix_info_t info[1];
     bool  val_optinal = 1;
+    pmix_proc_t proc = myproc;
+    proc.rank = PMIX_RANK_WILDCARD;
+
 
     PMI2_CHECK();
 
@@ -270,7 +269,7 @@ PMIX_EXPORT int PMI2_Info_GetSize(int *size)
     PMIX_INFO_CONSTRUCT(&info[0]);
     PMIX_INFO_LOAD(&info[0], PMIX_OPTIONAL, &val_optinal, PMIX_BOOL);
 
-    if (PMIX_SUCCESS == PMIx_Get(&myproc, PMIX_LOCAL_SIZE, info, 1, &val)) {
+    if (PMIX_SUCCESS == PMIx_Get(&proc, PMIX_LOCAL_SIZE, info, 1, &val)) {
         rc = convert_int(size, val);
         PMIX_VALUE_RELEASE(val);
     }
@@ -291,7 +290,8 @@ PMIX_EXPORT int PMI2_Job_Connect(const char jobid[], PMI2_Connect_comm_t *conn)
         return PMI2_ERR_INVALID_ARGS;
     }
 
-    (void)strncpy(proc.nspace, (jobid ? jobid : myproc.nspace), sizeof(myproc.nspace));
+    memset(proc.nspace, 0, sizeof(proc.nspace));
+    (void)strncpy(proc.nspace, (jobid ? jobid : proc.nspace), sizeof(proc.nspace)-1);
     proc.rank = PMIX_RANK_WILDCARD;
     rc = PMIx_Connect(&proc, 1, NULL, 0);
     return convert_err(rc);
@@ -304,7 +304,8 @@ PMIX_EXPORT int PMI2_Job_Disconnect(const char jobid[])
 
     PMI2_CHECK();
 
-    (void)strncpy(proc.nspace, (jobid ? jobid : myproc.nspace), sizeof(myproc.nspace));
+    memset(proc.nspace, 0, sizeof(proc.nspace));
+    (void)strncpy(proc.nspace, (jobid ? jobid : proc.nspace), sizeof(proc.nspace)-1);
     proc.rank = PMIX_RANK_WILDCARD;
     rc = PMIx_Disconnect(&proc, 1, NULL, 0);
     return convert_err(rc);
@@ -424,6 +425,8 @@ PMIX_EXPORT int PMI2_Info_GetNodeAttr(const char name[],
     pmix_value_t *val;
     pmix_info_t info[1];
     bool  val_optinal = 1;
+    pmix_proc_t proc = myproc;
+    proc.rank = PMIX_RANK_UNDEF;
 
     PMI2_CHECK();
 
@@ -438,7 +441,8 @@ PMIX_EXPORT int PMI2_Info_GetNodeAttr(const char name[],
     PMIX_INFO_LOAD(&info[0], PMIX_OPTIONAL, &val_optinal, PMIX_BOOL);
 
     *found = 0;
-    rc = PMIx_Get(&myproc, name, info, 1, &val);
+    /* TODO: does PMI2's "name" makes sense to PMIx? */
+    rc = PMIx_Get(&proc, name, info, 1, &val);
     if (PMIX_SUCCESS == rc && NULL != val) {
         if (PMIX_STRING != val->type) {
             rc = PMIX_ERROR;
@@ -484,19 +488,16 @@ PMIX_EXPORT int PMI2_Info_GetJobAttr(const char name[], char value[], int valuel
 {
     pmix_status_t rc = PMIX_SUCCESS;
     pmix_value_t *val;
-    pmix_proc_t proc;
     pmix_info_t info[1];
     bool  val_optinal = 1;
+    pmix_proc_t proc = myproc;
+    proc.rank = PMIX_RANK_UNDEF;
 
     PMI2_CHECK();
 
     if ((NULL == name) || (NULL == value) || (NULL == found)) {
         return PMI2_ERR_INVALID_ARG;
     }
-
-    /* getting internal key requires special rank value */
-    memcpy(&proc, &myproc, sizeof(myproc));
-    proc.rank = PMIX_RANK_UNDEF;
 
     /* set controlling parameters
      * PMIX_OPTIONAL - expect that these keys should be available on startup

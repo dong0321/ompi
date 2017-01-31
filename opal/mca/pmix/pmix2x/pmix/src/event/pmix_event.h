@@ -22,9 +22,8 @@
 #define PMIX_EVENT_H
 
 #include <src/include/pmix_config.h>
-#include <pmix/rename.h>
 
-#include <pmix/pmix_common.h>
+#include <pmix_common.h>
 #include "src/class/pmix_list.h"
 #include "src/util/output.h"
 
@@ -116,15 +115,28 @@ PMIX_CLASS_DECLARATION(pmix_event_chain_t);
 /* invoke the error handler that is registered against the given
  * status, passing it the provided info on the procs that were
  * affected, plus any additional info provided by the server */
- void pmix_invoke_local_event_hdlr(pmix_event_chain_t *chain);
+void pmix_invoke_local_event_hdlr(pmix_event_chain_t *chain);
 
-#define PMIX_REPORT_EVENT(e)                        \
+/* invoke the server event notification handler */
+pmix_status_t pmix_server_notify_client_of_event(pmix_status_t status,
+                                                 const pmix_proc_t *source,
+                                                 pmix_data_range_t range,
+                                                 pmix_info_t info[], size_t ninfo,
+                                                 pmix_op_cbfunc_t cbfunc, void *cbdata);
+
+#define PMIX_REPORT_EVENT(e, f)                     \
     do {                                            \
         pmix_event_chain_t *_ch;                    \
         _ch = PMIX_NEW(pmix_event_chain_t);         \
         _ch->status = (e);                          \
+        _ch->ninfo = 1;                             \
+        _ch->final_cbfunc = (f);                    \
+        _ch->final_cbdata = _ch;                    \
+        PMIX_INFO_CREATE(_ch->info, _ch->ninfo);    \
+        PMIX_INFO_LOAD(&_ch->info[0],               \
+                       PMIX_EVENT_RETURN_OBJECT,    \
+                       NULL, PMIX_POINTER);         \
         pmix_invoke_local_event_hdlr(_ch);          \
-        PMIX_RELEASE(_ch);                          \
     } while(0)
 
 

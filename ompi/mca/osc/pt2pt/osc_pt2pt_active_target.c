@@ -10,7 +10,7 @@
  *                         All rights reserved.
  * Copyright (c) 2007-2016 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2010      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2010-2016 IBM Corporation.  All rights reserved.
  * Copyright (c) 2012-2013 Sandia National Laboratories.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
@@ -227,6 +227,12 @@ int ompi_osc_pt2pt_start (ompi_group_t *group, int assert, ompi_win_t *win)
     /* haven't processed any post messages yet */
     sync->sync_expected = sync->num_peers;
 
+    /* If the previous epoch was from Fence, then eager_send_active is still
+     * set to true at this time, but it shoulnd't be true until we get our
+     * incoming Posts. So reset to 'false' for this new epoch.
+     */
+    sync->eager_send_active = false;
+
     OPAL_OUTPUT_VERBOSE((50, ompi_osc_base_framework.framework_output,
                          "ompi_osc_pt2pt_start entering with group size %d...",
                          sync->num_peers));
@@ -261,13 +267,13 @@ int ompi_osc_pt2pt_start (ompi_group_t *group, int assert, ompi_win_t *win)
         for (int i = 0 ; i < sync->num_peers ; ++i) {
             ompi_osc_pt2pt_peer_t *peer = sync->peer_list.peers[i];
 
-            if (peer->unexpected_post) {
+            if (ompi_osc_pt2pt_peer_unex (peer)) {
                 /* the peer already sent a post message for this pscw access epoch */
                 OPAL_OUTPUT_VERBOSE((50, ompi_osc_base_framework.framework_output,
                                      "found unexpected post from %d",
                                      peer->rank));
                 OPAL_THREAD_ADD32 (&sync->sync_expected, -1);
-                peer->unexpected_post = false;
+                ompi_osc_pt2pt_peer_set_unex (peer, false);
             }
         }
         OPAL_THREAD_UNLOCK(&sync->lock);
@@ -600,7 +606,7 @@ void osc_pt2pt_incoming_post (ompi_osc_pt2pt_module_t *module, int source)
                              "received unexpected post message from %d for future PSCW synchronization",
                              source));
 
-        peer->unexpected_post = true;
+        ompi_osc_pt2pt_peer_set_unex (peer, true);
         OPAL_THREAD_UNLOCK(&sync->lock);
     } else {
         OPAL_THREAD_UNLOCK(&sync->lock);

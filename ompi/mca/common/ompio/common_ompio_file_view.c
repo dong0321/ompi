@@ -32,6 +32,7 @@ static int datatype_duplicate  (ompi_datatype_t *oldtype, ompi_datatype_t **newt
 {
     ompi_datatype_t *type;
     if( ompi_datatype_is_predefined(oldtype) ) {
+	OBJ_RETAIN(oldtype);
         *newtype = oldtype;
         return OMPI_SUCCESS;
     }
@@ -85,8 +86,12 @@ int mca_common_ompio_set_view (mca_io_ompio_file_t *fh,
     }
 
     /* Reset the flags first */
-    fh->f_flags = 0;
-
+    if ( fh->f_flags & OMPIO_CONTIGUOUS_FVIEW ) {
+        fh->f_flags &= ~OMPIO_CONTIGUOUS_FVIEW;
+    }
+    if ( fh->f_flags & OMPIO_UNIFORM_FVIEW ) {
+        fh->f_flags &= ~OMPIO_UNIFORM_FVIEW;
+    }
     fh->f_flags |= OMPIO_FILE_VIEW_IS_SET;
     fh->f_datarep = strdup (datarep);
     datatype_duplicate (filetype, &fh->f_orig_filetype );

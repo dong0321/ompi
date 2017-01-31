@@ -19,9 +19,10 @@
 # Copyright (c) 2012      Oracle and/or its affiliates.  All rights reserved.
 # Copyright (c) 2013      Mellanox Technologies, Inc.
 #                         All rights reserved.
-# Copyright (c) 2013-2014 Intel, Inc.  All rights reserved.
+# Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
 # Copyright (c) 2014-2016 Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2016      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -63,6 +64,10 @@ OPAL_LOAD_PLATFORM
 #
 # Start it up
 #
+
+AC_CHECK_PROG([PERL],[perl],[perl],[no])
+AS_IF([test "X$PERL" = "Xno"],
+      [AC_MSG_ERROR(["Open MPI requires perl. Aborting"])])
 
 OPAL_CONFIGURE_SETUP
 opal_show_title "Configuring project_name_long"
@@ -134,7 +139,8 @@ m4_ifdef([project_ompi],
           AC_SUBST(libmpi_usempi_tkr_so_version)
           AC_SUBST(libmpi_usempi_ignore_tkr_so_version)
           AC_SUBST(libmpi_usempif08_so_version)
-          AC_SUBST(libmpi_java_so_version)])
+          AC_SUBST(libmpi_java_so_version)
+          AC_SUBST(libompitrace_so_version)])
 m4_ifdef([project_orte],
          [AC_SUBST(libopen_rte_so_version)])
 m4_ifdef([project_oshmem],
@@ -250,6 +256,7 @@ m4_ifdef([project_oshmem],
 OPAL_CONFIGURE_OPTIONS
 OPAL_CHECK_OS_FLAVORS
 OPAL_CHECK_CUDA
+OPAL_CHECK_PMIX
 m4_ifdef([project_orte], [ORTE_CONFIGURE_OPTIONS])
 m4_ifdef([project_ompi], [OMPI_CONFIGURE_OPTIONS])
 m4_ifdef([project_oshmem], [OSHMEM_CONFIGURE_OPTIONS])
@@ -277,6 +284,8 @@ fi
 OPAL_SET_LIB_PREFIX([])
 m4_ifdef([project_orte],
           [ORTE_SET_LIB_PREFIX([])])
+m4_ifdef([project_ompi],
+          [OMPI_SET_LIB_NAME([])])
 
 ############################################################################
 # Libtool: part one
@@ -581,14 +590,14 @@ AC_CHECK_HEADERS([alloca.h aio.h arpa/inet.h dirent.h \
     libutil.h memory.h netdb.h netinet/in.h netinet/tcp.h \
     poll.h pthread.h pty.h pwd.h sched.h \
     strings.h stropts.h linux/ethtool.h linux/sockios.h \
-    net/if.h sys/fcntl.h sys/ipc.h sys/shm.h \
+    sys/fcntl.h sys/ipc.h sys/shm.h \
     sys/ioctl.h sys/mman.h sys/param.h sys/queue.h \
     sys/resource.h sys/select.h sys/socket.h sys/sockio.h \
     sys/stat.h sys/statfs.h sys/statvfs.h sys/time.h sys/tree.h \
     sys/types.h sys/uio.h sys/un.h net/uio.h sys/utsname.h sys/vfs.h sys/wait.h syslog.h \
     termios.h ulimit.h unistd.h util.h utmp.h malloc.h \
     ifaddrs.h crt_externs.h regex.h mntent.h paths.h \
-    ioLib.h sockLib.h hostLib.h shlwapi.h sys/synch.h db.h ndbm.h])
+    ioLib.h sockLib.h hostLib.h shlwapi.h sys/synch.h db.h ndbm.h zlib.h])
 
 AC_CHECK_HEADERS([sys/mount.h], [], [],
 [AC_INCLUDES_DEFAULT
@@ -817,20 +826,6 @@ AC_TRY_LINK([void finalize (void) {}], [], [AC_MSG_RESULT([yes])
         opal_ld_have_fini=0])
 LDFLAGS=$LDFLAGS_save
 OPAL_VAR_SCOPE_POP
-
-opal_destructor_use_fini=0
-opal_no_destructor=0
-if test x$opal_cv___attribute__destructor = x0 ; then
-    if test x$opal_ld_have_fini = x1 ; then
-        opal_destructor_use_fini=1
-    else
-        opal_no_destructor=1;
-    fi
-fi
-
-AC_DEFINE_UNQUOTED(OPAL_NO_LIB_DESTRUCTOR, [$opal_no_destructor],
-    [Whether libraries can be configured with destructor functions])
-AM_CONDITIONAL(OPAL_DESTRUCTOR_USE_FINI, [test x$opal_destructor_use_fini = x1])
 
 ##################################
 # Libraries
@@ -1443,6 +1438,8 @@ OPAL_CONFIG_FILES
 m4_ifdef([project_orte], [ORTE_CONFIG_FILES])
 m4_ifdef([project_ompi], [OMPI_CONFIG_FILES])
 m4_ifdef([project_oshmem], [OSHMEM_CONFIG_FILES])
+
+OPAL_CHECK_LIBNL_SUMMARY
 
 AC_OUTPUT
 

@@ -1,7 +1,7 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
- * Copyright (c) 2014-2015 Research Organization for Information Science
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2014-2015 Artem Y. Polyakov <artpol84@gmail.com>.
  *                         All rights reserved.
@@ -18,7 +18,7 @@
 #include <src/include/pmix_config.h>
 
 #include <src/include/types.h>
-#include <pmix/autogen/pmix_stdint.h>
+#include <src/include/pmix_stdint.h>
 #include <src/include/pmix_socket_errno.h>
 
 #include <pmix_server.h>
@@ -26,6 +26,9 @@
 
 #ifdef HAVE_STRING_H
 #include <string.h>
+#endif
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
 #endif
 #include <fcntl.h>
 #ifdef HAVE_UNISTD_H
@@ -51,11 +54,13 @@
 #include "src/util/error.h"
 #include "src/util/output.h"
 #include "src/util/pmix_environ.h"
-#include "src/util/progress_threads.h"
-#include "src/usock/usock.h"
-#include "src/sec/pmix_sec.h"
 
 #include "pmix_server_ops.h"
+
+#if defined(PMIX_ENABLE_DSTORE) && (PMIX_ENABLE_DSTORE == 1)
+#include "src/dstore/pmix_dstore.h"
+#endif /* PMIX_ENABLE_DSTORE */
+
 
 pmix_server_module_t pmix_host_server = {0};
 
@@ -169,13 +174,32 @@ pmix_status_t pmix_server_commit(pmix_peer_t *peer, pmix_buffer_t *buf)
             PMIX_ERROR_LOG(rc);
             return rc;
         }
-        /* see if we already have info for this proc */
-        if (PMIX_SUCCESS == pmix_hash_fetch(ht, info->rank, "modex", &val) && NULL != val) {
-            /* create the new data storage */
+
+        /* create the new data storage */
+        kp = PMIX_NEW(pmix_kval_t);
+        kp->key = strdup("modex");
+        PMIX_VALUE_CREATE(kp->value, 1);
+        kp->value->type = PMIX_BYTE_OBJECT;
+
+#if defined(PMIX_ENABLE_DSTORE) && (PMIX_ENABLE_DSTORE == 1)
+        /* The local buffer must go directly the dstore */
+        if( PMIX_LOCAL == scope ){
+            /* need to deposit this in the dstore now */
+            PMIX_UNLOAD_BUFFER(b2, kp->value->data.bo.bytes, kp->value->data.bo.size);
+            if (PMIX_SUCCESS != (rc = pmix_dstore_store(nptr->nspace, info->rank, kp))) {
+                PMIX_ERROR_LOG(rc);
+            }
+            PMIX_RELEASE(kp);
+
             kp = PMIX_NEW(pmix_kval_t);
             kp->key = strdup("modex");
             PMIX_VALUE_CREATE(kp->value, 1);
             kp->value->type = PMIX_BYTE_OBJECT;
+        }
+#endif /* PMIX_ENABLE_DSTORE */
+
+        /* see if we already have info for this proc */
+        if (PMIX_SUCCESS == pmix_hash_fetch(ht, info->rank, "modex", &val) && NULL != val) {
             /* get space for the new new data blob */
             kp->value->data.bo.bytes = (char*)malloc(b2->bytes_used + val->data.bo.size);
             memcpy(kp->value->data.bo.bytes, val->data.bo.bytes, val->data.bo.size);
@@ -183,25 +207,18 @@ pmix_status_t pmix_server_commit(pmix_peer_t *peer, pmix_buffer_t *buf)
             kp->value->data.bo.size = val->data.bo.size + b2->bytes_used;
             /* release the storage */
             PMIX_VALUE_FREE(val, 1);
-            /* store it in the appropriate hash */
-            if (PMIX_SUCCESS != (rc = pmix_hash_store(ht, info->rank, kp))) {
-                PMIX_ERROR_LOG(rc);
-            }
-            PMIX_RELEASE(kp);  // maintain acctg
         } else {
-            /* create a new kval to hold this data */
-            kp = PMIX_NEW(pmix_kval_t);
-            kp->key = strdup("modex");
-            PMIX_VALUE_CREATE(kp->value, 1);
-            kp->value->type = PMIX_BYTE_OBJECT;
             PMIX_UNLOAD_BUFFER(b2, kp->value->data.bo.bytes, kp->value->data.bo.size);
-            PMIX_RELEASE(b2);
-            /* store it in the appropriate hash */
-            if (PMIX_SUCCESS != (rc = pmix_hash_store(ht, info->rank, kp))) {
-                PMIX_ERROR_LOG(rc);
-            }
-            PMIX_RELEASE(kp);  // maintain acctg
         }
+
+        /* store it in the appropriate hash */
+        if (PMIX_SUCCESS != (rc = pmix_hash_store(ht, info->rank, kp))) {
+            PMIX_ERROR_LOG(rc);
+        }
+        /* maintain the accounting */
+        PMIX_RELEASE(kp);
+        PMIX_RELEASE(b2);
+
         cnt = 1;
     }
     if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
@@ -992,7 +1009,7 @@ pmix_status_t pmix_server_register_events(pmix_peer_t *peer,
     pmix_notify_caddy_t *cd;
     int i;
     bool enviro_events = false;
-    bool found;
+    bool found, matched;
 
     pmix_output_verbose(2, pmix_globals.debug_output,
                         "recvd register events");
@@ -1156,7 +1173,32 @@ pmix_status_t pmix_server_register_events(pmix_peer_t *peer,
             }
         }
         if (found) {
-           /* have a match - notify */
+           /* if we were given specific targets, check if this is one */
+            if (NULL != cd->targets) {
+                matched = false;
+                for (n=0; n < cd->ntargets; n++) {
+                    if (0 != strncmp(peer->info->nptr->nspace, cd->targets[n].nspace, PMIX_MAX_NSLEN)) {
+                        continue;
+                    }
+                    /* if the source of the event is the same peer just registered, then ignore it
+                     * as the event notification system will have already locally
+                     * processed it */
+                    if (0 == strncmp(peer->info->nptr->nspace, cd->source.nspace, PMIX_MAX_NSLEN) &&
+                        peer->info->rank == cd->source.rank) {
+                        continue;
+                    }
+                    if (PMIX_RANK_WILDCARD == cd->targets[n].rank ||
+                        peer->info->rank == cd->targets[n].rank) {
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) {
+                    /* do not notify this one */
+                    continue;
+                }
+            }
+           /* all matches - notify */
             PMIX_RETAIN(cd->buf);
             PMIX_SERVER_QUEUE_REPLY(peer, 0, cd->buf);
         }
@@ -1187,8 +1229,8 @@ void pmix_server_deregister_events(pmix_peer_t *peer,
     /* unpack the number of codes */
     cnt=1;
     if (PMIX_SUCCESS != (rc = pmix_bfrop.unpack(buf, &ncodes, &cnt, PMIX_SIZE))) {
-        PMIX_ERROR_LOG(rc);
-        return;
+        /* it is okay if there aren't any - equivalent to a wildcard */
+        ncodes = 0;
     }
     /* unpack the array of codes */
     if (0 < ncodes) {
@@ -1302,6 +1344,20 @@ pmix_status_t pmix_server_event_recvd_from_client(pmix_peer_t *peer,
             PMIX_ERROR_LOG(rc);
             goto exit;
         }
+    }
+
+    /* check the range directive - if it is LOCAL, then we just
+     * process it ourselves. Otherwise, it needs to go up to our
+     * host for dissemination */
+    if (PMIX_RANGE_LOCAL == cd->range) {
+        if (PMIX_SUCCESS != (rc = pmix_server_notify_client_of_event(cd->status,
+                                                                     &cd->source,
+                                                                     cd->range,
+                                                                     cd->info, cd->ninfo,
+                                                                     local_cbfunc, cd))) {
+            goto exit;
+        }
+        return PMIX_SUCCESS;
     }
 
     /* when we receive an event from a client, we just pass it to
@@ -1499,19 +1555,22 @@ static void scadcon(pmix_setup_caddy_t *p)
 {
     memset(&p->proc, 0, sizeof(pmix_proc_t));
     p->active = true;
+    p->nspace = NULL;
     p->server_object = NULL;
     p->nlocalprocs = 0;
     p->info = NULL;
     p->ninfo = 0;
     p->cbfunc = NULL;
+    p->opcbfunc = NULL;
+    p->setupcbfunc = NULL;
     p->cbdata = NULL;
 }
 static void scaddes(pmix_setup_caddy_t *p)
 {
 }
-PMIX_CLASS_INSTANCE(pmix_setup_caddy_t,
-                    pmix_object_t,
-                    scadcon, scaddes);
+PMIX_EXPORT PMIX_CLASS_INSTANCE(pmix_setup_caddy_t,
+                                pmix_object_t,
+                                scadcon, scaddes);
 
 static void ncon(pmix_notify_caddy_t *p)
 {
@@ -1519,6 +1578,8 @@ static void ncon(pmix_notify_caddy_t *p)
     memset(p->source.nspace, 0, PMIX_MAX_NSLEN+1);
     p->source.rank = PMIX_RANK_UNDEF;
     p->range = PMIX_RANGE_UNDEF;
+    p->targets = NULL;
+    p->ntargets = 0;
     p->nondefault = false;
     p->info = NULL;
     p->ninfo = 0;
@@ -1528,6 +1589,9 @@ static void ndes(pmix_notify_caddy_t *p)
 {
     if (NULL != p->info) {
         PMIX_INFO_FREE(p->info, p->ninfo);
+    }
+    if (NULL != p->targets) {
+        free(p->targets);
     }
     if (NULL != p->buf) {
         PMIX_RELEASE(p->buf);
@@ -1570,27 +1634,11 @@ static void lmcon(pmix_dmdx_local_t *p)
 static void lmdes(pmix_dmdx_local_t *p)
 {
     PMIX_INFO_FREE(p->info, p->ninfo);
-    PMIX_DESTRUCT(&p->loc_reqs);
+    PMIX_LIST_DESTRUCT(&p->loc_reqs);
 }
 PMIX_CLASS_INSTANCE(pmix_dmdx_local_t,
                     pmix_list_item_t,
                     lmcon, lmdes);
-
-static void pccon(pmix_pending_connection_t *p)
-{
-    memset(p->nspace, 0, PMIX_MAX_NSLEN+1);
-    p->info = NULL;
-    p->ninfo = 0;
-}
-static void pcdes(pmix_pending_connection_t *p)
-{
-    if (NULL != p->info) {
-        PMIX_INFO_FREE(p->info, p->ninfo);
-    }
-}
-PMIX_CLASS_INSTANCE(pmix_pending_connection_t,
-                    pmix_object_t,
-                    pccon, pcdes);
 
 static void prevcon(pmix_peer_events_info_t *p)
 {
@@ -1617,38 +1665,3 @@ static void regdes(pmix_regevents_info_t *p)
 PMIX_CLASS_INSTANCE(pmix_regevents_info_t,
                     pmix_list_item_t,
                     regcon, regdes);
-
-static void lcon(pmix_listener_t *p)
-{
-    memset(&p->address, 0, sizeof(struct sockaddr_un));
-    p->address.sun_family = AF_UNIX;
-    p->socket = -1;
-    p->varname = NULL;
-    p->uri = NULL;
-    p->owner_given = false;
-    p->group_given = false;
-    p->mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
-}
-static void ldes(pmix_listener_t *p)
-{
-    if (0 <= p->socket) {
-        CLOSE_THE_SOCKET(p->socket);
-    }
-    /* cleanup the rendezvous file */
-    if (0 == access(p->address.sun_path, F_OK)) {
-        unlink(p->address.sun_path);
-    }
-    if (NULL != p->varname) {
-        free(p->varname);
-    }
-    if (NULL != p->uri) {
-        free(p->uri);
-    }
-}
-PMIX_CLASS_INSTANCE(pmix_listener_t,
-                    pmix_list_item_t,
-                    lcon, ldes);
-
-PMIX_CLASS_INSTANCE(pmix_usock_queue_t,
-                   pmix_object_t,
-                   NULL, NULL);

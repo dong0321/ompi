@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2014-2015 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2015 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2014      Artem Y. Polyakov <artpol84@gmail.com>.
@@ -18,9 +18,10 @@
 #include <src/include/pmix_config.h>
 
 #include <src/include/types.h>
-#include <pmix/autogen/pmix_stdint.h>
+#include <src/include/pmix_stdint.h>
 
 #include <pmix.h>
+#include <pmix_rename.h>
 
 #include "src/include/pmix_globals.h"
 
@@ -50,16 +51,16 @@
 #include "src/util/argv.h"
 #include "src/util/error.h"
 #include "src/util/output.h"
-#include "src/util/progress_threads.h"
-#include "src/usock/usock.h"
-#include "src/sec/pmix_sec.h"
+#include "src/mca/ptl/ptl.h"
 
 #include "pmix_client_ops.h"
 
-static void wait_cbfunc(struct pmix_peer_t *pr, pmix_usock_hdr_t *hdr,
+static void wait_cbfunc(struct pmix_peer_t *pr,
+                        pmix_ptl_hdr_t *hdr,
                         pmix_buffer_t *buf, void *cbdata);
 static void op_cbfunc(pmix_status_t status, void *cbdata);
-static void wait_lookup_cbfunc(struct pmix_peer_t *pr, pmix_usock_hdr_t *hdr,
+static void wait_lookup_cbfunc(struct pmix_peer_t *pr,
+                               pmix_ptl_hdr_t *hdr,
                                pmix_buffer_t *buf, void *cbdata);
 static void lookup_cbfunc(pmix_status_t status, pmix_pdata_t pdata[], size_t ndata,
                           void *cbdata);
@@ -164,13 +165,16 @@ PMIX_EXPORT pmix_status_t PMIx_Publish_nb(const pmix_info_t info[], size_t ninfo
     cb->active = true;
 
     /* push the message into our event base to send to the server */
-    PMIX_ACTIVATE_SEND_RECV(&pmix_client_globals.myserver, msg, wait_cbfunc, cb);
+    if (PMIX_SUCCESS != (rc = pmix_ptl.send_recv(&pmix_client_globals.myserver, msg, wait_cbfunc, (void*)cb))){
+        PMIX_RELEASE(msg);
+        PMIX_RELEASE(cb);
+    }
 
-    return PMIX_SUCCESS;
+    return rc;
 }
 
 PMIX_EXPORT pmix_status_t PMIx_Lookup(pmix_pdata_t pdata[], size_t ndata,
-                            const pmix_info_t info[], size_t ninfo)
+                                      const pmix_info_t info[], size_t ninfo)
 {
     pmix_status_t rc;
     pmix_cb_t *cb;
@@ -290,10 +294,13 @@ PMIX_EXPORT pmix_status_t PMIx_Lookup_nb(char **keys,
     cb->lookup_cbfunc = cbfunc;
     cb->cbdata = cbdata;
 
-    /* push the message into our event base to send to the server */
-    PMIX_ACTIVATE_SEND_RECV(&pmix_client_globals.myserver, msg, wait_lookup_cbfunc, cb);
+    /* send to the server */
+    if (PMIX_SUCCESS != (rc = pmix_ptl.send_recv(&pmix_client_globals.myserver, msg, wait_lookup_cbfunc, (void*)cb))){
+        PMIX_RELEASE(msg);
+        PMIX_RELEASE(cb);
+    }
 
-    return PMIX_SUCCESS;
+    return rc;
 }
 
 PMIX_EXPORT pmix_status_t PMIx_Unpublish(char **keys,
@@ -392,13 +399,17 @@ PMIX_EXPORT pmix_status_t PMIx_Unpublish_nb(char **keys,
     cb->cbdata = cbdata;
     cb->active = true;
 
-    /* push the message into our event base to send to the server */
-    PMIX_ACTIVATE_SEND_RECV(&pmix_client_globals.myserver, msg, wait_cbfunc, cb);
+    /* send to the server */
+    if (PMIX_SUCCESS != (rc = pmix_ptl.send_recv(&pmix_client_globals.myserver, msg, wait_cbfunc, (void*)cb))){
+        PMIX_RELEASE(msg);
+        PMIX_RELEASE(cb);
+    }
 
-    return PMIX_SUCCESS;
+    return rc;
 }
 
-static void wait_cbfunc(struct pmix_peer_t *pr, pmix_usock_hdr_t *hdr,
+static void wait_cbfunc(struct pmix_peer_t *pr,
+                        pmix_ptl_hdr_t *hdr,
                         pmix_buffer_t *buf, void *cbdata)
 {
     pmix_cb_t *cb = (pmix_cb_t*)cbdata;
@@ -429,7 +440,8 @@ static void op_cbfunc(pmix_status_t status, void *cbdata)
     cb->active = false;
 }
 
-static void wait_lookup_cbfunc(struct pmix_peer_t *pr, pmix_usock_hdr_t *hdr,
+static void wait_lookup_cbfunc(struct pmix_peer_t *pr,
+                               pmix_ptl_hdr_t *hdr,
                                pmix_buffer_t *buf, void *cbdata)
 {
     pmix_cb_t *cb = (pmix_cb_t*)cbdata;

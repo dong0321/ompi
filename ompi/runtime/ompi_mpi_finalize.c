@@ -17,6 +17,8 @@
  * Copyright (c) 2009      Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2011      Sandia National Laboratories. All rights reserved.
  * Copyright (c) 2014-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2016      Research Organization for Information Science
+ *                         and Technology (RIST). All rights reserved.
  *
  * $COPYRIGHT$
  *
@@ -103,6 +105,8 @@ int ompi_mpi_finalize(void)
     ompi_proc_t** procs;
     size_t nprocs;
     volatile bool active;
+    uint32_t key;
+    ompi_datatype_t * datatype;
     OPAL_TIMING_DECLARE(tm);
     OPAL_TIMING_INIT_EXT(&tm, OPAL_TIMING_GET_TIME_OF_DAY);
 
@@ -295,14 +299,16 @@ int ompi_mpi_finalize(void)
     }
     OBJ_DESTRUCT(&ompi_registered_datareps);
 
-    /* Remove all F90 types from the hash tables. As the OBJ_DESTRUCT will
-     * call a special destructor able to release predefined types, we can
-     * simply call the OBJ_DESTRUCT on the hash table and all memory will
-     * be correctly released.
-     */
-    OBJ_DESTRUCT( &ompi_mpi_f90_integer_hashtable );
-    OBJ_DESTRUCT( &ompi_mpi_f90_real_hashtable );
-    OBJ_DESTRUCT( &ompi_mpi_f90_complex_hashtable );
+    /* Remove all F90 types from the hash tables */
+    OPAL_HASH_TABLE_FOREACH(key, uint32, datatype, &ompi_mpi_f90_integer_hashtable)
+        OBJ_RELEASE(datatype);
+    OBJ_DESTRUCT(&ompi_mpi_f90_integer_hashtable);
+    OPAL_HASH_TABLE_FOREACH(key, uint32, datatype, &ompi_mpi_f90_real_hashtable)
+        OBJ_RELEASE(datatype);
+    OBJ_DESTRUCT(&ompi_mpi_f90_real_hashtable);
+    OPAL_HASH_TABLE_FOREACH(key, uint32, datatype, &ompi_mpi_f90_complex_hashtable)
+        OBJ_RELEASE(datatype);
+    OBJ_DESTRUCT(&ompi_mpi_f90_complex_hashtable);
 
     /* Free communication objects */
 
@@ -484,6 +490,17 @@ int ompi_mpi_finalize(void)
     if (OPAL_SUCCESS != (ret = opal_finalize_util())) {
         goto done;
     }
+
+    if (0 == opal_initialized) {
+        /* if there is no MPI_T_init_thread that has been MPI_T_finalize'd,
+         * then be gentle to the app and release all the memory now (instead
+         * of the opal library destructor */
+        opal_class_finalize();
+    }
+
+    /* cleanup environment */
+    opal_unsetenv("OMPI_COMMAND", &environ);
+    opal_unsetenv("OMPI_ARGV", &environ);
 
     /* All done */
 

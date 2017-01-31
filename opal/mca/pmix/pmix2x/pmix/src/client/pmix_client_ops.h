@@ -15,7 +15,6 @@
 
 #include "src/buffer_ops/buffer_ops.h"
 #include "src/class/pmix_hash_table.h"
-#include "src/usock/usock.h"
 
 BEGIN_C_DECLS
 
@@ -24,10 +23,7 @@ typedef struct {
     pmix_list_t pending_requests;   // list of pmix_cb_t pending data requests
 } pmix_client_globals_t;
 
-extern pmix_client_globals_t pmix_client_globals;
-
-void pmix_client_process_nspace_blob(const char *nspace, pmix_buffer_t *bptr);
-
+PMIX_EXPORT extern pmix_client_globals_t pmix_client_globals;
 
 END_C_DECLS
 

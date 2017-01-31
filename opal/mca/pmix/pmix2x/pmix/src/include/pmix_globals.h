@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2014-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,12 +30,15 @@
 #endif
 #include PMIX_EVENT_HEADER
 
-#include <pmix/pmix_common.h>
+#include <pmix_common.h>
 
 #include "src/buffer_ops/types.h"
 #include "src/class/pmix_hash_table.h"
 #include "src/class/pmix_list.h"
 #include "src/event/pmix_event.h"
+
+#include "src/mca/psec/psec.h"
+#include "src/mca/ptl/ptl.h"
 
 BEGIN_C_DECLS
 
@@ -82,14 +85,19 @@ typedef enum {
     PMIX_COLLECT_MAX
 } pmix_collect_t;
 
+/* define a process type */
+typedef enum {
+    PMIX_PROC_UNDEF,
+    PMIX_PROC_CLIENT,
+    PMIX_PROC_SERVER,
+    PMIX_PROC_TOOL
+} pmix_proc_type_t;
 
-/****    MESSAGING STRUCTURES    ****/
-/* header for messages */
-typedef struct {
-    int pindex;
-    uint32_t tag;
-    size_t nbytes;
-} pmix_usock_hdr_t;
+/* defins some convenience macros for testing proc type */
+#define PMIX_PROC_IS_CLIENT     (PMIX_PROC_CLIENT == pmix_globals.proc_type)
+#define PMIX_PROC_IS_SERVER     (PMIX_PROC_SERVER == pmix_globals.proc_type)
+#define PMIX_PROC_IS_TOOL       (PMIX_PROC_TOOL == pmix_globals.proc_type)
+
 
 /* internally used object for transferring data
  * to/from the server and for storing in the
@@ -103,37 +111,6 @@ PMIX_CLASS_DECLARATION(pmix_kval_t);
 
 // forward declaration
 struct pmix_peer_t;
-
-/* internally used cbfunc */
-typedef void (*pmix_usock_cbfunc_t)(struct pmix_peer_t *peer, pmix_usock_hdr_t *hdr,
-                                    pmix_buffer_t *buf, void *cbdata);
-
-/* usock structure for sending a message */
-typedef struct {
-    pmix_list_item_t super;
-    pmix_event_t ev;
-    pmix_usock_hdr_t hdr;
-    pmix_buffer_t *data;
-    bool hdr_sent;
-    char *sdptr;
-    size_t sdbytes;
-} pmix_usock_send_t;
-PMIX_CLASS_DECLARATION(pmix_usock_send_t);
-
-/* usock structure for recving a message */
-typedef struct {
-    pmix_list_item_t super;
-    pmix_event_t ev;
-    struct pmix_peer_t *peer;
-    int sd;
-    pmix_usock_hdr_t hdr;
-    char *data;
-    bool hdr_recvd;
-    char *rdptr;
-    size_t rdbytes;
-} pmix_usock_recv_t;
-PMIX_CLASS_DECLARATION(pmix_usock_recv_t);
-
 
 /****    PEER STRUCTURES    ****/
 /* objects for tracking active nspaces */
@@ -171,6 +148,13 @@ typedef struct pmix_rank_info_t {
 } pmix_rank_info_t;
 PMIX_CLASS_DECLARATION(pmix_rank_info_t);
 
+/* define a structure for holding personality pointers
+ * to plugins for cross-version support */
+typedef struct pmix_personality_t {
+    pmix_psec_module_t *psec;
+    pmix_ptl_module_t *ptl;
+} pmix_personality_t;
+
 /* object for tracking peers - each peer can have multiple
  * connections. This can occur if the initial app executes
  * a fork/exec, and the child initiates its own connection
@@ -183,13 +167,14 @@ typedef struct pmix_peer_t {
     void *server_object;
     int index;
     int sd;
-    pmix_event_t send_event;    /**< registration with event thread for send events */
+    pmix_event_t send_event;        /**< registration with event thread for send events */
     bool send_ev_active;
-    pmix_event_t recv_event;    /**< registration with event thread for recv events */
+    pmix_event_t recv_event;        /**< registration with event thread for recv events */
     bool recv_ev_active;
-    pmix_list_t send_queue;      /**< list of messages to send */
-    pmix_usock_send_t *send_msg; /**< current send in progress */
-    pmix_usock_recv_t *recv_msg; /**< current recv in progress */
+    pmix_list_t send_queue;         /**< list of messages to send */
+    pmix_ptl_send_t *send_msg;      /**< current send in progress */
+    pmix_ptl_recv_t *recv_msg;      /**< current recv in progress */
+    pmix_personality_t compat;
 } pmix_peer_t;
 PMIX_CLASS_DECLARATION(pmix_peer_t);
 
@@ -213,7 +198,7 @@ PMIX_CLASS_DECLARATION(pmix_snd_caddy_t);
  * request into the server's event base */
 typedef struct {
     pmix_list_item_t super;
-    pmix_usock_hdr_t hdr;
+    pmix_ptl_hdr_t hdr;
     pmix_peer_t *peer;
     pmix_snd_caddy_t snd;
 } pmix_server_caddy_t;
@@ -253,6 +238,23 @@ typedef struct {
 } pmix_server_trkr_t;
 PMIX_CLASS_DECLARATION(pmix_server_trkr_t);
 
+typedef int (*pmix_store_dstor_cbfunc_t)(const char *nsname,
+                                         pmix_rank_t rank, pmix_kval_t *kv);
+typedef int (*pmix_store_hash_cbfunc_t)(pmix_hash_table_t *table,
+                                         pmix_rank_t rank, pmix_kval_t *kv);
+
+typedef struct {
+    pmix_object_t super;
+    pmix_nspace_t *nsptr;
+    pmix_buffer_t *job_data;
+    pmix_store_dstor_cbfunc_t dstore_fn;
+    pmix_store_hash_cbfunc_t hstore_fn;
+#if defined(PMIX_ENABLE_DSTORE) && (PMIX_ENABLE_DSTORE == 1)
+    /* array of buffers per rank */
+    pmix_value_array_t *bufs;
+#endif
+} pmix_job_data_caddy_t;
+PMIX_CLASS_DECLARATION(pmix_job_data_caddy_t);
 
 /****    THREAD-RELATED    ****/
  /* define a caddy for thread-shifting operations */
@@ -289,6 +291,35 @@ PMIX_CLASS_DECLARATION(pmix_server_trkr_t);
  } pmix_shift_caddy_t;
 PMIX_CLASS_DECLARATION(pmix_shift_caddy_t);
 
+/* struct for tracking ops */
+typedef struct {
+    pmix_list_item_t super;
+    pmix_event_t ev;
+    volatile bool active;
+    bool checked;
+    int status;
+    pmix_status_t pstatus;
+    pmix_scope_t scope;
+    pmix_buffer_t data;
+    pmix_ptl_cbfunc_t cbfunc;
+    pmix_op_cbfunc_t op_cbfunc;
+    pmix_value_cbfunc_t value_cbfunc;
+    pmix_lookup_cbfunc_t lookup_cbfunc;
+    pmix_spawn_cbfunc_t spawn_cbfunc;
+    pmix_evhdlr_reg_cbfunc_t errreg_cbfunc;
+    size_t errhandler_ref;
+    void *cbdata;
+    char nspace[PMIX_MAX_NSLEN+1];
+    pmix_rank_t rank;
+    char *key;
+    pmix_value_t *value;
+    pmix_proc_t *procs;
+    pmix_info_t *info;
+    size_t ninfo;
+    size_t nvals;
+} pmix_cb_t;
+PMIX_CLASS_DECLARATION(pmix_cb_t);
+
 /* define a very simple caddy for dealing with pmix_info_t
  * objects when transferring portions of arrays */
 typedef struct {
@@ -321,6 +352,8 @@ PMIX_CLASS_DECLARATION(pmix_info_caddy_t);
 typedef struct {
     int init_cntr;                       // #times someone called Init - #times called Finalize
     pmix_proc_t myid;
+    pmix_peer_t *mypeer;                 // my own peer object
+    pmix_proc_type_t proc_type;
     uid_t uid;                           // my effective uid
     gid_t gid;                           // my effective gid
     int pindex;
@@ -328,7 +361,6 @@ typedef struct {
     bool external_evbase;
     int debug_output;
     pmix_events_t events;                // my event handler registrations.
-    bool server;
     bool connected;
     pmix_list_t nspaces;                 // list of pmix_nspace_t for the nspaces we know about
     pmix_buffer_t *cache_local;          // data PUT by me to local scope
@@ -336,13 +368,7 @@ typedef struct {
 } pmix_globals_t;
 
 
-/* initialize the pmix_global structure */
-void pmix_globals_init(void);
-
-/*  finalize the pmix_global structure */
-void pmix_globals_finalize(void);
-
-extern pmix_globals_t pmix_globals;
+PMIX_EXPORT extern pmix_globals_t pmix_globals;
 
 END_C_DECLS
 

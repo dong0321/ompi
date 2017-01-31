@@ -1,7 +1,7 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
- * Copyright (c) 2014-2016 Research Organization for Information Science
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2014-2015 Mellanox Technologies, Inc.
  *                         All rights reserved.
@@ -433,6 +433,7 @@ static void opal_lkupcbfunc(int status,
             }
         }
         opalcaddy->lkupcbfunc(rc, d, nd, opalcaddy->cbdata);
+        PMIX_PDATA_FREE(d, nd);
     }
     OBJ_RELEASE(opalcaddy);
 }
@@ -588,7 +589,6 @@ static pmix_status_t server_spawn_fn(const pmix_proc_t *p,
         if (NULL != apps[n].cmd) {
             app->cmd = strdup(apps[n].cmd);
         }
-        app->argc = apps[n].argc;
         if (NULL != apps[n].argv) {
             app->argv = opal_argv_copy(apps[n].argv);
         }
@@ -765,7 +765,50 @@ static pmix_status_t server_notify_event(pmix_status_t code,
                                          pmix_info_t info[], size_t ninfo,
                                          pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
-    return PMIX_ERR_NOT_SUPPORTED;
+    pmix2x_opalcaddy_t *opalcaddy;
+    opal_process_name_t src;
+    size_t n;
+    opal_value_t *oinfo;
+    int rc, status;
+
+    if (NULL == host_module || NULL == host_module->notify_event) {
+        return PMIX_ERR_NOT_SUPPORTED;
+    }
+
+    /* setup the caddy */
+    opalcaddy = OBJ_NEW(pmix2x_opalcaddy_t);
+    opalcaddy->opcbfunc = cbfunc;
+    opalcaddy->cbdata = cbdata;
+
+    /* convert the code */
+    status = pmix2x_convert_rc(code);
+
+    /* convert the source */
+    if (OPAL_SUCCESS != (rc = opal_convert_string_to_jobid(&src.jobid, source->nspace))) {
+        OBJ_RELEASE(opalcaddy);
+        return pmix2x_convert_opalrc(rc);
+    }
+    src.vpid = pmix2x_convert_rank(source->rank);
+
+    /* ignore the range for now */
+
+    /* convert the info */
+    for (n=0; n < ninfo; n++) {
+        oinfo = OBJ_NEW(opal_value_t);
+        opal_list_append(&opalcaddy->info, &oinfo->super);
+        oinfo->key = strdup(info[n].key);
+        if (OPAL_SUCCESS != (rc = pmix2x_value_unload(oinfo, &info[n].value))) {
+            OBJ_RELEASE(opalcaddy);
+            return pmix2x_convert_opalrc(rc);
+        }
+    }
+
+    /* send it upstairs */
+    if (OPAL_SUCCESS != (rc = host_module->notify_event(status, &src, &opalcaddy->info,
+                                                        opal_opcbfunc, opalcaddy))) {
+        OBJ_RELEASE(opalcaddy);
+    }
+    return pmix2x_convert_opalrc(rc);
 }
 
 static void _info_rel(void *cbdata)
@@ -838,7 +881,6 @@ static pmix_status_t server_query(pmix_proc_t *proct,
 
     /* convert the requestor */
     if (OPAL_SUCCESS != (rc = opal_convert_string_to_jobid(&requestor.jobid, proct->nspace))) {
-        opal_output(0, "FILE: %s LINE %d", __FILE__, __LINE__);
         OBJ_RELEASE(opalcaddy);
         return pmix2x_convert_opalrc(rc);
     }
@@ -879,13 +921,22 @@ static void toolcbfunc(int status,
     pmix2x_opalcaddy_t *opalcaddy = (pmix2x_opalcaddy_t*)cbdata;
     pmix_status_t rc;
     pmix_proc_t p;
+    opal_pmix2x_jobid_trkr_t *job;
 
     /* convert the status */
     rc = pmix2x_convert_opalrc(status);
 
-    /* convert the process name */
-    (void)opal_snprintf_jobid(p.nspace, PMIX_MAX_NSLEN, proc.jobid);
-    p.rank = pmix2x_convert_opalrank(proc.vpid);
+    memset(&p, 0, sizeof(pmix_proc_t));
+    if (OPAL_SUCCESS == status) {
+        /* convert the process name */
+        (void)opal_snprintf_jobid(p.nspace, PMIX_MAX_NSLEN, proc.jobid);
+        p.rank = pmix2x_convert_opalrank(proc.vpid);
+        /* store this job in our list of known nspaces */
+        job = OBJ_NEW(opal_pmix2x_jobid_trkr_t);
+        (void)strncpy(job->nspace, p.nspace, PMIX_MAX_NSLEN);
+        job->jobid = proc.jobid;
+        opal_list_append(&mca_pmix_pmix2x_component.jobids, &job->super);
+    }
 
     /* pass it down */
     if (NULL != opalcaddy->toolcbfunc) {
@@ -953,7 +1004,6 @@ static void server_log(const pmix_proc_t *proct,
 
     /* convert the requestor */
     if (OPAL_SUCCESS != (rc = opal_convert_string_to_jobid(&requestor.jobid, proct->nspace))) {
-    opal_output(0, "FILE: %s LINE %d", __FILE__, __LINE__);
     OBJ_RELEASE(opalcaddy);
     ret = pmix2x_convert_opalrc(rc);
         if (NULL != cbfunc) {
@@ -966,6 +1016,7 @@ static void server_log(const pmix_proc_t *proct,
     /* convert the data */
     for (n=0; n < ndata; n++) {
         oinfo = OBJ_NEW(opal_value_t);
+        oinfo->key = strdup(data[n].key);
         /* we "borrow" the info field of the caddy as we and the
          * server function both agree on what will be there */
         opal_list_append(&opalcaddy->info, &oinfo->super);

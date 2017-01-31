@@ -12,7 +12,7 @@
  * Copyright (c) 2011-2016 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -82,6 +82,12 @@ typedef uint8_t orte_daemon_cmd_flag_t;
 
 /* for debug purposes, get stack traces from all application procs */
 #define ORTE_DAEMON_GET_STACK_TRACES        (orte_daemon_cmd_flag_t) 31
+
+/* for memory profiling */
+#define ORTE_DAEMON_GET_MEMPROFILE          (orte_daemon_cmd_flag_t) 32
+
+/* request full topology string */
+#define ORTE_DAEMON_REPORT_TOPOLOGY_CMD     (orte_daemon_cmd_flag_t) 33
 
 /*
  * Struct written up the pipe from the child to the parent.

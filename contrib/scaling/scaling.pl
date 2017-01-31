@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2012      Los Alamos National Security, Inc.
 #                         All rights reserved.
-# Copyright (c) 2015      Intel, Inc. All rights reserved.
+# Copyright (c) 2015-2016 Intel, Inc. All rights reserved.
 
 use strict;
 use Getopt::Long;
@@ -10,7 +10,7 @@ use Getopt::Long;
 # globals
 my $num_nodes = 2;
 my $my_arg;
-my $reps = 1;
+my $reps = 5;
 my $usedvm = 0;
 my $usesrun = 0;
 my $usempirun = 0;
@@ -19,17 +19,17 @@ my $useaprun = 0;
 my $myapp;
 my $runall = 0;
 my $rawoutput = 0;
-my $myresults;
+my $myresults = "myresults";
+my $ppn = 1;
 my @csvrow;
 
-my @tests = qw(/bin/true ./orte_no_op ./mpi_no_op ./mpi_no_op);
-my @options = ("", "", "", "-mca mpi_add_procs_cutoff 0 -mca pmix_base_async_modex 1");
-my @starters = qw(mpirun orte-submit srun aprun orterun);
-my @starteroptions = ("-npernode 1 --novm",
-                      "--hnp file:dvm_uri -pernode",
-                      "--distribution=cyclic",
-                      "-N 1",
-                      "-npernode 1 --novm");
+my @tests = qw(/bin/true ./orte_no_op ./mpi_no_op ./mpi_no_op ./mpi_no_op);
+my @options = ("", "", "", "-mca mpi_add_procs_cutoff 0 -mca pmix_base_async_modex 1", "-mca mpi_add_procs_cutoff 0 -mca pmix_base_async_modex 1 -mca async_mpi_init 1 -mca async_mpi_finalize 1");
+my @starterlist = qw(mpirun orterun srun aprun);
+my @starteroptionlist = ("--novm",
+                         "--hnp file:dvm_uri",
+                         "--distribution=cyclic -N",
+                         "-N");
 
 # Set to true if the script should merely print the cmds
 # it would run, but don't run them
@@ -52,25 +52,26 @@ GetOptions(
     "all" => \$runall,
     "results=s" => \$myresults,
     "rawout" => \$rawoutput,
+    "ppn=s" => \$ppn,
 ) or die "unable to parse options, stopped";
 
 if ($HELP) {
-    print <<EOT;
-$0 [options]
+    print "$0 [options]
 
 --help | -h          This help message
 --quiet | -q         Only output critical messages to stdout
 --showme             Show the actual commands without executing them
 --reps=s             Number of times to run each test (for statistics)
---mpirun             Use only mpirun (or its equivalent orterun)
---dvm                Use only orte-dvm to execute the test
---srun               Use only srun (if available) to execute the test
---arpun              Use only aprun (if available) to execute the test
+--mpirun             Use mpirun (or its equivalent orterun)
+--dvm                Use orte-dvm to execute the test
+--srun               Use srun (if available) to execute the test
+--arpun              Use aprun (if available) to execute the test
 --myapp=s            In addition to the standard tests, run this specific application (including any args)
 --all                Use all available start commands [default]
 --results=file       File where results are to stored in comma-separated value format
 --rawout             Provide raw timing output to the file
-EOT
+--ppn=n              Run n procs/node
+";
     exit(0);
 }
 
@@ -86,13 +87,23 @@ my $res;
 my $idx;
 my $option;
 my $havedvm = 0;
+my @starters;
+my @starteroptions;
+
+# if they asked for all, then set all starters to requested
+if ($runall) {
+    $useaprun = 1;
+    $usempirun = 1;
+    $usesrun = 1;
+    $usedvm = 1;
+}
 
 # see which starters are available
 my @path = split(":", $ENV{PATH});
 my $exists = 0;
+my $opt;
 $idx=0;
-while ($idx <= $#starters) {
-    $starter = $starters[$idx];
+foreach $starter (@starterlist) {
     $exists = 0;
     foreach my $path (@path) {
         if ( -x "$path/$starter") {
@@ -100,59 +111,26 @@ while ($idx <= $#starters) {
             last;
         }
     }
-    unless ($exists) {
-        # remove this one from the list
-        splice @starters, $idx, 1;
-        splice @starteroptions, $idx, 1;
-        # adjust the index
-        $idx = $idx - 1;
-    } elsif ($usedvm && $starter ne "orte-submit") {
-        # remove this one from the list
-        splice @starters, $idx, 1;
-        splice @starteroptions, $idx, 1;
-        # adjust the index
-        $idx = $idx - 1;
-    } elsif ($usesrun && $starter ne "srun") {
-        # remove this one from the list
-        splice @starters, $idx, 1;
-        splice @starteroptions, $idx, 1;
-        # adjust the index
-        $idx = $idx - 1;
-    } elsif ($useaprun && $starter ne "aprun") {
-        # remove this one from the list
-        splice @starters, $idx, 1;
-        splice @starteroptions, $idx, 1;
-        # adjust the index
-        $idx = $idx - 1;
-    } elsif ($usempirun && (($starter ne "mpirun") && ($starter ne "orterun"))) {
-        # remove this one from the list
-        splice @starters, $idx, 1;
-        splice @starteroptions, $idx, 1;
-        # adjust the index
-        $idx = $idx - 1;
+    if ($exists) {
+        if ($usedvm && $starter eq "orterun") {
+            push @starters, $starter;
+            $opt = $starteroptionlist[$idx] . " --npernode " . $ppn;
+            push @starteroptions, $opt;
+        } elsif ($usempirun && $starter eq "mpirun") {
+            push @starters, $starter;
+            $opt = $starteroptionlist[$idx] . " --npernode " . $ppn;
+            push @starteroptions, $opt;
+        } elsif ($useaprun && $starter eq "aprun") {
+            push @starters, $starter;
+            $opt = $starteroptionlist[$idx] . " " . $ppn;
+            push @starteroptions, $opt;
+        } elsif ($usesrun && $starter eq "srun") {
+            push @starters, $starter;
+            $opt = $starteroptionlist[$idx] . " " . $ppn;
+            push @starteroptions, $opt;
+        }
     }
     $idx = $idx + 1;
-}
-
-# if both mpirun and orterun are present, then
-# we don't need to run both as they are just
-# symlinks to each other
-$exists = 0;
-foreach my $path (@path) {
-    if ( -x "$path/mpirun") {
-        $idx=0;
-        foreach $starter (@starters) {
-            if ($starter eq "orterun") {
-                splice @starters, $idx, 1;
-                splice @starteroptions, $idx, 1;
-                last;
-            }
-            $idx = $idx + 1;
-        }
-        if ($exists) {
-            last;
-        }
-    }
 }
 
 # bozo check
@@ -173,31 +151,21 @@ if ($myresults) {
 
 # determine the number of nodes - doesn't
 # matter which starter we use
-$cmd = $starters[0] . " " . $starteroptions[0] . " hostname";
-print "CMD: $cmd\n";
+$cmd = "mpirun --novm --pernode hostname";
 $output = `$cmd`;
-print "$output\n";
 @lines = split(/\n/, $output);
 $num_nodes = $#lines + 1;
-
-# collect the complete list of starters
-my $mystarters;
-$idx=1;
-$mystarters = $starters[0];
-while ($idx < $#starters) {
-    $mystarters = $mystarters . "," . $starters[$idx];
-    $idx = $idx + 1;
-}
 
 # get the local date and time
 my ($sec,$min,$hour,$day,$month,$yr19,@rest) =   localtime(time);
 
+my $pstarts = join(", ", @starters);
 # start by printing out the resulting configuration
 print "\n--------------------------------------------------\n";
 print "\nTest configuration:\n";
 print "\tDate:\t" . "$day-".++$month. "-".($yr19+1900) . " " . sprintf("%02d",$hour).":".sprintf("%02d",$min).":".sprintf("%02d",$sec) . "\n";;
 print "\tNum nodes:\t" . $num_nodes . "\n";
-print "\tStarters:\t" . $mystarters . "\n";
+print "\tStarters:\t" . $pstarts . "\n";
 print "\n--------------------------------------------------\n";
 
 # and tag the output file as well
@@ -205,7 +173,7 @@ if ($myresults) {
     print FILE "Test configuration:\n";
     print FILE "Date:\t" . "$day-".++$month. "-".($yr19+1900) . " " . sprintf("%02d",$hour).":".sprintf("%02d",$min).":".sprintf("%02d",$sec) . "\n";;
     print FILE "Num nodes:\t" . $num_nodes . "\n";
-    print FILE "Starters:\t" . $mystarters . "\n";
+    print FILE "Starters:\t" . $pstarts . "\n";
 }
 
 my $index = 0;
@@ -291,14 +259,17 @@ sub runcmd()
 }
 
 foreach $starter (@starters) {
+    print "STARTER: $starter\n";
     # if we are going to use the dvm, then we
-    if ($starter eq "orte-submit") {
+    if ($starter eq "orterun") {
         # need to start it
         if (-e "dvm_uri") {
             system("rm -f dvm_uri");
         }
         $cmd = "orte-dvm --report-uri dvm_uri 2>&1 &";
-        print $cmd . "\n";
+        if ($myresults) {
+            print FILE "\n\n$cmd\n";
+        }
         if (!$SHOWME) {
             system($cmd);
             # wait for the rendezvous file to appear
@@ -310,14 +281,14 @@ foreach $starter (@starters) {
     }
 
     if ($myresults) {
-        print FILE "\n\n$starter\n\n";
+        print FILE "$starter $starteroptions[$index]\n\n";
     }
     my $testnum = 0;
     foreach $test (@tests) {
         $option = $options[$testnum];
         if (-e $test) {
             if ($myresults) {
-                print FILE "#nodes,$test\n";
+                print FILE "#nodes,$test,$option\n";
             }
             if (!$SHOWME) {
                 # pre-position the executable
@@ -327,7 +298,7 @@ foreach $starter (@starters) {
             $n = 1;
             while ($n <= $num_nodes) {
                 push @csvrow,$n;
-                $cmd = "time " . $starter . " " . $starteroptions[$index] . " -n $n $option $test 2>&1";
+                $cmd = "time " . $starter . " " . $starteroptions[$index] . " $option $test 2>&1";
                 print $cmd . "\n";
                 if (!$SHOWME) {
                     runcmd();
@@ -350,7 +321,7 @@ foreach $starter (@starters) {
     }
     if ($havedvm) {
         if (!$SHOWME) {
-            $cmd = "orte-submit --hnp file:dvm_uri --terminate";
+            $cmd = "orterun --hnp file:dvm_uri --terminate";
             system($cmd);
         }
         if (-e "dvm_uri") {
@@ -363,4 +334,3 @@ foreach $starter (@starters) {
 if ($myresults) {
     close(FILE);
 }
-

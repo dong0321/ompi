@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016      Intel, Inc. All rights reserved.
+ * Copyright (c) 2016-2017 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -11,7 +11,7 @@
 #define PMIX_GETID_H
 
 #include <src/include/pmix_config.h>
-#include "include/pmix/pmix_common.h"
+#include "include/pmix_common.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -28,4 +28,3 @@ pmix_status_t pmix_util_getid(int sd, uid_t *uid, gid_t *gid);
 END_C_DECLS
 
 #endif /* PMIX_PRINTF_H */
-

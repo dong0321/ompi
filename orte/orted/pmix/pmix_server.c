@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2014-2015 Research Organization for Information Science
@@ -57,6 +57,7 @@
 #include "opal/util/show_help.h"
 #include "opal/util/error.h"
 #include "opal/util/output.h"
+#include "opal/util/os_path.h"
 #include "opal/util/argv.h"
 
 #include "orte/mca/errmgr/errmgr.h"
@@ -98,6 +99,7 @@ static opal_pmix_server_module_t pmix_server = {
     .disconnect = pmix_server_disconnect_fn,
     .register_events = pmix_server_register_events_fn,
     .deregister_events = pmix_server_deregister_events_fn,
+    .notify_event = pmix_server_notify_event,
     .query = pmix_server_query_fn,
     .tool_connected = pmix_tool_connected_fn,
     .log = pmix_server_log_fn
@@ -251,31 +253,22 @@ int pmix_server_init(void)
         kv->type = OPAL_STRING;
         opal_list_append(&info, &kv->super);
     }
-    /* tell the server to allow tool connections */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(OPAL_PMIX_SERVER_TOOL_SUPPORT);
-    kv->type = OPAL_BOOL;
-    kv->data.flag = true;
-    opal_list_append(&info, &kv->super);
     /* tell the server our temp directory */
     kv = OBJ_NEW(opal_value_t);
     kv->key = strdup(OPAL_PMIX_SERVER_TMPDIR);
     kv->type = OPAL_STRING;
-    kv->data.string = strdup(orte_process_info.tmpdir_base);
+    kv->data.string = opal_os_path(false, orte_process_info.jobfam_session_dir, NULL);
     opal_list_append(&info, &kv->super);
-    /* use the same for the system temp directory */
+    /* use only one listener */
     kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(OPAL_PMIX_SYSTEM_TMPDIR);
-    kv->type = OPAL_STRING;
-    kv->data.string = strdup(orte_process_info.tmpdir_base);
+    kv->key = strdup(OPAL_PMIX_SINGLE_LISTENER);
+    kv->type = OPAL_BOOL;
+    kv->data.flag = true;
     opal_list_append(&info, &kv->super);
 
     /* setup the local server */
     if (ORTE_SUCCESS != (rc = opal_pmix.server_init(&pmix_server, &info))) {
-        ORTE_ERROR_LOG(rc);
-        /* memory cleanup will occur when finalize is called */
-        orte_show_help("help-orterun.txt", "orterun:pmix-failed", true,
-                       orte_process_info.proc_session_dir);
+        /* pmix will provide a nice show_help output here */
         return rc;
     }
     OPAL_LIST_DESTRUCT(&info);
@@ -353,9 +346,9 @@ int pmix_server_init(void)
             struct timeval timeout;
             timeout.tv_sec = orte_pmix_server_globals.timeout;
             timeout.tv_usec = 0;
-            if (ORTE_SUCCESS != (rc = orte_rml.ping(server, &timeout))) {
+            if (ORTE_SUCCESS != (rc = orte_rml.ping(orte_mgmt_conduit, server, &timeout))) {
                 /* try it one more time */
-                if (ORTE_SUCCESS != (rc = orte_rml.ping(server, &timeout))) {
+                if (ORTE_SUCCESS != (rc = orte_rml.ping(orte_mgmt_conduit, server, &timeout))) {
                     /* okay give up */
                     orte_show_help("help-orterun.txt", "orterun:server-not-found", true,
                                    orte_basename, server,
@@ -416,7 +409,8 @@ static void send_error(int status, opal_process_name_t *idreq,
         return;
     }
     /* send the response */
-    orte_rml.send_buffer_nb(remote, reply,
+    orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                            remote, reply,
                             ORTE_RML_TAG_DIRECT_MODEX_RESP,
                             orte_rml_send_callback, NULL);
     return;
@@ -454,7 +448,8 @@ static void _mdxresp(int sd, short args, void *cbdata)
     opal_dss.copy_payload(reply, &req->msg);
 
     /* send the response */
-    orte_rml.send_buffer_nb(&req->proxy, reply,
+    orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                            &req->proxy, reply,
                             ORTE_RML_TAG_DIRECT_MODEX_RESP,
                             orte_rml_send_callback, NULL);
 

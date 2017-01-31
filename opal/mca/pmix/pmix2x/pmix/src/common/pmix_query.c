@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
@@ -13,18 +13,19 @@
 #include <src/include/pmix_config.h>
 
 #include <src/include/types.h>
-#include <pmix/autogen/pmix_stdint.h>
+#include <src/include/pmix_stdint.h>
 #include <src/include/pmix_socket_errno.h>
 
 #include <pmix.h>
-#include <pmix/pmix_common.h>
+#include <pmix_common.h>
 #include <pmix_server.h>
+#include <pmix_rename.h>
 
 #include "src/util/argv.h"
 #include "src/util/error.h"
 #include "src/util/output.h"
 #include "src/buffer_ops/buffer_ops.h"
-#include "src/usock/usock.h"
+#include "src/mca/ptl/ptl.h"
 
 #include "src/client/pmix_client_ops.h"
 #include "src/server/pmix_server_ops.h"
@@ -43,7 +44,7 @@ static void relcbfunc(void *cbdata)
     PMIX_RELEASE(cd);
 }
 static void query_cbfunc(struct pmix_peer_t *peer,
-                         pmix_usock_hdr_t *hdr,
+                         pmix_ptl_hdr_t *hdr,
                          pmix_buffer_t *buf, void *cbdata)
 {
     pmix_query_caddy_t *cd = (pmix_query_caddy_t*)cbdata;
@@ -113,7 +114,7 @@ PMIX_EXPORT pmix_status_t PMIx_Query_info_nb(pmix_query_t queries[], size_t nque
 
     /* if we are the server, then we just issue the query and
      * return the response */
-    if (pmix_globals.server) {
+    if (PMIX_PROC_SERVER == pmix_globals.proc_type) {
             if (NULL == pmix_host_server.query) {
                 /* nothing we can do */
                 return PMIX_ERR_NOT_SUPPORTED;
@@ -123,6 +124,7 @@ PMIX_EXPORT pmix_status_t PMIx_Query_info_nb(pmix_query_t queries[], size_t nque
             pmix_host_server.query(&pmix_globals.myid,
                                    queries, nqueries,
                                    cbfunc, cbdata);
+            rc = PMIX_SUCCESS;
     } else {
         /* if we are a client, then relay this request to the server */
         cd = PMIX_NEW(pmix_query_caddy_t);
@@ -149,7 +151,9 @@ PMIX_EXPORT pmix_status_t PMIx_Query_info_nb(pmix_query_t queries[], size_t nque
         }
         pmix_output_verbose(2, pmix_globals.debug_output,
                             "pmix:query sending to server");
-        PMIX_ACTIVATE_SEND_RECV(&pmix_client_globals.myserver, msg, query_cbfunc, cd);
+        if (PMIX_SUCCESS != (rc = pmix_ptl.send_recv(&pmix_client_globals.myserver, msg, query_cbfunc, (void*)cd))){
+            PMIX_RELEASE(cd);
+        }
     }
-    return PMIX_SUCCESS;
+    return rc;
 }

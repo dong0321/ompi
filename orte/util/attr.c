@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2014-2016 Intel, Inc. All rights reserved
- * Copyright (c) 2014      Research Organization for Information Science
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
  *
@@ -14,6 +14,7 @@
 #include "orte/constants.h"
 
 #include "opal/dss/dss.h"
+#include "opal/util/output.h"
 
 #include "orte/mca/errmgr/errmgr.h"
 
@@ -172,6 +173,8 @@ const char *orte_attr_key_to_str(orte_attribute_key_t key)
 
         case ORTE_NODE_USERNAME:
             return "NODE-USERNAME";
+        case ORTE_NODE_PORT:
+            return "NODE-PORT";
         case ORTE_NODE_LAUNCH_ID:
             return "NODE-LAUNCHID";
         case ORTE_NODE_HOSTID:
@@ -251,8 +254,8 @@ const char *orte_attr_key_to_str(orte_attribute_key_t key)
             return "JOB-LAUNCHED-DAEMONS";
         case ORTE_JOB_REPORT_BINDINGS:
             return "JOB-REPORT-BINDINGS";
-        case ORTE_JOB_SLOT_LIST:
-            return "JOB-SLOT-LIST";
+        case ORTE_JOB_CPU_LIST:
+            return "JOB-CPU-LIST";
         case ORTE_JOB_NOTIFICATIONS:
             return "JOB-NOTIFICATIONS";
         case ORTE_JOB_ROOM_NUM:
@@ -275,6 +278,14 @@ const char *orte_attr_key_to_str(orte_attribute_key_t key)
             return "ORTE-JOB-TAG-OUTPUT";
         case ORTE_JOB_TIMESTAMP_OUTPUT:
             return "ORTE-JOB-TIMESTAMP-OUTPUT";
+        case ORTE_JOB_MULTI_DAEMON_SIM:
+            return "ORTE_JOB_MULTI_DAEMON_SIM";
+        case ORTE_JOB_NOTIFY_COMPLETION:
+            return "ORTE_JOB_NOTIFY_COMPLETION";
+        case ORTE_JOB_TRANSPORT_KEY:
+            return "ORTE_JOB_TRANSPORT_KEY";
+        case ORTE_JOB_INFO_CACHE:
+            return "ORTE_JOB_INFO_CACHE";
 
         case ORTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";
@@ -305,6 +316,26 @@ const char *orte_attr_key_to_str(orte_attribute_key_t key)
         case ORTE_PROC_NBEATS:
             return "PROC-NBEATS";
 
+        case ORTE_RML_TRANSPORT_TYPE:
+            return "RML-TRANSPORT-TYPE";
+        case ORTE_RML_PROTOCOL_TYPE:
+            return "RML-PROTOCOL-TYPE";
+        case ORTE_RML_CONDUIT_ID:
+            return "RML-CONDUIT-ID";
+        case ORTE_RML_INCLUDE_COMP_ATTRIB:
+            return "RML-INCLUDE";
+        case ORTE_RML_EXCLUDE_COMP_ATTRIB:
+            return "RML-EXCLUDE";
+        case ORTE_RML_TRANSPORT_ATTRIB:
+            return "RML-TRANSPORT";
+        case ORTE_RML_QUALIFIER_ATTRIB:
+            return "RML-QUALIFIER";
+        case ORTE_RML_PROVIDER_ATTRIB:
+            return "RML-DESIRED-PROVIDERS";
+        case ORTE_RML_PROTOCOL_ATTRIB:
+            return "RML-DESIRED-PROTOCOLS";
+        case ORTE_RML_ROUTED_ATTRIB:
+            return "RML-DESIRED-ROUTED-MODULES";
         default:
             return "UNKNOWN-KEY";
         }
@@ -332,9 +363,24 @@ static int orte_attr_load(orte_attribute_t *kv,
     struct timeval *tv;
 
     kv->type = type;
-    if (NULL == data && OPAL_STRING != type && OPAL_BYTE_OBJECT != type) {
-        /* just set the fields to zero */
-        memset(&kv->data, 0, sizeof(kv->data));
+    if (NULL == data) {
+        /* if the type is BOOL, then the user wanted to
+         * use the presence of the attribute to indicate
+         * "true" - so let's mark it that way just in
+         * case a subsequent test looks for the value */
+        if (OPAL_BOOL == type) {
+            kv->data.flag = true;
+        } else {
+            /* otherwise, check to see if this type has storage
+             * that is already allocated, and free it if so */
+            if (OPAL_STRING == type && NULL != kv->data.string) {
+                free(kv->data.string);
+            } else if (OPAL_BYTE_OBJECT == type && NULL != kv->data.bo.bytes) {
+                free(kv->data.bo.bytes);
+            }
+            /* just set the fields to zero */
+            memset(&kv->data, 0, sizeof(kv->data));
+        }
         return OPAL_SUCCESS;
     }
 
@@ -451,8 +497,8 @@ static int orte_attr_unload(orte_attribute_t *kv,
         return OPAL_ERR_TYPE_MISMATCH;
     }
     if (NULL == data  ||
-        (NULL == *data && OPAL_STRING != type && OPAL_BYTE_OBJECT != type &&
-         OPAL_BUFFER != type && OPAL_PTR != type)) {
+        (OPAL_STRING != type && OPAL_BYTE_OBJECT != type &&
+         OPAL_BUFFER != type && OPAL_PTR != type && NULL == *data)) {
         assert(0);
         OPAL_ERROR_LOG(OPAL_ERR_BAD_PARAM);
         return OPAL_ERR_BAD_PARAM;

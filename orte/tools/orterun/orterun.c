@@ -14,7 +14,7 @@
  * Copyright (c) 2007-2009 Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2007-2016 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -170,9 +170,14 @@ int orterun(int argc, char *argv[])
             ORTE_UPDATE_EXIT_STATUS(1);
             goto DONE;
         }
-        while (1) {
+        while (orte_event_base_active) {
            opal_event_loop(orte_event_base, OPAL_EVLOOP_ONCE);
         }
+        /* we are terminated when the DVM master shuts down, thereby
+         * closing our connection to them. This looks like an error,
+         * but is not - so correct our exit status here */
+        orte_exit_status = 0;
+        goto DONE;
     } else {
         /* spawn the job and its daemons */
         memset(&launchst, 0, sizeof(launchst));
@@ -187,21 +192,21 @@ int orterun(int argc, char *argv[])
         }
     }
 
-      // wait for response and unpack the status, jobid
-      while (orte_event_base_active && launchst.active) {
-          opal_event_loop(orte_event_base, OPAL_EVLOOP_ONCE);
-      }
-      if (orte_debug_flag) {
-          opal_output(0, "Job %s has launched",
-                      (NULL == launchst.jdata) ? "UNKNOWN" : ORTE_JOBID_PRINT(launchst.jdata->jobid));
-      }
-      if (!orte_event_base_active || ORTE_SUCCESS != launchst.status) {
-          goto DONE;
-      }
+    // wait for response and unpack the status, jobid
+    while (orte_event_base_active && launchst.active) {
+        opal_event_loop(orte_event_base, OPAL_EVLOOP_ONCE);
+    }
+    if (orte_debug_flag) {
+        opal_output(0, "Job %s has launched",
+                   (NULL == launchst.jdata) ? "UNKNOWN" : ORTE_JOBID_PRINT(launchst.jdata->jobid));
+    }
+    if (!orte_event_base_active || ORTE_SUCCESS != launchst.status) {
+        goto DONE;
+    }
 
-      while (orte_event_base_active && completest.active) {
-          opal_event_loop(orte_event_base, OPAL_EVLOOP_ONCE);
-      }
+    while (orte_event_base_active && completest.active) {
+        opal_event_loop(orte_event_base, OPAL_EVLOOP_ONCE);
+    }
 
     if (ORTE_PROC_IS_HNP) {
         /* ensure all local procs are dead */

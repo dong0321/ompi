@@ -6,7 +6,7 @@
  *                         reserved.
  * Copyright (c) 2011-2014 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014-2015 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      Mellanox Technologies, Inc.
@@ -22,7 +22,7 @@
 
 #include <src/include/pmix_config.h>
 
-#include <pmix/autogen/pmix_stdint.h>
+#include <src/include/pmix_stdint.h>
 #include <src/include/hash_string.h>
 
 #include <string.h>

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2016 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2016      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -9,7 +10,7 @@
 
 #include "opal_config.h"
 
-#include "opal/mca/hwloc/hwloc.h"
+#include "opal/mca/hwloc/base/base.h"
 #include "opal/constants.h"
 
 #if BTL_IN_OPAL
@@ -162,7 +163,7 @@ static hwloc_obj_t find_device_numa(opal_btl_usnic_module_t *module)
     if (obj->type != HWLOC_OBJ_NODE) {
         opal_output_verbose(5, USNIC_OUT,
                             "btl:usnic:filter_numa: could not find NUMA node for %s; filtering by NUMA distance not possible",
-                            module->fabric_info->fabric_attr->name);
+                            module->linux_device_name);
         return NULL;
     }
 
@@ -191,6 +192,13 @@ int opal_btl_usnic_hwloc_distance(opal_btl_usnic_module_t *module)
     opal_output_verbose(5, USNIC_OUT,
                         "btl:usnic:filter_numa: filtering devices by NUMA distance");
 
+    /* ensure we have the topology */
+    if (OPAL_SUCCESS !=- opal_hwloc_base_get_topology()) {
+        opal_output_verbose(5, USNIC_OUT,
+                            "btl:usnic:filter_numa: not sorting devices by NUMA distance (topology not available)");
+        return OPAL_SUCCESS;
+    }
+
     /* Get the hwloc distance matrix for all NUMA nodes */
     if (OPAL_SUCCESS != (ret = get_distance_matrix())) {
         return ret;
@@ -218,7 +226,7 @@ int opal_btl_usnic_hwloc_distance(opal_btl_usnic_module_t *module)
 
         opal_output_verbose(5, USNIC_OUT,
                             "btl:usnic:filter_numa: %s is distance %d from me",
-                            module->fabric_info->fabric_attr->name,
+                            module->linux_device_name,
                             module->numa_distance);
     }
 

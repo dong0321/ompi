@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2016      Mellanox Technologies, Inc.
  *                         All rights reserved.
+ * Copyright (c) 2017      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -9,7 +10,7 @@
  */
 
 #include <src/include/pmix_config.h>
-#include <pmix/pmix_common.h>
+#include <pmix_common.h>
 #include "src/include/pmix_globals.h"
 
 #include "pmix_dstore.h"
@@ -34,7 +35,7 @@ static pmix_dstore_base_module_t *all[] = {
 
 pmix_dstore_base_module_t pmix_dstore = {0};
 
-int pmix_dstore_init(void)
+int pmix_dstore_init(pmix_info_t info[], size_t ninfo)
 {
     pmix_dstore = *all[0];
 
@@ -42,19 +43,21 @@ int pmix_dstore_init(void)
         return PMIX_ERR_NOT_SUPPORTED;
     }
 
-    return pmix_dstore.init();
+    return pmix_dstore.init(info, ninfo);
 }
 
 void pmix_dstore_finalize(void)
 {
     if (!pmix_dstore.finalize) {
-        pmix_dstore.finalize();
+        return ;
     }
+
+    pmix_dstore.finalize();
 
     return ;
 }
 
-int pmix_dstore_store(const char *nspace, int rank, pmix_kval_t *kv)
+int pmix_dstore_store(const char *nspace, pmix_rank_t rank, pmix_kval_t *kv)
 {
     if (!pmix_dstore.store) {
         return PMIX_ERR_NOT_SUPPORTED;
@@ -63,11 +66,36 @@ int pmix_dstore_store(const char *nspace, int rank, pmix_kval_t *kv)
     return pmix_dstore.store(nspace, rank, kv);
 }
 
-int pmix_dstore_fetch(const char *nspace, int rank, const char *key, pmix_value_t **kvs)
+int pmix_dstore_fetch(const char *nspace, pmix_rank_t rank,
+                      const char *key, pmix_value_t **kvs)
 {
     if (!pmix_dstore.fetch) {
         return PMIX_ERR_NOT_SUPPORTED;
     }
 
     return pmix_dstore.fetch(nspace, rank, key, kvs);
+}
+
+int pmix_dstore_patch_env(const char *nspace, char ***env)
+{
+    if (!pmix_dstore.patch_env) {
+        return PMIX_ERR_NOT_SUPPORTED;
+    }
+    return pmix_dstore.patch_env(nspace, env);
+}
+
+int pmix_dstore_nspace_add(const char *nspace, pmix_info_t info[], size_t ninfo)
+{
+    if (!pmix_dstore.nspace_add) {
+        return PMIX_ERR_NOT_SUPPORTED;
+    }
+    return pmix_dstore.nspace_add(nspace, info, ninfo);
+}
+
+int pmix_dstore_nspace_del(const char *nspace)
+{
+    if (!pmix_dstore.nspace_del) {
+        return PMIX_ERR_NOT_SUPPORTED;
+    }
+    return pmix_dstore.nspace_del(nspace);
 }

@@ -15,6 +15,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      FUJITSU LIMITED.  All rights reserved.
+ * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -45,10 +46,9 @@ static int ompi_osc_pt2pt_comm_complete (ompi_request_t *request)
 
     mark_outgoing_completion(module);
 
-    /* put this request on the garbage colletion list */
-    osc_pt2pt_gc_add_request (module, request);
+    ompi_request_free (&request);
 
-    return OMPI_SUCCESS;
+    return 1;
 }
 
 static int ompi_osc_pt2pt_req_comm_complete (ompi_request_t *request)
@@ -101,10 +101,9 @@ static int ompi_osc_pt2pt_dt_send_complete (ompi_request_t *request)
     OPAL_THREAD_UNLOCK(&mca_osc_pt2pt_component.lock);
     assert (NULL != module);
 
-    /* put this request on the garbage colletion list */
-    osc_pt2pt_gc_add_request (module, request);
+    ompi_request_free (&request);
 
-    return OMPI_SUCCESS;
+    return 1;
 }
 
 /* self communication optimizations */
@@ -118,7 +117,7 @@ static inline int ompi_osc_pt2pt_put_self (ompi_osc_pt2pt_sync_t *pt2pt_sync, co
     int ret;
 
     /* if we are in active target mode wait until all post messages arrive */
-    ompi_osc_pt2pt_sync_wait (pt2pt_sync);
+    ompi_osc_pt2pt_sync_wait_expected (pt2pt_sync);
 
     ret = ompi_datatype_sndrcv ((void *)source, source_count, source_datatype,
                                 target, target_count, target_datatype);
@@ -142,7 +141,7 @@ static inline int ompi_osc_pt2pt_get_self (ompi_osc_pt2pt_sync_t *pt2pt_sync, vo
     int ret;
 
     /* if we are in active target mode wait until all post messages arrive */
-    ompi_osc_pt2pt_sync_wait (pt2pt_sync);
+    ompi_osc_pt2pt_sync_wait_expected (pt2pt_sync);
 
     ret = ompi_datatype_sndrcv (source, source_count, source_datatype,
                                 target, target_count, target_datatype);
@@ -164,7 +163,7 @@ static inline int ompi_osc_pt2pt_cas_self (ompi_osc_pt2pt_sync_t *pt2pt_sync, co
         ((unsigned long) target_disp * module->disp_unit);
 
     /* if we are in active target mode wait until all post messages arrive */
-    ompi_osc_pt2pt_sync_wait (pt2pt_sync);
+    ompi_osc_pt2pt_sync_wait_expected (pt2pt_sync);
 
     ompi_osc_pt2pt_accumulate_lock (module);
 
@@ -188,7 +187,7 @@ static inline int ompi_osc_pt2pt_acc_self (ompi_osc_pt2pt_sync_t *pt2pt_sync, co
     int ret;
 
     /* if we are in active target mode wait until all post messages arrive */
-    ompi_osc_pt2pt_sync_wait (pt2pt_sync);
+    ompi_osc_pt2pt_sync_wait_expected (pt2pt_sync);
 
     ompi_osc_pt2pt_accumulate_lock (module);
 
@@ -338,7 +337,16 @@ static inline int ompi_osc_pt2pt_put_w_req (const void *origin_addr, int origin_
 
     if (is_long_msg) {
         /* wait for eager sends to be active before starting a long put */
-        ompi_osc_pt2pt_sync_wait (pt2pt_sync);
+        if (pt2pt_sync->type == OMPI_OSC_PT2PT_SYNC_TYPE_LOCK) {
+            OPAL_THREAD_LOCK(&pt2pt_sync->lock);
+            ompi_osc_pt2pt_peer_t *peer = ompi_osc_pt2pt_peer_lookup (module, target);
+            while (!(peer->flags & OMPI_OSC_PT2PT_PEER_FLAG_EAGER)) {
+                opal_condition_wait(&pt2pt_sync->cond, &pt2pt_sync->lock);
+            }
+            OPAL_THREAD_UNLOCK(&pt2pt_sync->lock);
+        } else {
+            ompi_osc_pt2pt_sync_wait_expected (pt2pt_sync);
+        }
     }
 
     OPAL_OUTPUT_VERBOSE((50, ompi_osc_base_framework.framework_output,
@@ -497,7 +505,16 @@ ompi_osc_pt2pt_accumulate_w_req (const void *origin_addr, int origin_count,
 
     if (is_long_msg) {
         /* wait for synchronization before posting a long message */
-        ompi_osc_pt2pt_sync_wait (pt2pt_sync);
+        if (pt2pt_sync->type == OMPI_OSC_PT2PT_SYNC_TYPE_LOCK) {
+            OPAL_THREAD_LOCK(&pt2pt_sync->lock);
+            ompi_osc_pt2pt_peer_t *peer = ompi_osc_pt2pt_peer_lookup (module, target);
+            while (!(peer->flags & OMPI_OSC_PT2PT_PEER_FLAG_EAGER)) {
+                opal_condition_wait(&pt2pt_sync->cond, &pt2pt_sync->lock);
+            }
+            OPAL_THREAD_UNLOCK(&pt2pt_sync->lock);
+        } else {
+            ompi_osc_pt2pt_sync_wait_expected (pt2pt_sync);
+        }
     }
 
     header = (ompi_osc_pt2pt_header_acc_t*) ptr;
@@ -804,7 +821,7 @@ static inline int ompi_osc_pt2pt_rget_internal (void *origin_addr, int origin_co
 
     if (!release_req) {
         /* wait for epoch to begin before starting rget operation */
-        ompi_osc_pt2pt_sync_wait (pt2pt_sync);
+        ompi_osc_pt2pt_sync_wait_expected (pt2pt_sync);
     }
 
     header = (ompi_osc_pt2pt_header_get_t*) ptr;
@@ -970,7 +987,7 @@ int ompi_osc_pt2pt_rget_accumulate_internal (const void *origin_addr, int origin
 
     if (!release_req) {
         /* wait for epoch to begin before starting operation */
-        ompi_osc_pt2pt_sync_wait (pt2pt_sync);
+        ompi_osc_pt2pt_sync_wait_expected (pt2pt_sync);
     }
 
     /* optimize the self case. TODO: optimize the local case */

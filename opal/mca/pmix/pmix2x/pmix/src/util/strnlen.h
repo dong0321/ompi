@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016      Intel, Inc. All rights reserved.
+ * Copyright (c) 2016-2017 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -19,11 +19,11 @@
 
 #if defined(HAVE_STRNLEN)
 #define PMIX_STRNLEN(c, a, b)       \
-    (c) = (int)strnlen(a, b)
+    (c) = strnlen(a, b)
 #else
 #define PMIX_STRNLEN(c, a, b)           \
     do {                                \
-        int _x;                         \
+        size_t _x;                      \
         (c) = 0;                        \
         for (_x=0; _x < (b); _x++) {    \
             if ('\0' == (a)[_x]) {      \
@@ -35,4 +35,3 @@
 #endif
 
 #endif /* PMIX_STRNLEN_H */
-

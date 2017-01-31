@@ -15,6 +15,8 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2016 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
+ * Copyright (c) 2016      Research Organization for Information Science
+ *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,6 +32,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <time.h>
+#include <sys/param.h>
 
 #include <pmix.h>
 
@@ -45,7 +48,7 @@ int main(int argc, char **argv)
     uint32_t nprocs;
     char nsp2[PMIX_MAX_NSLEN+1];
     pmix_app_t *app;
-    char hostname[PMIX_MAXHOSTNAMELEN], dir[1024];
+    char hostname[1024], dir[1024];
     pmix_proc_t *peers;
     size_t npeers, ntmp=0;
     char *nodelist;
@@ -64,8 +67,12 @@ int main(int argc, char **argv)
     }
     fprintf(stderr, "Client ns %s rank %d: Running\n", myproc.nspace, myproc.rank);
 
+    PMIX_PROC_CONSTRUCT(&proc);
+    (void)strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
+    proc.rank = PMIX_RANK_WILDCARD;
+
     /* get our universe size */
-    if (PMIX_SUCCESS != (rc = PMIx_Get(&myproc, PMIX_UNIV_SIZE, NULL, 0, &val))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_UNIV_SIZE, NULL, 0, &val))) {
         fprintf(stderr, "Client ns %s rank %d: PMIx_Get universe size failed: %d\n", myproc.nspace, myproc.rank, rc);
         goto done;
     }
@@ -74,7 +81,6 @@ int main(int argc, char **argv)
     fprintf(stderr, "Client %s:%d universe size %d\n", myproc.nspace, myproc.rank, nprocs);
 
     /* call fence to sync */
-    PMIX_PROC_CONSTRUCT(&proc);
     (void)strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
     proc.rank = PMIX_RANK_WILDCARD;
     if (PMIX_SUCCESS != (rc = PMIx_Fence(&proc, 1, NULL, 0))) {
@@ -89,7 +95,6 @@ int main(int argc, char **argv)
             exit(1);
         }
         app->maxprocs = 2;
-        app->argc = 1;
         app->argv = (char**)malloc(2 * sizeof(char*));
         if (0 > asprintf(&app->argv[0], "%s/client", dir)) {
             exit(1);
@@ -178,7 +183,6 @@ int main(int argc, char **argv)
 
  done:
     /* call fence to sync */
-    PMIX_PROC_CONSTRUCT(&proc);
     (void)strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
     proc.rank = PMIX_RANK_WILDCARD;
     if (PMIX_SUCCESS != (rc = PMIx_Fence(&proc, 1, NULL, 0))) {

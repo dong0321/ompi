@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2013-2017 Cisco Systems, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -60,6 +60,12 @@ static inline void usnic_stats_reset(opal_btl_usnic_module_t *module)
         module->stats.pml_module_sends =
         module->stats.pml_send_callbacks =
 
+        module->stats.num_seg_total_completions =
+        module->stats.num_seg_ack_completions =
+        module->stats.num_seg_frag_completions =
+        module->stats.num_seg_chunk_completions =
+        module->stats.num_seg_recv_completions =
+
         0;
 
     for (i=0; i<USNIC_NUM_CHANNELS; ++i) {
@@ -82,11 +88,11 @@ void opal_btl_usnic_print_stats(
     char tmp[128], str[2048];
 
     /* The usuals */
-    snprintf(str, sizeof(str), "%s:MCW:%3u, %s, ST(P+D)/F/C/R(T+F)/A:%8lu(%8u+%8u)/%8lu/%8lu/%4lu(%4lu+%4lu)/%8lu, RcvTot/Chk/F/C/L/H/D/BF/A:%8lu/%c%c/%8lu/%8lu/%4lu+%2lu/%4lu/%4lu/%6lu OA/DA %4lu/%4lu CRC:%4lu ",
+    snprintf(str, sizeof(str), "%s:MCW:%3u, %s, ST(P+D)/F/C/R(T+F)/A:%8lu(%8u+%8u)/%8lu/%8lu/%4lu(%4lu+%4lu)/%8lu, RcvTot/Chk/F/C/L/H/D/BF/A:%8lu/%c%c/%8lu/%8lu/%4lu+%2lu/%4lu/%4lu/%6lu Comp:T(A/F/C/R) %8lu(%8lu/%8lu/%8lu/%8lu), OA/DA %4lu/%4lu CRC:%4lu ",
              prefix,
              opal_proc_local_get()->proc_name.vpid,
 
-             module->fabric_info->fabric_attr->name,
+             module->linux_device_name,
 
              module->stats.num_total_sends,
              module->mod_channels[USNIC_PRIORITY_CHANNEL].num_channel_sends,
@@ -118,10 +124,21 @@ void opal_btl_usnic_print_stats(
              module->stats.num_badfrag_recvs,
              module->stats.num_ack_recvs,
 
+	     module->stats.num_seg_total_completions,
+	     module->stats.num_seg_ack_completions,
+	     module->stats.num_seg_frag_completions,
+	     module->stats.num_seg_chunk_completions,
+	     module->stats.num_seg_recv_completions,
+
              module->stats.num_old_dup_acks,
              module->stats.num_dup_acks,
 
              module->stats.num_crc_errors);
+
+    // Shouldn't happen, but just in case the string ever grows long
+    // enough to someday potentially get truncated by snprintf, ensure
+    // that the string is terminated.
+    str[sizeof(str) - 1] = '\0';
 
     /* If our PML calls were 0, then show send and receive window
        extents instead */
@@ -394,7 +411,7 @@ static void setup_mpit_pvars_enum(void)
 
         devices[i].value = i;
         rc = asprintf(&str, "%s,%hhu.%hhu.%hhu.%hhu/%" PRIu32,
-                      m->fabric_info->fabric_attr->name,
+                      m->linux_device_name,
                       c[0], c[1], c[2], c[3],
                       usnic_netmask_to_cidrlen(sin->sin_addr.s_addr));
         assert(rc > 0);

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2015-2016 Mellanox Technologies, Inc.
  *                         All rights reserved.
+ * Copyright (c) 2017      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -9,7 +10,7 @@
  */
 
 #include <src/include/pmix_config.h>
-#include <pmix/pmix_common.h>
+#include <pmix_common.h>
 #include "src/include/pmix_globals.h"
 
 #include "pmix_sm.h"
@@ -54,13 +55,13 @@ int pmix_sm_segment_create(pmix_sm_seg_t *sm_seg, const char *file_name, size_t 
     return pmix_sm.segment_create(sm_seg, file_name, size);
 }
 
-int pmix_sm_segment_attach(pmix_sm_seg_t *sm_seg)
+int pmix_sm_segment_attach(pmix_sm_seg_t *sm_seg, pmix_sm_access_mode_t sm_mode)
 {
     if (!pmix_sm.segment_attach) {
         return PMIX_ERR_NOT_SUPPORTED;
     }
 
-    return pmix_sm.segment_attach(sm_seg);
+    return pmix_sm.segment_attach(sm_seg, sm_mode);
 }
 
 int pmix_sm_segment_detach(pmix_sm_seg_t *sm_seg)

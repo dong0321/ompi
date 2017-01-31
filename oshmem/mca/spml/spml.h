@@ -5,6 +5,8 @@
  * Copyright (c) 2014 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2016      Research Organization for Information Science
+ *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -116,7 +118,7 @@ typedef int (*mca_spml_base_module_wait_fn_t)(void* addr,
  *
  * @param mkey remote mkey
  */
-typedef void (*mca_spml_base_module_mkey_unpack_fn_t)(sshmem_mkey_t *, int remote_pe);
+typedef void (*mca_spml_base_module_mkey_unpack_fn_t)(sshmem_mkey_t *, uint32_t segno, int remote_pe, int tr_id);
 
 /**
  * free resources used by deserialized remote mkey
@@ -147,9 +149,9 @@ typedef int (*mca_spml_base_module_deregister_fn_t)(sshmem_mkey_t *mkeys);
 
 /**
  * try to fill up mkeys that can be used to reach remote pe.
- * @param pe  remote pe
+ * @param pe         remote pe
  * @param seg 0 - symmetric heap, 1 - static data, everything else are static data in .so
- * @param mkeys  mkeys array
+ * @param mkeys      mkeys array
  *
  * @return OSHMEM_SUCCSESS if keys are found
  */
@@ -166,9 +168,9 @@ typedef int (*mca_spml_base_module_oob_get_mkeys_fn_t)(int pe,
  * @return OSHMEM_SUCCESS or failure status.
  *
  */
-typedef int (*mca_spml_base_module_add_procs_fn_t)(oshmem_proc_t** procs,
+typedef int (*mca_spml_base_module_add_procs_fn_t)(ompi_proc_t** procs,
                                                    size_t nprocs);
-typedef int (*mca_spml_base_module_del_procs_fn_t)(oshmem_proc_t** procs,
+typedef int (*mca_spml_base_module_del_procs_fn_t)(ompi_proc_t** procs,
                                                    size_t nprocs);
 
 /**
@@ -276,6 +278,15 @@ typedef int (*mca_spml_base_module_fence_fn_t)(void);
 typedef int (*mca_spml_base_module_wait_nb_fn_t)(void *);
 
 /**
+ * Called by memheap when memory is allocated by shmalloc(),
+ * shcalloc(), shmemalign() or shrealloc()
+ *
+ * @param addr   base address of the registered buffer.
+ * @param size   the size of the buffer to be registered.
+ */
+typedef void (*mca_spml_base_module_memuse_hook_fn_t)(void *, size_t);
+
+/**
  *  SPML instance.
  */
 struct mca_spml_base_module_1_0_0_t {
@@ -302,6 +313,8 @@ struct mca_spml_base_module_1_0_0_t {
 
     mca_spml_base_module_mkey_unpack_fn_t spml_rmkey_unpack;
     mca_spml_base_module_mkey_free_fn_t   spml_rmkey_free;
+
+    mca_spml_base_module_memuse_hook_fn_t spml_memuse_hook;
     void *self;
 };
 

@@ -8,10 +8,11 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007-2015 Los Alamos National Security, LLC.  All rights
+ * Copyright (c) 2007-2016 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012-2013 Sandia National Laboratories.  All rights reserved.
+ * Copyright (c) 2016      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -86,6 +87,12 @@ struct ompi_osc_rdma_component_t {
     /** Default value of the no_locks info key for new windows */
     bool no_locks;
 
+    /** Accumulate operations will only operate on a single intrinsic datatype */
+    bool acc_single_intrinsic;
+
+    /** Use network AMOs when available */
+    bool acc_use_amo;
+
     /** Priority of the osc/rdma component */
     unsigned int priority;
 
@@ -121,11 +128,12 @@ struct ompi_osc_rdma_module_t {
     /** value of same_size info key for this window */
     bool same_size;
 
-    /** window should have accumulate ordering... */
-    bool accumulate_ordering;
-
     /** passive-target synchronization will not be used in this window */
     bool no_locks;
+
+    bool acc_single_intrinsic;
+
+    bool acc_use_amo;
 
     /** flavor of this window */
     int flavor;
@@ -318,7 +326,7 @@ static inline int _ompi_osc_rdma_register (ompi_osc_rdma_module_t *module, struc
 {
     if (module->selected_btl->btl_register_mem) {
         OSC_RDMA_VERBOSE(MCA_BASE_VERBOSE_INFO, "registering segment with btl. range: %p - %p (%lu bytes)",
-                         ptr, (char *) ptr + size, size);
+                         ptr, (void*)((char *) ptr + size), size);
 
         *handle = module->selected_btl->btl_register_mem (module->selected_btl, endpoint, ptr, size, flags);
         if (OPAL_UNLIKELY(NULL == *handle)) {

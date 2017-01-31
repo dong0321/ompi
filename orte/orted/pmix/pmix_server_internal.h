@@ -12,7 +12,7 @@
  * Copyright (c) 2006-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2013-2015 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2016 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2014      Research Organization for Information Science
@@ -75,7 +75,7 @@ typedef struct {
     opal_object_t super;
     opal_event_t ev;
     int status;
-    opal_process_name_t *proc;
+    opal_process_name_t proc;
     const char *msg;
     void *server_object;
     opal_list_t *procs;
@@ -140,7 +140,8 @@ OBJ_CLASS_DECLARATION(orte_pmix_mdx_caddy_t);
     do {                                                        \
         orte_pmix_server_op_caddy_t *_cd;                       \
         _cd = OBJ_NEW(orte_pmix_server_op_caddy_t);             \
-        _cd->proc = (p);                                        \
+        _cd->proc.jobid = (p)->jobid;                           \
+        _cd->proc.vpid = (p)->vpid;                             \
         _cd->server_object = (s);                               \
         _cd->status = (st);                                     \
         _cd->msg = (m);                                         \
@@ -189,6 +190,9 @@ extern int pmix_server_register_events_fn(opal_list_t *info,
 extern int pmix_server_deregister_events_fn(opal_list_t *info,
                                             opal_pmix_op_cbfunc_t cbfunc,
                                             void *cbdata);
+extern int pmix_server_notify_event(int code, opal_process_name_t *source,
+                                    opal_list_t *info,
+                                    opal_pmix_op_cbfunc_t cbfunc, void *cbdata);
 extern int pmix_server_query_fn(opal_process_name_t *requestor,
                                 opal_list_t *queries,
                                 opal_pmix_info_cbfunc_t cbfunc, void *cbdata);
@@ -234,4 +238,3 @@ extern pmix_server_globals_t orte_pmix_server_globals;
 END_C_DECLS
 
 #endif /* PMIX_SERVER_INTERNAL_H_ */
-

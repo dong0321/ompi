@@ -25,6 +25,7 @@
 #include "oshmem/shmem/shmem_api_logger.h"
 #include "oshmem/shmem/shmem_lock.h"
 #include "oshmem/mca/memheap/memheap.h"
+#include "oshmem/mca/memheap/base/base.h"
 #include "oshmem/mca/atomic/atomic.h"
 
 #define OPAL_BITWISE_SIZEOF_LONG (SIZEOF_LONG * 8)
@@ -170,8 +171,16 @@ int shmem_lock_finalize()
 
 static int shmem_lock_get_server(void *lock)
 {
-    uint64_t offset =  MCA_MEMHEAP_CALL(find_offset(shmem_my_pe(), 0, lock, lock));
-    return (offset / 8) % shmem_n_pes();
+    map_segment_t *s;
+
+    s = memheap_find_va(lock);
+    if (NULL == s) {
+        SHMEM_API_ERROR("PE#%i lock %p is not a shared variable", shmem_my_pe(), lock);
+        oshmem_shmem_abort(-1);
+        return 0;
+    }
+
+    return ((int)((uintptr_t)lock - (uintptr_t)s->super.va_base)/8) % shmem_n_pes();
 }
 
 static uint64_t get_lock_value(const void *lock, int lock_size)
@@ -251,11 +260,11 @@ static int extract_second_word(void *lock, int lock_size, int *two)
     return extract_2_words(lock, lock_size, &one, two);
 }
 
-static uint64_t shmem_cswap(void *target,
-                            int target_size,
-                            uint64_t cond,
-                            uint64_t value,
-                            int pe)
+static uint64_t shmem_lock_cswap(void *target,
+                                 int target_size,
+                                 uint64_t cond,
+                                 uint64_t value,
+                                 int pe)
 {
     uint64_t prev_value = 0;
 
@@ -270,14 +279,30 @@ static uint64_t shmem_cswap(void *target,
 
         prev_value = prev_value_32;
     }
-
     return prev_value;
 }
 
-static uint64_t shmem_fadd(void *target,
-                           int target_size,
-                           uint64_t value,
-                           int pe)
+/* function is used to busy wait for the value. 
+ * Call opal_progress() so that ompi will no deadlock
+ * (for example may need to respond to rkey requests)
+ */
+static uint64_t shmem_lock_cswap_poll(void *target,
+                                      int target_size,
+                                      uint64_t cond,
+                                      uint64_t value,
+                                      int pe)
+{
+    uint64_t prev_value;
+
+    prev_value = shmem_lock_cswap(target, target_size, cond, value, pe);
+    opal_progress();
+    return prev_value;
+}
+
+static uint64_t shmem_lock_fadd(void *target,
+                                int target_size,
+                                uint64_t value,
+                                int pe)
 {
     uint64_t prev_value = 0;
 
@@ -316,11 +341,11 @@ static int pack_first_word(void *lock,
         extract_second_word(&lock_value, lock_size, &two);
         pack_2_words(&new_long_value, lock_size, one, &two);
         while (lock_value
-                != (temp = shmem_cswap(lock,
-                                       lock_size,
-                                       lock_value,
-                                       new_long_value,
-                                       my_pe))) {
+                != (temp = shmem_lock_cswap_poll(lock,
+                                                 lock_size,
+                                                 lock_value,
+                                                 new_long_value,
+                                                 my_pe))) {
             lock_value = temp;
             extract_second_word(&lock_value, lock_size, &two);
             pack_2_words(&new_long_value, lock_size, one, &two);
@@ -367,11 +392,11 @@ static int pack_second_word(void *lock,
         extract_first_word(&lock_value, lock_size, &one);
         pack_2_words(&new_long_value, lock_size, &one, two);
         while (lock_value
-                != (temp = shmem_cswap(lock,
-                                       lock_size,
-                                       lock_value,
-                                       new_long_value,
-                                       my_pe))) {
+                != (temp = shmem_lock_cswap_poll(lock,
+                                                 lock_size,
+                                                 lock_value,
+                                                 new_long_value,
+                                                 my_pe))) {
             lock_value = temp;
             extract_first_word(&lock_value, lock_size, &one);
             pack_2_words(&new_long_value, lock_size, &one, two);
@@ -691,11 +716,11 @@ static int shmem_lock_wait_for_ticket(void *lock,
         new_server_lock = server_lock = temp;
         lock_pack_pe_last(&new_server_lock, lock_size, &my_pe, 0);
     } while (server_lock
-            != (temp = shmem_cswap(lock,
-                                   lock_size,
-                                   server_lock,
-                                   new_server_lock,
-                                   server_pe)));
+            != (temp = shmem_lock_cswap_poll(lock,
+                                             lock_size,
+                                             server_lock,
+                                             new_server_lock,
+                                             server_pe)));
     lock_extract_pe_last(&server_lock, lock_size, pe_last);
     if (*pe_last == -1) {
         /* we are first in queue for the lock */
@@ -724,7 +749,7 @@ static int shmem_lock_subscribe_for_informing(void *lock,
     int remote_prev_pe_next = 0;
     uint64_t prev_remote_value = 1;
 
-    prev_remote_value = shmem_fadd(lock, lock_size, my_pe + 1, pe_last);
+    prev_remote_value = shmem_lock_fadd(lock, lock_size, my_pe + 1, pe_last);
     if (my_pe == server_pe) {
         lock_save_prev_pe(lock, pe_last);
     }
@@ -751,11 +776,11 @@ static int shmem_lock_subscribe_for_informing(void *lock,
         prev_remote_value += my_pe + 1;
 
         while (prev_remote_value
-                != (temp_value = shmem_cswap(lock,
-                                             lock_size,
-                                             prev_remote_value,
-                                             new_remote_value,
-                                             pe_last))) {
+                != (temp_value = shmem_lock_cswap_poll(lock,
+                                                       lock_size,
+                                                       prev_remote_value,
+                                                       new_remote_value,
+                                                       pe_last))) {
             prev_remote_value = temp_value;
             lock_extract_counter(&prev_remote_value,
                                  lock_size,
@@ -849,11 +874,11 @@ static int shmem_lock_inform_next(void *lock, int lock_size, int pe_next)
                 | (((uint64_t) 1) << (lock_bitwise_size - 1));
 
         while (remote_value
-                != (temp_value = shmem_cswap(lock,
-                                             lock_size,
-                                             remote_value,
-                                             new_remote_value,
-                                             pe_next))) {
+                != (temp_value = shmem_lock_cswap_poll(lock,
+                                                       lock_size,
+                                                       remote_value,
+                                                       new_remote_value,
+                                                       pe_next))) {
             remote_value = temp_value;
             new_remote_value = remote_value
                     | (((uint64_t) 1) << (lock_bitwise_size - 1));
@@ -938,7 +963,7 @@ static int shmem_lock_try_inform_server(void *lock, int lock_size)
                                     &incorrect_pe,
                                     &my_pe);
     return !(remote_value
-            == shmem_cswap(lock, lock_size, remote_value, zero, server_pe));
+            == shmem_lock_cswap_poll(lock, lock_size, remote_value, zero, server_pe));
 }
 
 /***************************************************************************/
@@ -987,11 +1012,11 @@ int _shmem_test_lock(void *lock, int lock_size)
             goto FreeMemory;
         }
 
-        prev_lock_value = shmem_cswap(lock,
-                                      lock_size,
-                                      0,
-                                      new_lock_value,
-                                      server_pe);
+        prev_lock_value = shmem_lock_cswap(lock,
+                                           lock_size,
+                                           0,
+                                           new_lock_value,
+                                           server_pe);
     }
 
     if (0 == prev_lock_value || my_lock) {

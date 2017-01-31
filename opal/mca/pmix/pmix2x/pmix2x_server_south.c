@@ -1,12 +1,12 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
- * Copyright (c) 2014-2016 Research Organization for Information Science
+ * Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Mellanox Technologies, Inc.
  *                         All rights reserved.
- * Copyright (c) 2016 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2016      Cisco Systems, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -71,6 +71,28 @@ static void errreg_cbfunc (pmix_status_t status,
     *active = false;
 }
 
+static void opcbfunc(pmix_status_t status, void *cbdata)
+{
+    pmix2x_opcaddy_t *op = (pmix2x_opcaddy_t*)cbdata;
+
+    if (NULL != op->opcbfunc) {
+        op->opcbfunc(pmix2x_convert_rc(status), op->cbdata);
+    }
+    if (op->active) {
+        op->status = status;
+        op->active = false;
+    } else {
+        OBJ_RELEASE(op);
+    }
+}
+
+static void op2cbfunc(pmix_status_t status, void *cbdata)
+{
+    volatile bool *active = (volatile bool*)cbdata;
+
+    *active = false;
+}
+
 int pmix2x_server_init(opal_pmix_server_module_t *module,
                       opal_list_t *info)
 {
@@ -80,6 +102,7 @@ int pmix2x_server_init(opal_pmix_server_module_t *module,
     pmix_info_t *pinfo;
     size_t sz, n;
     volatile bool active;
+    opal_pmix2x_jobid_trkr_t *job;
 
     if (0 < (dbg = opal_output_get_verbosity(opal_pmix_base_framework.framework_output))) {
         asprintf(&dbgvalue, "PMIX_DEBUG=%d", dbg);
@@ -101,6 +124,13 @@ int pmix2x_server_init(opal_pmix_server_module_t *module,
         pinfo = NULL;
     }
 
+    /* insert ourselves into our list of jobids - it will be the
+     * first, and so we'll check it first */
+    job = OBJ_NEW(opal_pmix2x_jobid_trkr_t);
+    (void)opal_snprintf_jobid(job->nspace, PMIX_MAX_NSLEN, OPAL_PROC_MY_NAME.jobid);
+    job->jobid = OPAL_PROC_MY_NAME.jobid;
+    opal_list_append(&mca_pmix_pmix2x_component.jobids, &job->super);
+
     if (PMIX_SUCCESS != (rc = PMIx_server_init(&mymodule, pinfo, sz))) {
         PMIX_INFO_FREE(pinfo, sz);
         return pmix2x_convert_rc(rc);
@@ -114,6 +144,15 @@ int pmix2x_server_init(opal_pmix_server_module_t *module,
     active = true;
     PMIx_Register_event_handler(NULL, 0, NULL, 0, pmix2x_event_hdlr, errreg_cbfunc, (void*)&active);
     PMIX_WAIT_FOR_COMPLETION(active);
+
+    /* as we might want to use some client-side functions, be sure
+     * to register our own nspace */
+    PMIX_INFO_CREATE(pinfo, 1);
+    PMIX_INFO_LOAD(&pinfo[0], PMIX_REGISTER_NODATA, NULL, PMIX_BOOL);
+    active = true;
+    PMIx_server_register_nspace(job->nspace, 1, pinfo, 1, op2cbfunc, (void*)&active);
+    PMIX_WAIT_FOR_COMPLETION(active);
+    PMIX_INFO_FREE(pinfo, 1);
 
     return OPAL_SUCCESS;
 }
@@ -155,21 +194,6 @@ int pmix2x_server_gen_ppn(const char *input, char **ppn)
     return pmix2x_convert_rc(rc);
 }
 
-static void opcbfunc(pmix_status_t status, void *cbdata)
-{
-    pmix2x_opcaddy_t *op = (pmix2x_opcaddy_t*)cbdata;
-
-    if (NULL != op->opcbfunc) {
-        op->opcbfunc(pmix2x_convert_rc(status), op->cbdata);
-    }
-    if (op->active) {
-        op->status = status;
-        op->active = false;
-    } else {
-        OBJ_RELEASE(op);
-    }
-}
-
 static void _reg_nspace(int sd, short args, void *cbdata)
 {
     pmix2x_threadshift_t *cd = (pmix2x_threadshift_t*)cbdata;
@@ -208,15 +232,17 @@ static void _reg_nspace(int sd, short args, void *cbdata)
                 pmapinfo = (opal_list_t*)kv->data.ptr;
                 szmap = opal_list_get_size(pmapinfo);
                 PMIX_INFO_CREATE(pmap, szmap);
-                pinfo[n].value.data.darray.type = PMIX_INFO;
-                pinfo[n].value.data.darray.array = (struct pmix_info_t*)pmap;
-                pinfo[n].value.data.darray.size = szmap;
+                pinfo[n].value.data.darray = (pmix_data_array_t*)calloc(1, sizeof(pmix_data_array_t));
+                pinfo[n].value.data.darray->type = PMIX_INFO;
+                pinfo[n].value.data.darray->array = (struct pmix_info_t*)pmap;
+                pinfo[n].value.data.darray->size = szmap;
                 m = 0;
                 OPAL_LIST_FOREACH(k2, pmapinfo, opal_value_t) {
                     (void)strncpy(pmap[m].key, k2->key, PMIX_MAX_KEYLEN);
                     pmix2x_value_load(&pmap[m].value, k2);
                     ++m;
                 }
+                OPAL_LIST_RELEASE(pmapinfo);
             } else {
                 pmix2x_value_load(&pinfo[n].value, kv);
             }
@@ -477,6 +503,7 @@ int pmix2x_server_notify_event(int status,
         OPAL_LIST_FOREACH(kv, info, opal_value_t) {
             (void)strncpy(pinfo[n].key, kv->key, PMIX_MAX_KEYLEN);
             pmix2x_value_load(&pinfo[n].value, kv);
+            ++n;
         }
     } else {
         sz = 0;

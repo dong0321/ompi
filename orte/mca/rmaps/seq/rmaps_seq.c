@@ -12,9 +12,10 @@
  * Copyright (c) 2006-2011 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,6 +35,7 @@
 #include <ctype.h>
 
 #include "opal/util/if.h"
+#include "opal/util/net.h"
 #include "opal/mca/hwloc/hwloc.h"
 
 #include "orte/util/show_help.h"
@@ -70,9 +72,11 @@ static void sn_des(seq_node_t *p)
 {
     if (NULL != p->hostname) {
         free(p->hostname);
+        p->hostname = NULL;
     }
     if (NULL != p->cpuset) {
         free(p->cpuset);
+        p->cpuset = NULL;
     }
 }
 OBJ_CLASS_INSTANCE(seq_node_t,
@@ -101,7 +105,7 @@ static int orte_rmaps_seq_map(orte_job_t *jdata)
     opal_list_t node_list, *seq_list, sq_list;
     orte_proc_t *proc;
     mca_base_component_t *c = &mca_rmaps_seq_component.base_version;
-    char *hosts, *sep, *eptr;
+    char *hosts = NULL, *sep, *eptr;
     FILE *fp;
     opal_hwloc_resource_type_t rtype;
 
@@ -156,7 +160,7 @@ static int orte_rmaps_seq_map(orte_job_t *jdata)
     /* if there is a default hostfile, go and get its ordered list of nodes */
     OBJ_CONSTRUCT(&default_seq_list, opal_list_t);
     if (NULL != orte_default_hostfile) {
-        char *hstname;
+        char *hstname = NULL;
         /* open the file */
         fp = fopen(orte_default_hostfile, "r");
         if (NULL == fp) {
@@ -168,6 +172,11 @@ static int orte_rmaps_seq_map(orte_job_t *jdata)
             if (0 == strlen(hstname)) {
                 free(hstname);
                 /* blank line - ignore */
+                continue;
+            }
+            if( '#' == hstname[0] ) {
+                free(hstname);
+                /* Comment line - ignore */
                 continue;
             }
             sq = OBJ_NEW(seq_node_t);
@@ -182,6 +191,15 @@ static int orte_rmaps_seq_map(orte_job_t *jdata)
                 *(eptr+1) = 0;
                 sq->cpuset = strdup(sep);
             }
+
+            // Strip off the FQDN if present, ignore IP addresses
+            if( !orte_keep_fqdn_hostnames && !opal_net_isaddr(hstname) ) {
+                char *ptr;
+                if (NULL != (ptr = strchr(hstname, '.'))) {
+                    *ptr = '\0';
+                }
+            }
+
             sq->hostname = hstname;
             opal_list_append(&default_seq_list, &sq->super);
         }
@@ -243,6 +261,10 @@ static int orte_rmaps_seq_map(orte_job_t *jdata)
             seq_list = &sq_list;
         } else if (orte_get_attribute(&app->attributes, ORTE_APP_HOSTFILE, (void**)&hosts, OPAL_STRING)) {
             char *hstname;
+            if (NULL == hosts) {
+                rc = ORTE_ERR_NOT_FOUND;
+                goto error;
+            }
             opal_output_verbose(5, orte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using hostfile %s nodes on app %s", hosts, app->app);
             OBJ_CONSTRUCT(&sq_list, opal_list_t);
@@ -255,6 +277,16 @@ static int orte_rmaps_seq_map(orte_job_t *jdata)
                 goto error;
             }
             while (NULL != (hstname = orte_getline(fp))) {
+                if (0 == strlen(hstname)) {
+                    free(hstname);
+                    /* blank line - ignore */
+                    continue;
+                }
+                if( '#' == hstname[0] ) {
+                    free(hstname);
+                    /* Comment line - ignore */
+                    continue;
+                }
                 sq = OBJ_NEW(seq_node_t);
                 if (NULL != (sep = strchr(hstname, ' '))) {
                     *sep = '\0';
@@ -267,6 +299,15 @@ static int orte_rmaps_seq_map(orte_job_t *jdata)
                     *(eptr+1) = 0;
                     sq->cpuset = strdup(sep);
                 }
+
+                // Strip off the FQDN if present, ignore IP addresses
+                if( !orte_keep_fqdn_hostnames && !opal_net_isaddr(hstname) ) {
+                    char *ptr;
+                    if (NULL != (ptr = strchr(hstname, '.'))) {
+                        (*ptr) = '\0';
+                    }
+                }
+
                 sq->hostname = hstname;
                 opal_list_append(&sq_list, &sq->super);
             }
@@ -371,6 +412,7 @@ static int orte_rmaps_seq_map(orte_job_t *jdata)
                  * properly set
                  */
                 ORTE_FLAG_SET(node, ORTE_NODE_FLAG_OVERSUBSCRIBED);
+                ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_OVERSUBSCRIBED);
                 /* check for permission */
                 if (ORTE_FLAG_TEST(node, ORTE_NODE_FLAG_SLOTS_GIVEN)) {
                     /* if we weren't given a directive either way, then we will error out
@@ -400,7 +442,7 @@ static int orte_rmaps_seq_map(orte_job_t *jdata)
             if (NULL != sq->cpuset) {
                 hwloc_cpuset_t bitmap;
                 char *cpu_bitmap;
-                if (NULL == node->topology) {
+                if (NULL == node->topology || NULL == node->topology->topo) {
                     /* not allowed - for sequential cpusets, we must have
                      * the topology info
                      */
@@ -418,7 +460,7 @@ static int orte_rmaps_seq_map(orte_job_t *jdata)
                     /* setup the bitmap */
                     bitmap = hwloc_bitmap_alloc();
                     /* parse the slot_list to find the socket and core */
-                    if (ORTE_SUCCESS != (rc = opal_hwloc_base_slot_list_parse(sq->cpuset, node->topology, rtype, bitmap))) {
+                    if (ORTE_SUCCESS != (rc = opal_hwloc_base_cpu_list_parse(sq->cpuset, node->topology->topo, rtype, bitmap))) {
                         ORTE_ERROR_LOG(rc);
                         hwloc_bitmap_free(bitmap);
                         goto error;
@@ -448,8 +490,8 @@ static int orte_rmaps_seq_map(orte_job_t *jdata)
                 /* assign the locale - okay for the topo to be null as
                  * it just means it wasn't returned
                  */
-                if (NULL != node->topology) {
-                    locale = hwloc_get_root_obj(node->topology);
+                if (NULL != node->topology && NULL != node->topology->topo) {
+                    locale = hwloc_get_root_obj(node->topology->topo);
                     orte_set_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE,
                                        ORTE_ATTR_LOCAL, locale, OPAL_PTR);
                 }
@@ -489,12 +531,10 @@ static char *orte_getline(FILE *fp)
 
     ret = fgets(input, 1024, fp);
     if (NULL != ret) {
-	   input[strlen(input)-1] = '\0';  /* remove newline */
-	   buff = strdup(input);
-	   return buff;
+           input[strlen(input)-1] = '\0';  /* remove newline */
+           buff = strdup(input);
+           return buff;
     }
 
     return NULL;
 }
-
-

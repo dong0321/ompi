@@ -16,7 +16,7 @@
  * Copyright (c) 2010-2015 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2013-2016 Intel, Inc. All rights reserved
- * Copyright (c) 2015      Research Organization for Information Science
+ * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
  *
@@ -52,6 +52,7 @@
 #include "opal/mca/sec/base/base.h"
 #include "opal/mca/timer/base/base.h"
 #include "opal/mca/memchecker/base/base.h"
+#include "opal/mca/if/base/base.h"
 #include "opal/dss/dss.h"
 #include "opal/mca/shmem/base/base.h"
 #if OPAL_ENABLE_FT_CR    == 1
@@ -277,6 +278,21 @@ opal_err2str(int errnum, const char **errmsg)
     case OPAL_ERR_NODE_OFFLINE:
         retval = "Node has gone offline";
         break;
+    case OPAL_ERR_JOB_TERMINATED:
+        retval = "Job terminated";
+        break;
+    case OPAL_ERR_PROC_RESTART:
+        retval = "Process restarted";
+        break;
+    case OPAL_ERR_PROC_CHECKPOINT:
+        retval = "Process checkpoint";
+        break;
+    case OPAL_ERR_PROC_MIGRATE:
+        retval = "Process migrate";
+        break;
+    case OPAL_ERR_EVENT_REGISTRATION:
+        retval = "Event registration";
+        break;
     default:
         retval = "UNRECOGNIZED";
     }
@@ -328,15 +344,7 @@ opal_init_util(int* pargc, char*** pargv)
         return OPAL_SUCCESS;
     }
 
-#if OPAL_NO_LIB_DESTRUCTOR
-    if (opal_init_called) {
-        /* can't use show_help here */
-        fprintf (stderr, "opal_init_util: attempted to initialize after finalize without compiler "
-                 "support for either __attribute__(destructor) or linker support for -fini -- process "
-                 "will likely abort\n");
-        return OPAL_ERR_NOT_SUPPORTED;
-    }
-#endif
+    opal_thread_set_main();
 
     opal_init_called = true;
 
@@ -443,6 +451,13 @@ opal_init_util(int* pargc, char*** pargv)
     if (OPAL_SUCCESS != (ret = mca_base_open())) {
         error = "mca_base_open";
         goto return_error;
+    }
+
+    /* initialize if framework */
+    if (OPAL_SUCCESS != (ret = mca_base_framework_open(&opal_if_base_framework, 0))) {
+        fprintf(stderr, "opal_if_base_open() failed -- process will likely abort (%s:%d, returned %d instead of OPAL_SUCCESS)\n",
+                __FILE__, __LINE__, ret);
+        return ret;
     }
 
     return OPAL_SUCCESS;

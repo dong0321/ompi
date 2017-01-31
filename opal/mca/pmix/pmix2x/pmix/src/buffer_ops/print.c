@@ -23,7 +23,7 @@
 
 #include <src/include/pmix_config.h>
 
-#include <pmix/autogen/pmix_stdint.h>
+#include <src/include/pmix_stdint.h>
 
 #include <stdio.h>
 #ifdef HAVE_TIME_H
@@ -865,26 +865,47 @@ pmix_status_t pmix_bfrop_print_status(char **output, char *prefix,
                       PMIx_Error_string(src->data.status));
         break;
         case PMIX_PROC:
+        if (NULL == src->data.proc) {
+            rc = asprintf(output, "%sPMIX_VALUE: Data type: PMIX_PROC\tNULL", prefx);
+        } else {
+            rc = asprintf(output, "%sPMIX_VALUE: Data type: PMIX_PROC\t%s:%lu",
+                          prefx, src->data.proc->nspace, (unsigned long)src->data.proc->rank);
+        }
+        break;
         case PMIX_BYTE_OBJECT:
+        rc = asprintf(output, "%sPMIX_VALUE: Data type: BYTE_OBJECT\tSIZE: %ld",
+                      prefx, (long)src->data.bo.size);
+        break;
         case PMIX_PERSIST:
-        rc = asprintf(output, "%sPMIX_VALUE: Data type: PMIX_PERSIST\tValue: %d",
-                      prefx, (int)src->data.persist);
+        rc = asprintf(output, "%sPMIX_VALUE: Data type: PMIX_PERSIST\tValue: %s",
+                      prefx, PMIx_Persistence_string(src->data.persist));
         break;
         case PMIX_SCOPE:
-        rc = asprintf(output, "%sPMIX_VALUE: Data type: PMIX_PERSIST\tValue: %d",
-                      prefx, (int)src->data.persist);
+        rc = asprintf(output, "%sPMIX_VALUE: Data type: PMIX_SCOPE\tValue: %s",
+                      prefx, PMIx_Scope_string(src->data.scope));
         break;
         case PMIX_DATA_RANGE:
-        rc = asprintf(output, "%sPMIX_VALUE: Data type: PMIX_PERSIST\tValue: %d",
-                      prefx, (int)src->data.persist);
+        rc = asprintf(output, "%sPMIX_VALUE: Data type: PMIX_DATA_RANGE\tValue: %s",
+                      prefx, PMIx_Data_range_string(src->data.range));
         break;
         case PMIX_PROC_STATE:
+        rc = asprintf(output, "%sPMIX_VALUE: Data type: PMIX_STATE\tValue: %s",
+                      prefx, PMIx_Proc_state_string(src->data.state));
+        break;
         case PMIX_PROC_INFO:
+        rc = asprintf(output, "%sPMIX_VALUE: Data type: PMIX_PROC_INFO\tProc: %s:%lu\n%s\tHost: %s\tExecutable: %s\tPid: %lu",
+                      prefx, src->data.pinfo->proc.nspace, (unsigned long)src->data.pinfo->proc.rank,
+                      prefx, src->data.pinfo->hostname, src->data.pinfo->executable_name,
+                      (unsigned long)src->data.pinfo->pid);
+        break;
         case PMIX_DATA_ARRAY:
+        rc = asprintf(output, "%sPMIX_VALUE: Data type: DATA_ARRAY\tARRAY SIZE: %ld",
+                      prefx, (long)src->data.darray->size);
+        break;
         /**** DEPRECATED ****/
         case PMIX_INFO_ARRAY:
         rc = asprintf(output, "%sPMIX_VALUE: Data type: INFO_ARRAY\tARRAY SIZE: %ld",
-                      prefx, (long)src->data.array.size);
+                      prefx, (long)src->data.array->size);
         break;
         /********************/
         default:
@@ -999,130 +1020,6 @@ pmix_status_t pmix_bfrop_print_kval(char **output, char *prefix,
 {
     return PMIX_SUCCESS;
 }
-
-#if PMIX_HAVE_HWLOC
-#define PMIX_HWLOC_MAX_STRING   2048
-
-static void print_hwloc_obj(char **output, char *prefix,
-                            hwloc_topology_t topo, hwloc_obj_t obj)
-{
-    hwloc_obj_t obj2;
-    char string[1024], *tmp, *tmp2, *pfx;
-    unsigned i;
-    struct hwloc_topology_support *support;
-
-    /* print the object type */
-    hwloc_obj_type_snprintf(string, 1024, obj, 1);
-    if (0 > asprintf(&pfx, "\n%s\t", (NULL == prefix) ? "" : prefix)) {
-        return;
-    }
-    if (0 > asprintf(&tmp, "%sType: %s Number of child objects: %u%sName=%s",
-                     (NULL == prefix) ? "" : prefix, string, obj->arity,
-                     pfx, (NULL == obj->name) ? "NULL" : obj->name)) {
-        free(pfx);
-    return;
-}
-if (0 < hwloc_obj_attr_snprintf(string, 1024, obj, pfx, 1)) {
-        /* print the attributes */
-    if (0 > asprintf(&tmp2, "%s%s%s", tmp, pfx, string)) {
-        free(tmp);
-        free(pfx);
-        return;
-    }
-    free(tmp);
-    tmp = tmp2;
-}
-    /* print the cpusets - apparently, some new HWLOC types don't
-     * have cpusets, so protect ourselves here
-     */
-     if (NULL != obj->cpuset) {
-        hwloc_bitmap_snprintf(string, PMIX_HWLOC_MAX_STRING, obj->cpuset);
-        if (0 > asprintf(&tmp2, "%s%sCpuset:  %s", tmp, pfx, string)) {
-            free(tmp);
-            free(pfx);
-            return;
-        }
-        free(tmp);
-        tmp = tmp2;
-    }
-    if (NULL != obj->online_cpuset) {
-        hwloc_bitmap_snprintf(string, PMIX_HWLOC_MAX_STRING, obj->online_cpuset);
-        if (0 > asprintf(&tmp2, "%s%sOnline:  %s", tmp, pfx, string)) {
-            free(tmp);
-            free(pfx);
-            return;
-        }
-        free(tmp);
-        tmp = tmp2;
-    }
-    if (NULL != obj->allowed_cpuset) {
-        hwloc_bitmap_snprintf(string, PMIX_HWLOC_MAX_STRING, obj->allowed_cpuset);
-        if (0 > asprintf(&tmp2, "%s%sAllowed: %s", tmp, pfx, string)) {
-            free(tmp);
-            free(pfx);
-            return;
-        }
-        free(tmp);
-        tmp = tmp2;
-    }
-    if (HWLOC_OBJ_MACHINE == obj->type) {
-        /* root level object - add support values */
-        support = (struct hwloc_topology_support*)hwloc_topology_get_support(topo);
-        if (0 > asprintf(&tmp2, "%s%sBind CPU proc:   %s%sBind CPU thread: %s", tmp, pfx,
-                         (support->cpubind->set_thisproc_cpubind) ? "TRUE" : "FALSE", pfx,
-                         (support->cpubind->set_thisthread_cpubind) ? "TRUE" : "FALSE")) {
-            free(tmp);
-        free(pfx);
-        return;
-    }
-    free(tmp);
-    tmp = tmp2;
-    if (0 > asprintf(&tmp2, "%s%sBind MEM proc:   %s%sBind MEM thread: %s", tmp, pfx,
-                     (support->membind->set_thisproc_membind) ? "TRUE" : "FALSE", pfx,
-                     (support->membind->set_thisthread_membind) ? "TRUE" : "FALSE")) {
-        free(tmp);
-    free(pfx);
-    return;
-}
-free(tmp);
-tmp = tmp2;
-}
-if (0 > asprintf(&tmp2, "%s%s\n", (NULL == *output) ? "" : *output, tmp)) {
-    free(tmp);
-    return;
-}
-free(tmp);
-free(pfx);
-if (0 > asprintf(&pfx, "%s\t", (NULL == prefix) ? "" : prefix)) {
-    return;
-}
-for (i=0; i < obj->arity; i++) {
-    obj2 = obj->children[i];
-        /* print the object */
-    print_hwloc_obj(&tmp2, pfx, topo, obj2);
-}
-free(pfx);
-if (NULL != *output) {
-    free(*output);
-}
-*output = tmp2;
-}
-
-pmix_status_t pmix_bfrop_print_topo(char **output, char *prefix,
-                                    hwloc_topology_t src, pmix_data_type_t type)
-{
-    hwloc_obj_t obj;
-    char *tmp=NULL;
-
-    /* get root object */
-    obj = hwloc_get_root_obj(src);
-    /* print it */
-    print_hwloc_obj(&tmp, prefix, src, obj);
-    *output = tmp;
-    return PMIX_SUCCESS;
-}
-
-#endif
 
 pmix_status_t pmix_bfrop_print_modex(char **output, char *prefix,
                                      pmix_modex_data_t *src, pmix_data_type_t type)

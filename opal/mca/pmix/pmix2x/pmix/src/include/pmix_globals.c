@@ -18,7 +18,7 @@
 #include <src/include/pmix_config.h>
 
 #include <src/include/types.h>
-#include <pmix/autogen/pmix_stdint.h>
+#include <src/include/pmix_stdint.h>
 #include <src/include/pmix_socket_errno.h>
 
 #include "src/include/pmix_globals.h"
@@ -40,38 +40,75 @@
 #include "src/class/pmix_hash_table.h"
 #include "src/class/pmix_list.h"
 
-
-pmix_globals_t pmix_globals = {
-    .init_cntr = 0,
-    .pindex = 0,
-    .evbase = NULL,
-    .debug_output = -1,
-    .server = false,
-    .connected = false,
-    .cache_local = NULL,
-    .cache_remote = NULL
-};
-
-
-void pmix_globals_init(void)
+static void cbcon(pmix_cb_t *p)
 {
-    memset(&pmix_globals.myid, 0, sizeof(pmix_proc_t));
-    PMIX_CONSTRUCT(&pmix_globals.nspaces, pmix_list_t);
-    PMIX_CONSTRUCT(&pmix_globals.events, pmix_events_t);
+    p->active = false;
+    p->checked = false;
+    PMIX_CONSTRUCT(&p->data, pmix_buffer_t);
+    p->cbfunc = NULL;
+    p->op_cbfunc = NULL;
+    p->value_cbfunc = NULL;
+    p->lookup_cbfunc = NULL;
+    p->spawn_cbfunc = NULL;
+    p->cbdata = NULL;
+    memset(p->nspace, 0, PMIX_MAX_NSLEN+1);
+    p->rank = -1;
+    p->key = NULL;
+    p->value = NULL;
+    p->procs = NULL;
+    p->info = NULL;
+    p->ninfo = 0;
+    p->nvals = 0;
 }
-
-void pmix_globals_finalize(void)
+static void cbdes(pmix_cb_t *p)
 {
-    PMIX_LIST_DESTRUCT(&pmix_globals.nspaces);
-    if (NULL != pmix_globals.cache_local) {
-        PMIX_RELEASE(pmix_globals.cache_local);
-    }
-    if (NULL != pmix_globals.cache_remote) {
-        PMIX_RELEASE(pmix_globals.cache_remote);
-    }
-    PMIX_DESTRUCT(&pmix_globals.events);
+    PMIX_DESTRUCT(&p->data);
 }
+PMIX_EXPORT PMIX_CLASS_INSTANCE(pmix_cb_t,
+                                pmix_list_item_t,
+                                cbcon, cbdes);
 
+static void pcon(pmix_peer_t *p)
+{
+    p->info = NULL;
+    p->proc_cnt = 0;
+    p->server_object = NULL;
+    p->index = 0;
+    p->sd = -1;
+    p->send_ev_active = false;
+    p->recv_ev_active = false;
+    PMIX_CONSTRUCT(&p->send_queue, pmix_list_t);
+    p->send_msg = NULL;
+    p->recv_msg = NULL;
+    memset(&p->compat, 0, sizeof(p->compat));
+}
+static void pdes(pmix_peer_t *p)
+{
+    if (0 <= p->sd) {
+        CLOSE_THE_SOCKET(p->sd);
+    }
+    if (p->send_ev_active) {
+        event_del(&p->send_event);
+    }
+    if (p->recv_ev_active) {
+        event_del(&p->recv_event);
+    }
+
+    if (NULL != p->info) {
+        PMIX_RELEASE(p->info);
+    }
+
+    PMIX_LIST_DESTRUCT(&p->send_queue);
+    if (NULL != p->send_msg) {
+        PMIX_RELEASE(p->send_msg);
+    }
+    if (NULL != p->recv_msg) {
+        PMIX_RELEASE(p->recv_msg);
+    }
+}
+PMIX_EXPORT PMIX_CLASS_INSTANCE(pmix_peer_t,
+                                pmix_object_t,
+                                pcon, pdes);
 
 static void nscon(pmix_nspace_t *p)
 {
@@ -85,16 +122,29 @@ static void nscon(pmix_nspace_t *p)
 }
 static void nsdes(pmix_nspace_t *p)
 {
+    uint64_t key;
+    pmix_object_t *obj;
+
     PMIX_LIST_DESTRUCT(&p->nodes);
+    PMIX_HASH_TABLE_FOREACH(key, uint64, obj, &p->internal) {
+        if (NULL != obj) {
+            PMIX_RELEASE(obj);
+        }
+    }
     PMIX_DESTRUCT(&p->internal);
+    PMIX_HASH_TABLE_FOREACH(key, uint64, obj, &p->modex) {
+        if (NULL != obj) {
+            PMIX_RELEASE(obj);
+        }
+    }
     PMIX_DESTRUCT(&p->modex);
     if (NULL != p->server) {
         PMIX_RELEASE(p->server);
     }
 }
-PMIX_CLASS_INSTANCE(pmix_nspace_t,
-                    pmix_list_item_t,
-                    nscon, nsdes);
+PMIX_EXPORT PMIX_CLASS_INSTANCE(pmix_nspace_t,
+                                pmix_list_item_t,
+                                nscon, nsdes);
 
 static void ncon(pmix_nrec_t *p)
 {
@@ -110,9 +160,9 @@ static void ndes(pmix_nrec_t *p)
         free(p->procs);
     }
 }
-PMIX_CLASS_INSTANCE(pmix_nrec_t,
-                    pmix_list_item_t,
-                    ncon, ndes);
+PMIX_EXPORT PMIX_CLASS_INSTANCE(pmix_nrec_t,
+                                pmix_list_item_t,
+                                ncon, ndes);
 
 static void sncon(pmix_server_nspace_t *p)
 {
@@ -135,9 +185,9 @@ static void sndes(pmix_server_nspace_t *p)
     PMIX_DESTRUCT(&p->myremote);
     PMIX_DESTRUCT(&p->remote);
 }
-PMIX_CLASS_INSTANCE(pmix_server_nspace_t,
-                    pmix_object_t,
-                    sncon, sndes);
+PMIX_EXPORT PMIX_CLASS_INSTANCE(pmix_server_nspace_t,
+                                pmix_object_t,
+                                sncon, sndes);
 
 static void info_con(pmix_rank_info_t *info)
 {
@@ -154,9 +204,9 @@ static void info_des(pmix_rank_info_t *info)
         PMIX_RELEASE(info->nptr);
     }
 }
-PMIX_CLASS_INSTANCE(pmix_rank_info_t,
-                    pmix_list_item_t,
-                    info_con, info_des);
+PMIX_EXPORT PMIX_CLASS_INSTANCE(pmix_rank_info_t,
+                                pmix_list_item_t,
+                                info_con, info_des);
 
 static void scon(pmix_shift_caddy_t *p)
 {
@@ -186,9 +236,9 @@ static void scdes(pmix_shift_caddy_t *p)
         PMIX_RELEASE(p->kv);
     }
 }
-PMIX_CLASS_INSTANCE(pmix_shift_caddy_t,
-                    pmix_object_t,
-                    scon, scdes);
+PMIX_EXPORT PMIX_CLASS_INSTANCE(pmix_shift_caddy_t,
+                                pmix_object_t,
+                                scon, scdes);
 
 PMIX_CLASS_INSTANCE(pmix_info_caddy_t,
                     pmix_list_item_t,
@@ -205,3 +255,18 @@ static void qcon(pmix_query_caddy_t *p)
 PMIX_CLASS_INSTANCE(pmix_query_caddy_t,
                     pmix_object_t,
                     qcon, NULL);
+
+static void jdcon(pmix_job_data_caddy_t *p)
+{
+    p->nsptr = NULL;
+    p->job_data = NULL;
+    p->dstore_fn = NULL;
+    p->hstore_fn = NULL;
+#if defined(PMIX_ENABLE_DSTORE) && (PMIX_ENABLE_DSTORE == 1)
+    p->bufs = NULL;
+#endif
+}
+
+PMIX_CLASS_INSTANCE(pmix_job_data_caddy_t,
+                    pmix_object_t,
+                    jdcon, NULL);

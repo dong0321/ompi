@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 Intel, Inc. All rights reserved
+ * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Artem Y. Polyakov <artpol84@gmail.com>.
  *                         All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
@@ -59,15 +59,12 @@
 #ifndef PMIx_SERVER_API_H
 #define PMIx_SERVER_API_H
 
-#include <pmix/autogen/config.h>
-
-/* Symbol transforms */
-#include <pmix/rename.h>
-
 /* Structure and constant definitions */
-#include <pmix/pmix_common.h>
+#include <pmix_common.h>
 
-BEGIN_C_DECLS
+#if defined(c_plusplus) || defined(__cplusplus)
+extern "C" {
+#endif
 
 /****    SERVER FUNCTION-SHIPPED APIs    ****/
 /* NOTE: for performance purposes, the host server is required to
@@ -80,7 +77,6 @@ BEGIN_C_DECLS
  * PMIX server support library and MUST NOT be free'd. Data returned
  * by the host server via callback function is owned by the host
  * server, which is free to release it upon return from the callback */
-
 
 /* Notify the host server that a client connected to us - note
  * that the client will be in a blocked state until the host server
@@ -487,6 +483,36 @@ pmix_status_t PMIx_server_dmodex_request(const pmix_proc_t *proc,
                                          pmix_dmodex_response_fn_t cbfunc,
                                          void *cbdata);
 
-END_C_DECLS
+/* define a callback function for the setup_application API. The returned info
+ * array is owned by the PMIx server library and will be free'd when the
+ * provided cbfunc is called. */
+typedef void (*pmix_setup_application_cbfunc_t)(pmix_status_t status,
+                                                pmix_info_t info[], size_t ninfo,
+                                                void *provided_cbdata,
+                                                pmix_op_cbfunc_t cbfunc, void *cbdata);
+
+/* Provide a function by which the resource manager can request
+ * any application-specific environmental variables prior to
+ * launch of an application. For example, network libraries may
+ * opt to provide security credentials for the application. This
+ * is defined as a non-blocking operation in case network
+ * libraries need to perform some action before responding. The
+ * returned env will be distributed along with the application */
+pmix_status_t PMIx_server_setup_application(const char nspace[],
+                                            pmix_info_t info[], size_t ninfo,
+                                            pmix_setup_application_cbfunc_t cbfunc, void *cbdata);
+
+/* Provide a function by which the local PMIx server can perform
+ * any application-specific operations prior to spawning local
+ * clients of a given application. For example, a network library
+ * might need to setup the local driver for "instant on" addressing.
+ */
+pmix_status_t PMIx_server_setup_local_support(const char nspace[],
+                                              pmix_info_t info[], size_t ninfo,
+                                              pmix_op_cbfunc_t cbfunc, void *cbdata);
+
+#if defined(c_plusplus) || defined(__cplusplus)
+}
+#endif
 
 #endif

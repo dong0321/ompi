@@ -31,7 +31,9 @@
 #include <stdlib.h>
 #endif
 
-#include <pmix/pmix_common.h>
+#include <pmix_common.h>
+#include <pmix_rename.h>
+
 #include "src/buffer_ops/internal.h"
 #include "src/include/pmix_globals.h"
 

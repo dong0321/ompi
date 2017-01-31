@@ -13,12 +13,13 @@ results_addr=testing@lists.open-mpi.org
 # svn repository uri
 master_code_uri=https://github.com/open-mpi/ompi.git
 master_raw_uri=https://raw.github.com/open-mpi/ompi
-release_code_uri=https://github.com/open-mpi/ompi-release.git
-release_raw_uri=https://raw.github.com/open-mpi/ompi-release
 
 # where to put built tarballs - needs to be
 # adjusted to match your site!
 outputroot=$HOME/openmpi/nightly
+
+# Target where to scp the final tarballs
+output_ssh_target=ompiteam@192.185.39.252
 
 # where to find the build script
 script_uri=contrib/nightly/create_tarball.sh
@@ -29,7 +30,7 @@ script_dir=$HOME/ompi/contrib/build-server
 # The tarballs to make
 if [ $# -eq 0 ] ; then
     # We're no longer ever checking the 1.0 - 1.8 branches anymore
-    branches="master v1.10 v2.x"
+    branches="master v1.10 v2.x v2.0.x"
 else
     branches=$@
 fi
@@ -39,7 +40,7 @@ build_root=$HOME/openmpi/nightly-tarball-build-root
 
 # Coverity stuff
 coverity_token=`cat $HOME/coverity/openmpi-token.txt`
-coverity_configure_args="--enable-debug --enable-mpi-fortran --enable-mpi-java --enable-oshmem --enable-oshmem-fortran --with-psm --with-usnic --with-libfabric"
+coverity_configure_args="--enable-debug --enable-mpi-fortran --enable-mpi-cxx --enable-mpi-java --enable-oshmem --enable-oshmem-fortran --with-usnic --with-libfabric=/mnt/data/local-installs"
 
 export PATH=$HOME_PREFIX/bin:$PATH
 export LD_LIBRARY_PATH=$HOME_PREFIX/lib:$LD_LIBRARY_PATH
@@ -55,6 +56,7 @@ export LD_LIBRARY_PATH=$HOME_PREFIX/lib:$LD_LIBRARY_PATH
 module use $AUTOTOOL_MODULE
 
 # get our nightly build script
+echo "MKDIR"
 mkdir -p $build_root
 cd $build_root
 
@@ -70,13 +72,8 @@ for branch in $branches; do
     prev_snapshot=`cat $outputroot/$branch/latest_snapshot.txt`
     echo "=== Previous snapshot: $prev_snapshot"
 
-    if test "$branch" = "master"; then
-        code_uri=$master_code_uri
-        raw_uri=$master_raw_uri
-    else
-        code_uri=$release_code_uri
-        raw_uri=$release_raw_uri
-    fi
+    code_uri=$master_code_uri
+    raw_uri=$master_raw_uri
 
     # Form a URL-specific script name
     script=$branch-`basename $script_uri`
@@ -122,13 +119,23 @@ for branch in $branches; do
         fi
         echo "=== Posting tarball to open-mpi.org"
         # tell the web server to cleanup old nightly tarballs
-        ssh -p 2222 ompiteam@192.185.39.252 "git/ompi/contrib/build-server/remove-old.pl 7 public_html/nightly/$branch"
+        ssh -p 2222 \
+	    $output_ssh_target \
+	    "git/ompi/contrib/build-server/remove-old.pl 7 public_html/nightly/$branch"
         # upload the new ones
-        scp -P 2222 $outputroot/$branch/openmpi-$latest_snapshot.tar.* ompiteam@192.185.39.252:public_html/nightly/$branch/
-        scp -P 2222 $outputroot/$branch/latest_snapshot.txt ompiteam@192.185.39.252:public_html/nightly/$branch/
+        scp -P 2222 \
+	    $outputroot/$branch/openmpi-$latest_snapshot.tar.* \
+	    $output_ssh_target:public_html/nightly/$branch/
+        scp -P 2222 \
+	    $outputroot/$branch/latest_snapshot.txt \
+	    $output_ssh_target:public_html/nightly/$branch/
         # direct the web server to regenerate the checksums
-        ssh -p 2222 ompiteam@192.185.39.252 "cd public_html/nightly/$branch && md5sum openmpi* > md5sums.txt"
-        ssh -p 2222 ompiteam@192.185.39.252 "cd public_html/nightly/$branch && sha1sum openmpi* > sha1sums.txt"
+        ssh -p 2222 \
+	    $output_ssh_target \
+	    "cd public_html/nightly/$branch && md5sum openmpi* > md5sums.txt"
+        ssh -p 2222 \
+	    $output_ssh_target \
+	    "cd public_html/nightly/$branch && sha1sum openmpi* > sha1sums.txt"
     fi
 
     # Failed builds are not removed.  But if a human forgets to come
@@ -149,7 +156,7 @@ for tarball in `cat $pending_coverity`; do
         --coverity-token=$coverity_token \
         --verbose \
         --logfile-dir=$HOME/coverity \
-        --make-args=-j8 \
+        --make-args=-j4 \
         --configure-args="$coverity_configure_args"
 done
 rm -f $pending_coverity

@@ -2,6 +2,8 @@
  * Copyright (c) 2013      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2016      Research Organization for Information Science
+ *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -57,7 +59,7 @@ OSHMEM_DECLSPEC int mca_spml_base_spml_selected(const char *name);
  * Verify that all new procs are using the currently selected component
  */
 OSHMEM_DECLSPEC int mca_spml_base_spml_check_selected(const char *my_spml,
-                                                      oshmem_proc_t **procs,
+                                                      ompi_proc_t **procs,
                                                       size_t nprocs);
 
 OSHMEM_DECLSPEC int mca_spml_base_wait(void* addr,
@@ -69,7 +71,7 @@ OSHMEM_DECLSPEC int mca_spml_base_oob_get_mkeys(int pe,
                                                 uint32_t seg,
                                                 sshmem_mkey_t *mkeys);
 
-OSHMEM_DECLSPEC void mca_spml_base_rmkey_unpack(sshmem_mkey_t *mkey, int pe);
+OSHMEM_DECLSPEC void mca_spml_base_rmkey_unpack(sshmem_mkey_t *mkey, uint32_t seg, int pe, int tr_id);
 OSHMEM_DECLSPEC void mca_spml_base_rmkey_free(sshmem_mkey_t *mkey);
 OSHMEM_DECLSPEC int mca_spml_base_put_nb(void *dst_addr,
                                          size_t size,
@@ -82,6 +84,7 @@ OSHMEM_DECLSPEC int mca_spml_base_get_nb(void *dst_addr,
                                          int src,
                                          void **handle);
 
+OSHMEM_DECLSPEC void mca_spml_base_memuse_hook(void *addr, size_t length);
 /*
  * MCA framework
  */
@@ -101,6 +104,8 @@ OSHMEM_DECLSPEC extern mca_base_framework_t oshmem_spml_base_framework;
 #else
 #define SPML_VERBOSE(level, ...)
 #endif
+
+#define SPML_VERBOSE_FASTPATH(level, ...)
 
 #define SPML_ERROR(...) \
     oshmem_output(oshmem_spml_base_framework.framework_output, \

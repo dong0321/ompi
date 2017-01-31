@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2014-2016 Los Alamos National Security, LLC.  All rights
  *                         reserved.
+ * Copyright (c) 2016      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,7 +51,7 @@ int ompi_osc_get_data_blocking (ompi_osc_rdma_module_t *module, struct mca_btl_b
         }
 
         local_handle = frag->handle;
-        OSC_RDMA_VERBOSE(MCA_BASE_VERBOSE_TRACE, "allocated temporary buffer %p in fragment %p", ptr,
+        OSC_RDMA_VERBOSE(MCA_BASE_VERBOSE_TRACE, "allocated temporary buffer %p in fragment %p", (void*)ptr,
                          (void *) frag);
     }
 
@@ -301,10 +302,10 @@ static inline int ompi_osc_rdma_master (ompi_osc_rdma_sync_t *sync, void *local_
         }
 
         /* ignore failure here */
-        (void) ompi_datatype_get_extent (local_datatype, &lb, &extent);
+        (void) ompi_datatype_get_true_extent (local_datatype, &lb, &extent);
         local_address = (void *)((intptr_t) local_address + lb);
 
-        (void) ompi_datatype_get_extent (remote_datatype, &lb, &extent);
+        (void) ompi_datatype_get_true_extent (remote_datatype, &lb, &extent);
         remote_address += lb;
 
         OSC_RDMA_VERBOSE(MCA_BASE_VERBOSE_TRACE, "performing rdma on contiguous region. local: %p, "
@@ -732,7 +733,7 @@ static int ompi_osc_rdma_get_contig (ompi_osc_rdma_sync_t *sync, ompi_osc_rdma_p
             }
         } else {
             OSC_RDMA_VERBOSE(MCA_BASE_VERBOSE_TRACE, "using internal buffer %p in fragment %p for get of size %lu bytes, source address 0x%lx",
-                             ptr, (void *) frag, aligned_len, (unsigned long) aligned_source_base);
+                             (void*)ptr, (void *) frag, (unsigned long) aligned_len, (unsigned long) aligned_source_base);
             local_handle = frag->handle;
         }
     }
@@ -772,9 +773,9 @@ static int ompi_osc_rdma_get_contig (ompi_osc_rdma_sync_t *sync, ompi_osc_rdma_p
 }
 
 static inline int ompi_osc_rdma_put_w_req (ompi_osc_rdma_sync_t *sync, const void *origin_addr, int origin_count,
-                                           struct ompi_datatype_t *origin_datatype, ompi_osc_rdma_peer_t *peer,
+                                           ompi_datatype_t *origin_datatype, ompi_osc_rdma_peer_t *peer,
                                            OPAL_PTRDIFF_TYPE target_disp, int target_count,
-                                           struct ompi_datatype_t *target_datatype, ompi_osc_rdma_request_t *request)
+                                           ompi_datatype_t *target_datatype, ompi_osc_rdma_request_t *request)
 {
     ompi_osc_rdma_module_t *module = sync->module;
     mca_btl_base_registration_handle_t *target_handle;
@@ -807,9 +808,9 @@ static inline int ompi_osc_rdma_put_w_req (ompi_osc_rdma_sync_t *sync, const voi
                                  ompi_osc_rdma_put_contig, false);
 }
 
-static inline int ompi_osc_rdma_get_w_req (ompi_osc_rdma_sync_t *sync, void *origin_addr, int origin_count, struct ompi_datatype_t *origin_datatype,
+static inline int ompi_osc_rdma_get_w_req (ompi_osc_rdma_sync_t *sync, void *origin_addr, int origin_count, ompi_datatype_t *origin_datatype,
                                            ompi_osc_rdma_peer_t *peer, OPAL_PTRDIFF_TYPE source_disp, int source_count,
-                                           struct ompi_datatype_t *source_datatype, ompi_osc_rdma_request_t *request)
+                                           ompi_datatype_t *source_datatype, ompi_osc_rdma_request_t *request)
 {
     ompi_osc_rdma_module_t *module = sync->module;
     mca_btl_base_registration_handle_t *source_handle;
@@ -841,9 +842,9 @@ static inline int ompi_osc_rdma_get_w_req (ompi_osc_rdma_sync_t *sync, void *ori
                                  source_handle, source_count, source_datatype, request,
                                  module->selected_btl->btl_get_limit, ompi_osc_rdma_get_contig, true);
 }
-int ompi_osc_rdma_put (const void *origin_addr, int origin_count, struct ompi_datatype_t *origin_datatype,
+int ompi_osc_rdma_put (const void *origin_addr, int origin_count, ompi_datatype_t *origin_datatype,
                        int target_rank, OPAL_PTRDIFF_TYPE target_disp, int target_count,
-                       struct ompi_datatype_t *target_datatype, ompi_win_t *win)
+                       ompi_datatype_t *target_datatype, ompi_win_t *win)
 {
     ompi_osc_rdma_module_t *module = GET_MODULE(win);
     ompi_osc_rdma_peer_t *peer;
@@ -862,10 +863,10 @@ int ompi_osc_rdma_put (const void *origin_addr, int origin_count, struct ompi_da
                                     target_count, target_datatype, NULL);
 }
 
-int ompi_osc_rdma_rput (const void *origin_addr, int origin_count, struct ompi_datatype_t *origin_datatype,
+int ompi_osc_rdma_rput (const void *origin_addr, int origin_count, ompi_datatype_t *origin_datatype,
                         int target_rank, OPAL_PTRDIFF_TYPE target_disp, int target_count,
-                        struct ompi_datatype_t *target_datatype, struct ompi_win_t *win,
-                        struct ompi_request_t **request)
+                        ompi_datatype_t *target_datatype, ompi_win_t *win,
+                        ompi_request_t **request)
 {
     ompi_osc_rdma_module_t *module = GET_MODULE(win);
     ompi_osc_rdma_peer_t *peer;
@@ -897,9 +898,9 @@ int ompi_osc_rdma_rput (const void *origin_addr, int origin_count, struct ompi_d
     return OMPI_SUCCESS;
 }
 
-int ompi_osc_rdma_get (void *origin_addr, int origin_count, struct ompi_datatype_t *origin_datatype,
+int ompi_osc_rdma_get (void *origin_addr, int origin_count, ompi_datatype_t *origin_datatype,
                        int source_rank, OPAL_PTRDIFF_TYPE source_disp, int source_count,
-                       struct ompi_datatype_t *source_datatype, struct ompi_win_t *win)
+                       ompi_datatype_t *source_datatype, ompi_win_t *win)
 {
     ompi_osc_rdma_module_t *module = GET_MODULE(win);
     ompi_osc_rdma_peer_t *peer;
@@ -918,10 +919,10 @@ int ompi_osc_rdma_get (void *origin_addr, int origin_count, struct ompi_datatype
                                     source_disp, source_count, source_datatype, NULL);
 }
 
-int ompi_osc_rdma_rget (void *origin_addr, int origin_count, struct ompi_datatype_t *origin_datatype,
+int ompi_osc_rdma_rget (void *origin_addr, int origin_count, ompi_datatype_t *origin_datatype,
                         int source_rank, OPAL_PTRDIFF_TYPE source_disp, int source_count,
-                        struct ompi_datatype_t *source_datatype, struct ompi_win_t *win,
-                        struct ompi_request_t **request)
+                        ompi_datatype_t *source_datatype, ompi_win_t *win,
+                        ompi_request_t **request)
 {
     ompi_osc_rdma_module_t *module = GET_MODULE(win);
     ompi_osc_rdma_peer_t *peer;

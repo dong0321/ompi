@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2015-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -60,7 +60,7 @@ void cli_connect(cli_info_t *cli, int sd, struct event_base * ebase, event_callb
     cli->ev = event_new(ebase, sd,
                       EV_READ|EV_PERSIST, callback, cli);
     event_add(cli->ev,NULL);
-    pmix_usock_set_nonblocking(sd);
+    pmix_ptl_base_set_nonblocking(sd);
     TEST_VERBOSE(("Connection accepted from rank %d", cli_rank(cli) ));
     cli->state = CLI_CONNECTED;
 }
@@ -274,4 +274,3 @@ void errhandler_reg_callbk (pmix_status_t status,
     TEST_VERBOSE(("ERRHANDLER REGISTRATION CALLBACK CALLED WITH STATUS %d, ref=%lu",
                 status, (unsigned long)errhandler_ref));
 }
-

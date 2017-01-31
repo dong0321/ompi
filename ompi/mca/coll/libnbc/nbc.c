@@ -16,6 +16,7 @@
  * Author(s): Torsten Hoefler <htor@cs.indiana.edu>
  *
  * Copyright (c) 2012      Oracle and/or its affiliates.  All rights reserved.
+ * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  *
  */
 #include "nbc_internal.h"
@@ -312,6 +313,8 @@ int NBC_Progress(NBC_Handle *handle) {
   int flag, res, ret=NBC_CONTINUE;
   unsigned long size = 0;
   char *delim;
+  int i;
+  ompi_status_public_t status;
 
   /* the handle is done if there is no schedule attached */
   if (NULL == handle->schedule) {
@@ -325,8 +328,30 @@ int NBC_Progress(NBC_Handle *handle) {
 #endif
     res = ompi_request_test_all(handle->req_count, handle->req_array, &flag, MPI_STATUSES_IGNORE);
     if(res != OMPI_SUCCESS) {
-      NBC_Error ("MPI Error in MPI_Testall() (%i)", res);
-      return res;
+      // Attempt to cancel outstanding requests
+      for(i = 0; i < handle->req_count; ++i ) {
+        // If the request is complete, then try to report the error code
+        if( handle->req_array[i]->req_complete ) {
+          if( OMPI_SUCCESS != handle->req_array[i]->req_status.MPI_ERROR ) {
+            NBC_Error ("MPI Error in MPI_Testall() (req %d = %d)", i, handle->req_array[i]->req_status.MPI_ERROR);
+          }
+        }
+        else {
+          ompi_request_cancel(handle->req_array[i]);
+          // If the PML actually canceled the request, then wait on it
+          if( handle->req_array[i]->req_status._cancelled) {
+            ompi_request_wait(&handle->req_array[i], &status);
+          }
+          // Warn the user that we had to leave a PML message outstanding so
+          // bad things could happen if they continue using nonblocking collectives
+          else {
+            NBC_Error ("MPI Error: Not able to cancel the internal request %d. "
+                       "Be aware that continuing to use nonblocking collectives on this communicator may result in undefined behavior.", i);
+          }
+        }
+      }
+
+      return OMPI_ERROR;
     }
 #ifdef NBC_TIMING
     Test_time += MPI_Wtime();
@@ -677,7 +702,9 @@ int NBC_Start(NBC_Handle *handle, NBC_Schedule *schedule) {
   if (OPAL_UNLIKELY(OMPI_SUCCESS != res)) {
     return res;
   }
+  OPAL_THREAD_LOCK(&mca_coll_libnbc_component.lock);
   opal_list_append(&mca_coll_libnbc_component.active_requests, &(handle->super.super.super));
+  OPAL_THREAD_UNLOCK(&mca_coll_libnbc_component.lock);
 
   return OMPI_SUCCESS;
 }

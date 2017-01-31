@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2014-2015 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2015 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2014      Artem Y. Polyakov <artpol84@gmail.com>.
@@ -18,9 +18,10 @@
 #include <src/include/pmix_config.h>
 
 #include <src/include/types.h>
-#include <pmix/autogen/pmix_stdint.h>
+#include <src/include/pmix_stdint.h>
 
 #include <pmix.h>
+#include <pmix_rename.h>
 
 #include "src/include/pmix_globals.h"
 
@@ -50,14 +51,14 @@
 #include "src/util/argv.h"
 #include "src/util/error.h"
 #include "src/util/output.h"
-#include "src/util/progress_threads.h"
-#include "src/usock/usock.h"
-#include "src/sec/pmix_sec.h"
+#include "src/mca/ptl/ptl.h"
 
 #include "pmix_client_ops.h"
+#include "src/include/pmix_jobdata.h"
 
 /* callback for wait completion */
-static void wait_cbfunc(struct pmix_peer_t *pr, pmix_usock_hdr_t *hdr,
+static void wait_cbfunc(struct pmix_peer_t *pr,
+                        pmix_ptl_hdr_t *hdr,
                         pmix_buffer_t *buf, void *cbdata);
 static void op_cbfunc(pmix_status_t status, void *cbdata);
 
@@ -167,9 +168,12 @@ PMIX_EXPORT pmix_status_t PMIx_Connect_nb(const pmix_proc_t procs[], size_t npro
     cb->cbdata = cbdata;
 
     /* push the message into our event base to send to the server */
-    PMIX_ACTIVATE_SEND_RECV(&pmix_client_globals.myserver, msg, wait_cbfunc, cb);
+    if (PMIX_SUCCESS != (rc = pmix_ptl.send_recv(&pmix_client_globals.myserver, msg, wait_cbfunc, (void*)cb))){
+        PMIX_RELEASE(msg);
+        PMIX_RELEASE(cb);
+    }
 
-    return PMIX_SUCCESS;
+    return rc;
 }
 
 PMIX_EXPORT pmix_status_t PMIx_Disconnect(const pmix_proc_t procs[], size_t nprocs,
@@ -274,15 +278,19 @@ PMIX_EXPORT pmix_status_t PMIx_Disconnect_nb(const pmix_proc_t procs[], size_t n
     cb->cbdata = cbdata;
 
     /* push the message into our event base to send to the server */
-    PMIX_ACTIVATE_SEND_RECV(&pmix_client_globals.myserver, msg, wait_cbfunc, cb);
+    if (PMIX_SUCCESS != (rc = pmix_ptl.send_recv(&pmix_client_globals.myserver, msg, wait_cbfunc, (void*)cb))){
+        PMIX_RELEASE(msg);
+        PMIX_RELEASE(cb);
+    }
 
     pmix_output_verbose(2, pmix_globals.debug_output,
                         "pmix: disconnect completed");
 
-    return PMIX_SUCCESS;
+    return rc;
 }
 
-static void wait_cbfunc(struct pmix_peer_t *pr, pmix_usock_hdr_t *hdr,
+static void wait_cbfunc(struct pmix_peer_t *pr,
+                        pmix_ptl_hdr_t *hdr,
                         pmix_buffer_t *buf, void *cbdata)
 {
     pmix_cb_t *cb = (pmix_cb_t*)cbdata;
@@ -314,7 +322,9 @@ static void wait_cbfunc(struct pmix_peer_t *pr, pmix_usock_hdr_t *hdr,
             continue;
         }
         /* extract and process any proc-related info for this nspace */
-        pmix_client_process_nspace_blob(nspace, bptr);
+#if !(defined(PMIX_ENABLE_DSTORE) && (PMIX_ENABLE_DSTORE == 1))
+        pmix_job_data_htable_store(nspace, bptr);
+#endif
         PMIX_RELEASE(bptr);
     }
     if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {

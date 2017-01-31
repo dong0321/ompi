@@ -14,9 +14,10 @@
  * Copyright (c) 2007-2009 Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2007-2016 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2016 Intel, Inc. All rights reserved.
- * Copyright (c) 2015      Research Organization for Information Science
+ * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -55,6 +56,7 @@
 #ifdef HAVE_SYS_STAT_H
 #include <sys/stat.h>
 #endif
+#include <poll.h>
 
 #include "opal/dss/dss.h"
 #include "opal/mca/event/event.h"
@@ -117,6 +119,7 @@ static orte_std_cntr_t total_num_apps = 0;
 static bool want_prefix_by_default = (bool) ORTE_WANT_ORTERUN_PREFIX_BY_DEFAULT;
 static opal_pointer_array_t tool_jobs;
 static int timeout_seconds;
+static orte_timer_t *orte_memprofile_timeout;
 
 int orte_debugger_attach_fd = -1;
 bool orte_debugger_fifo_active=false;
@@ -135,6 +138,10 @@ static int parse_locals(orte_job_t *jdata, int argc, char* argv[]);
 static void set_classpath_jar_file(orte_app_context_t *app, int index, char *jarfile);
 static int parse_appfile(orte_job_t *jdata, char *filename, char ***env);
 static void orte_timeout_wakeup(int sd, short args, void *cbdata);
+static void orte_profile_wakeup(int sd, short args, void *cbdata);
+static void profile_recv(int status, orte_process_name_t* sender,
+                         opal_buffer_t *buffer, orte_rml_tag_t tag,
+                         void* cbdata);
 static void launch_recv(int status, orte_process_name_t* sender,
                         opal_buffer_t *buffer,
                         orte_rml_tag_t tag, void *cbdata);
@@ -551,14 +558,14 @@ int orte_submit_init(int argc, char *argv[],
             exit(1);
         }
         /* set the route to be direct */
-        if (ORTE_SUCCESS != orte_routed.update_route(ORTE_PROC_MY_HNP, ORTE_PROC_MY_HNP)) {
+        if (ORTE_SUCCESS != orte_routed.update_route(NULL, ORTE_PROC_MY_HNP, ORTE_PROC_MY_HNP)) {
             orte_show_help("help-orte-top.txt", "orte-top:hnp-uri-bad", true, orte_process_info.my_hnp_uri);
             orte_finalize();
             exit(1);
         }
 
         /* set the target hnp as our lifeline so we will terminate if it exits */
-        orte_routed.set_lifeline(ORTE_PROC_MY_HNP);
+        orte_routed.set_lifeline(NULL, ORTE_PROC_MY_HNP);
 
         /* setup to listen for HNP response to my commands */
         orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_NOTIFY_COMPLETE,
@@ -582,16 +589,25 @@ int orte_submit_init(int argc, char *argv[],
 void orte_submit_finalize(void)
 {
     trackr_t *trk;
-    int i;
+    int i, rc;
 
-    orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_LAUNCH_RESP);
-    orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_NOTIFY_COMPLETE);
     for (i=0; i < tool_jobs.size; i++) {
         if (NULL != (trk = (trackr_t*)opal_pointer_array_get_item(&tool_jobs, i))) {
             OBJ_RELEASE(trk);
         }
     }
     OBJ_DESTRUCT(&tool_jobs);
+
+    /* close the SCHIZO framework */
+    if (ORTE_SUCCESS != (rc = mca_base_framework_close(&orte_schizo_base_framework))) {
+        ORTE_ERROR_LOG(rc);
+        return;
+    }
+
+    /* finalize only the util portion of OPAL */
+    if (OPAL_SUCCESS != (rc = opal_finalize_util())) {
+        return;
+    }
 
     /* destruct the cmd line object */
     if (NULL != orte_cmd_line) {
@@ -606,6 +622,16 @@ void orte_submit_finalize(void)
         }
         close(orte_debugger_attach_fd);
         unlink(MPIR_attach_fifo);
+    }
+
+    if (NULL != orte_cmd_options.prefix) {
+        free(orte_cmd_options.prefix);
+    }
+    if (NULL != orte_launch_environ) {
+        opal_argv_free(orte_launch_environ);
+    }
+    if (NULL != orte_basename) {
+        free(orte_basename);
     }
 }
 
@@ -632,7 +658,8 @@ int orte_submit_cancel(int index) {
         ORTE_ERROR_LOG(rc);
         return rc;
     }
-    rc = orte_rml.send_buffer_nb(ORTE_PROC_MY_HNP, req, ORTE_RML_TAG_DAEMON,
+    rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                                 ORTE_PROC_MY_HNP, req, ORTE_RML_TAG_DAEMON,
                                  orte_rml_send_callback, NULL);
     if (ORTE_SUCCESS != rc) {
         ORTE_ERROR_LOG(rc);
@@ -655,7 +682,8 @@ int orte_submit_halt(void)
         ORTE_ERROR_LOG(rc);
         return rc;
     }
-    rc = orte_rml.send_buffer_nb(ORTE_PROC_MY_HNP, req,
+    rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                                 ORTE_PROC_MY_HNP, req,
                                  ORTE_RML_TAG_DAEMON,
                                  orte_rml_send_callback, NULL);
     if (ORTE_SUCCESS != rc) {
@@ -677,7 +705,7 @@ int orte_submit_job(char *argv[], int *index,
                     void *complete_cbdata)
 {
     opal_buffer_t *req;
-    int rc;
+    int rc, n;
     orte_app_idx_t i;
     orte_daemon_cmd_flag_t cmd = ORTE_DAEMON_SPAWN_JOB_CMD;
     char *param;
@@ -696,7 +724,8 @@ int orte_submit_job(char *argv[], int *index,
 
     /* reset the globals every time thru as the argv
      * will modify them */
-    memset(&orte_cmd_options, 0, sizeof(orte_cmd_options));
+    init_globals();
+
     argc = opal_argv_count(argv);
 
     /* parse the cmd line - do this every time thru so we can
@@ -724,6 +753,14 @@ int orte_submit_job(char *argv[], int *index,
          */
         return ORTE_ERR_OUT_OF_RESOURCE;
     }
+    /* see if they specified the personality */
+    if (NULL != orte_cmd_options.personality) {
+        jdata->personality = opal_argv_split(orte_cmd_options.personality, ',');
+    } else {
+        /* default to OMPI */
+        opal_argv_append_nosize(&jdata->personality, "ompi");
+    }
+
     trk = OBJ_NEW(trackr_t);
     trk->jdata = jdata;
     trk->launch_cb = launch_cb;
@@ -801,7 +838,13 @@ int orte_submit_job(char *argv[], int *index,
         ORTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, ORTE_MAPPING_GIVEN);
         /* define the ppr */
         (void)asprintf(&jdata->map->ppr, "%d:node", orte_cmd_options.npernode);
+    } else if (0 < orte_cmd_options.npersocket) {
+        ORTE_SET_MAPPING_POLICY(jdata->map->mapping, ORTE_MAPPING_PPR);
+        ORTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, ORTE_MAPPING_GIVEN);
+        /* define the ppr */
+        (void)asprintf(&jdata->map->ppr, "%d:socket", orte_cmd_options.npersocket);
     }
+
 
     /* if the user specified cpus/rank, set it */
     if (0 < orte_cmd_options.cpus_per_proc) {
@@ -838,8 +881,8 @@ int orte_submit_job(char *argv[], int *index,
     if (orte_cmd_options.report_bindings) {
         orte_set_attribute(&jdata->attributes, ORTE_JOB_REPORT_BINDINGS, ORTE_ATTR_GLOBAL, NULL, OPAL_BOOL);
     }
-    if (orte_cmd_options.slot_list) {
-        orte_set_attribute(&jdata->attributes, ORTE_JOB_SLOT_LIST, ORTE_ATTR_GLOBAL, orte_cmd_options.slot_list, OPAL_STRING);
+    if (orte_cmd_options.cpu_list) {
+        orte_set_attribute(&jdata->attributes, ORTE_JOB_CPU_LIST, ORTE_ATTR_GLOBAL, orte_cmd_options.cpu_list, OPAL_STRING);
     }
 
     /* if recovery was enabled on the cmd line, do so */
@@ -862,6 +905,20 @@ int orte_submit_job(char *argv[], int *index,
     if (orte_cmd_options.continuous) {
         /* mark this job as continuously operating */
         orte_set_attribute(&jdata->attributes, ORTE_JOB_CONTINUOUS_OP, ORTE_ATTR_GLOBAL, NULL, OPAL_BOOL);
+    }
+
+    /* check for debugger test envars and forward them if necessary */
+    if (NULL != getenv("ORTE_TEST_DEBUGGER_ATTACH")) {
+        char *evar;
+        evar = getenv("ORTE_TEST_DEBUGGER_SLEEP");
+        for (n=0; n < (int)jdata->num_apps; n++) {
+            if (NULL != (app = (orte_app_context_t*)opal_pointer_array_get_item(jdata->apps, n))) {
+                opal_setenv("ORTE_TEST_DEBUGGER_ATTACH", "1", true, &app->env);
+                if (NULL != evar) {
+                    opal_setenv("ORTE_TEST_DEBUGGER_SLEEP", evar, true, &app->env);
+                }
+            }
+        }
     }
 
     /* check for suicide test directives */
@@ -902,6 +959,23 @@ int orte_submit_job(char *argv[], int *index,
         opal_event_evtimer_add(orte_mpiexec_timeout->ev, &orte_mpiexec_timeout->tv);
     }
 
+    /* check for diagnostic memory profile */
+    if (NULL != (param = getenv("OMPI_MEMPROFILE"))) {
+        timeout_seconds = strtol(param, NULL, 10);
+        if (NULL == (orte_memprofile_timeout = OBJ_NEW(orte_timer_t))) {
+            ORTE_ERROR_LOG(ORTE_ERR_OUT_OF_RESOURCE);
+            ORTE_UPDATE_EXIT_STATUS(ORTE_ERR_OUT_OF_RESOURCE);
+            //goto DONE;
+        }
+        orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_MEMPROFILE,
+                                ORTE_RML_PERSISTENT, profile_recv, NULL);
+        orte_memprofile_timeout->tv.tv_sec = timeout_seconds;
+        orte_memprofile_timeout->tv.tv_usec = 0;
+        opal_event_evtimer_set(orte_event_base, orte_memprofile_timeout->ev,
+                               orte_profile_wakeup, jdata);
+        opal_event_set_priority(orte_memprofile_timeout->ev, ORTE_ERROR_PRI);
+        opal_event_evtimer_add(orte_memprofile_timeout->ev, &orte_memprofile_timeout->tv);
+    }
     if (ORTE_PROC_IS_HNP) {
         /* get the daemon job object */
         daemons = orte_get_job_data_object(ORTE_PROC_MY_NAME->jobid);
@@ -993,14 +1067,6 @@ int orte_submit_job(char *argv[], int *index,
             free(param);
         }
 
-        /* pre-condition any network transports that require it */
-        if (ORTE_SUCCESS != (rc = orte_pre_condition_transports(jdata))) {
-            ORTE_ERROR_LOG(rc);
-            orte_show_help("help-orterun.txt", "orterun:precondition", false,
-                           orte_basename, NULL, NULL, rc);
-            ORTE_UPDATE_EXIT_STATUS(ORTE_ERROR_DEFAULT_EXIT_CODE);
-            return rc;
-        }
         /* setup for debugging */
         orte_debugger_init_before_spawn(jdata);
 
@@ -1026,7 +1092,9 @@ int orte_submit_job(char *argv[], int *index,
             ORTE_ERROR_LOG(rc);
             return rc;
         }
-        orte_rml.send_buffer_nb(ORTE_PROC_MY_HNP, req, ORTE_RML_TAG_DAEMON, orte_rml_send_callback, NULL);
+        orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                                ORTE_PROC_MY_HNP, req, ORTE_RML_TAG_DAEMON,
+                                orte_rml_send_callback, NULL);
 
         /* Inform the caller of the tracker index if they passed a index pointer */
         if (NULL != index) {
@@ -1047,20 +1115,60 @@ static int init_globals(void)
     orte_cmd_options.num_procs =  0;
     if (NULL != orte_cmd_options.appfile) {
         free(orte_cmd_options.appfile);
+        orte_cmd_options.appfile = NULL;
     }
-    orte_cmd_options.appfile = NULL;
     if (NULL != orte_cmd_options.wdir) {
         free(orte_cmd_options.wdir);
+        orte_cmd_options.wdir = NULL;
     }
     orte_cmd_options.set_cwd_to_session_dir = false;
-    orte_cmd_options.wdir = NULL;
     if (NULL != orte_cmd_options.path) {
         free(orte_cmd_options.path);
+        orte_cmd_options.path = NULL;
     }
-    orte_cmd_options.path = NULL;
+    if (NULL != orte_cmd_options.hnp) {
+        free(orte_cmd_options.hnp);
+        orte_cmd_options.hnp = NULL;
+    }
+    if (NULL != orte_cmd_options.stdin_target) {
+        free(orte_cmd_options.stdin_target);
+        orte_cmd_options.stdin_target = NULL ;
+    }
+    if (NULL != orte_cmd_options.output_filename) {
+        free(orte_cmd_options.output_filename);
+        orte_cmd_options.output_filename = NULL ;
+    }
+    if (NULL != orte_cmd_options.binding_policy) {
+        free(orte_cmd_options.binding_policy);
+        orte_cmd_options.binding_policy = NULL;
+    }
+    if (NULL != orte_cmd_options.mapping_policy) {
+        free(orte_cmd_options.mapping_policy);
+        orte_cmd_options.mapping_policy = NULL;
+    }
+    if (NULL != orte_cmd_options.ranking_policy) {
+        free(orte_cmd_options.ranking_policy);
+        orte_cmd_options.ranking_policy = NULL;
+    }
 
+    if (NULL != orte_cmd_options.report_pid) {
+        free(orte_cmd_options.report_pid);
+        orte_cmd_options.report_pid = NULL;
+    }
+    if (NULL != orte_cmd_options.report_uri) {
+        free(orte_cmd_options.report_uri);
+        orte_cmd_options.report_uri = NULL;
+    }
+    if (NULL != orte_cmd_options.cpu_list) {
+        free(orte_cmd_options.cpu_list);
+        orte_cmd_options.cpu_list= NULL;
+    }
     orte_cmd_options.preload_binaries = false;
-    orte_cmd_options.preload_files  = NULL;
+    if (NULL != orte_cmd_options.preload_files) {
+        free(orte_cmd_options.preload_files);
+        orte_cmd_options.preload_files  = NULL;
+    }
+
 
     /* All done */
     return ORTE_SUCCESS;
@@ -1236,12 +1344,18 @@ static int parse_locals(orte_job_t *jdata, int argc, char* argv[])
              * region.
              * So we make a copy of the variable.
              */
-            char *s = strdup(env[j]);
+            char *value, *s = strdup(env[j]);
 
             if (NULL == s) {
                 return OPAL_ERR_OUT_OF_RESOURCE;
             }
-            putenv(s);
+
+            value = strchr(s, '=');
+            if (NULL != value) {
+                value++;
+            }
+            opal_setenv(s, value, true, &environ);
+            free(s);
         }
     }
 
@@ -1282,7 +1396,7 @@ static int create_app(int argc, char* argv[],
     char *param, *value;
     orte_app_context_t *app = NULL;
     bool found = false;
-    char *appname;
+    char *appname = NULL;
 
     *made_app = false;
 
@@ -1695,7 +1809,6 @@ static int create_app(int argc, char* argv[],
             free(value);
         }
     }
-    free(appname);
 
     *app_ptr = app;
     app = NULL;
@@ -1706,6 +1819,9 @@ static int create_app(int argc, char* argv[],
  cleanup:
     if (NULL != app) {
         OBJ_RELEASE(app);
+    }
+    if (NULL != appname) {
+        free(appname);
     }
     return rc;
 }
@@ -2102,12 +2218,13 @@ static void orte_debugger_init_before_spawn(orte_job_t *jdata)
 
     if (!MPIR_being_debugged && !orte_in_parallel_debugger) {
         /* if we were given a test debugger, then we still want to
-         * colaunch it
+         * colaunch it - unless we are testing attach to a running job
          */
-        if (NULL != orte_debugger_test_daemon) {
+        if (NULL != orte_debugger_test_daemon && !orte_debugger_test_attach) {
             opal_output_verbose(2, orte_debug_output,
-                                "%s No debugger test daemon specified",
-                                ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
+                                "%s Debugger test daemon specified: %s",
+                                ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                                orte_debugger_test_daemon);
             goto launchit;
         }
         /* if we were given an auto-detect rate, then we want to setup
@@ -2123,7 +2240,8 @@ static void orte_debugger_init_before_spawn(orte_job_t *jdata)
             /* create the attachment FIFO and setup readevent - cannot be
              * done if no session dirs exist!
              */
-            attach_fifo = opal_os_path(false, orte_process_info.job_session_dir, "debugger_attach_fifo", NULL);
+            attach_fifo = opal_os_path(false, orte_process_info.job_session_dir,
+                                       "debugger_attach_fifo", NULL);
             if ((mkfifo(attach_fifo, FILE_MODE) < 0) && errno != EEXIST) {
                 opal_output(0, "CANNOT CREATE FIFO %s: errno %d", attach_fifo, errno);
                 free(attach_fifo);
@@ -2153,10 +2271,9 @@ static void orte_debugger_init_before_spawn(orte_job_t *jdata)
 
 static bool mpir_breakpoint_fired = false;
 
-static void _send_notification(void)
+static void _send_notification(int status)
 {
     opal_buffer_t buf;
-    int status = OPAL_ERR_DEBUGGER_RELEASE;
     orte_grpcomm_signature_t sig;
     int rc;
     opal_value_t kv, *kvptr;
@@ -2319,6 +2436,8 @@ static void setup_debugger_job(void)
         proc = OBJ_NEW(orte_proc_t);
         proc->name.jobid = debugger->jobid;
         proc->name.vpid = vpid++;
+        /* point the proc at the local ORTE daemon as its parent */
+        proc->parent = node->daemon->name.vpid;
         /* set the local/node ranks - we don't actually care
          * what these are, but the odls needs them
          */
@@ -2388,7 +2507,7 @@ void orte_debugger_init_after_spawn(int fd, short event, void *cbdata)
                                     "%s NOTIFYING DEBUGGER RELEASE",
                                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
                 /* notify all procs that the debugger is ready */
-                _send_notification();
+                _send_notification(OPAL_ERR_DEBUGGER_RELEASE);
             }
         }
         return;
@@ -2487,8 +2606,8 @@ void orte_debugger_init_after_spawn(int fd, short event, void *cbdata)
                                 "%s NOTIFYING DEBUGGER RELEASE",
                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
             /* notify all procs that the debugger is ready */
-            _send_notification();
-        } else {
+            _send_notification(OPAL_ERR_DEBUGGER_RELEASE);
+        } else if (!orte_debugger_test_attach) {
             /* if I am launching debugger daemons, then I need to do so now
              * that the job has been started and I know which nodes have
              * apps on them
@@ -2698,14 +2817,14 @@ static int process(char *orig_line, char *basename, opal_cmd_line_t *cmd_line,
 static void open_fifo(void)
 {
     if (orte_debugger_attach_fd > 0) {
-    close(orte_debugger_attach_fd);
+        close(orte_debugger_attach_fd);
     }
 
     orte_debugger_attach_fd = open(MPIR_attach_fifo, O_RDONLY | O_NONBLOCK, 0);
     if (orte_debugger_attach_fd < 0) {
-    opal_output(0, "%s unable to open debugger attach fifo",
-            ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
-    return;
+        opal_output(0, "%s unable to open debugger attach fifo",
+                    ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
+        return;
     }
 
     /* Set this fd to be close-on-exec so that children don't see it */
@@ -2717,10 +2836,16 @@ static void open_fifo(void)
         return;
     }
 
-    opal_output_verbose(2, orte_debug_output,
-            "%s Monitoring debugger attach fifo %s",
-            ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-            MPIR_attach_fifo);
+    if (orte_debugger_test_attach) {
+        opal_output(0, "%s Monitoring debugger attach fifo %s",
+                    ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                    MPIR_attach_fifo);
+    } else {
+        opal_output_verbose(2, orte_debug_output,
+                            "%s Monitoring debugger attach fifo %s",
+                            ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                            MPIR_attach_fifo);
+    }
     orte_debugger_attach = (opal_event_t*)malloc(sizeof(opal_event_t));
     opal_event_set(orte_event_base, orte_debugger_attach, orte_debugger_attach_fd,
                    OPAL_EV_READ, attach_debugger, orte_debugger_attach);
@@ -2728,6 +2853,8 @@ static void open_fifo(void)
     orte_debugger_fifo_active = true;
     opal_event_add(orte_debugger_attach, 0);
 }
+
+static bool did_once = false;
 
 static void attach_debugger(int fd, short event, void *arg)
 {
@@ -2783,6 +2910,12 @@ static void attach_debugger(int fd, short event, void *arg)
                             (NULL == orte_debugger_test_daemon) ?
                             MPIR_executable_path : orte_debugger_test_daemon);
         setup_debugger_job();
+        did_once = true;
+    }
+
+    /* if we are testing, ensure we only do this once */
+    if (NULL != orte_debugger_test_daemon && did_once) {
+        return;
     }
 
     /* reset the read or timer event */
@@ -2827,7 +2960,7 @@ static void run_debugger(char *basename, opal_cmd_line_t *cmd_line,
 {
     int i, id, ret;
     char **new_argv = NULL;
-    const char **tmp;
+    const char **tmp = NULL;
     char *value, **lines, *env_name;
 
     /* Get the orte_base_debug MCA parameter and search for a debugger
@@ -2940,8 +3073,10 @@ static void stack_trace_recv(int status, orte_process_name_t* sender,
     }
     ++ntraces;
     if (orte_process_info.num_procs == ntraces) {
-        /* cancel the timeout */
-        OBJ_DESTRUCT(&stack_trace_timer);
+        if( orte_stack_trace_wait_timeout > 0 ) {
+            /* cancel the timeout */
+            OBJ_DESTRUCT(&stack_trace_timer);
+        }
         /* abort the job */
         ORTE_ACTIVATE_JOB_STATE(NULL, ORTE_JOB_STATE_ALL_JOBS_COMPLETE);
         /* set the global abnormal exit flag  */
@@ -3045,12 +3180,14 @@ void orte_timeout_wakeup(int sd, short args, void *cbdata)
         OBJ_RELEASE(sig);
         /* we will terminate after we get the stack_traces, but set a timeout
          * just in case we never hear back from everyone */
-        OBJ_CONSTRUCT(&stack_trace_timer, orte_timer_t);
-        opal_event_evtimer_set(orte_event_base,
-                               stack_trace_timer.ev, stack_trace_timeout, NULL);
-        opal_event_set_priority(stack_trace_timer.ev, ORTE_ERROR_PRI);
-        stack_trace_timer.tv.tv_sec = 30;
-        opal_event_evtimer_add(stack_trace_timer.ev, &stack_trace_timer.tv);
+        if( orte_stack_trace_wait_timeout > 0 ) {
+            OBJ_CONSTRUCT(&stack_trace_timer, orte_timer_t);
+            opal_event_evtimer_set(orte_event_base,
+                                   stack_trace_timer.ev, stack_trace_timeout, NULL);
+            opal_event_set_priority(stack_trace_timer.ev, ORTE_ERROR_PRI);
+            stack_trace_timer.tv.tv_sec = orte_stack_trace_wait_timeout;
+            opal_event_evtimer_add(stack_trace_timer.ev, &stack_trace_timer.tv);
+        }
         return;
     }
   giveup:
@@ -3058,4 +3195,137 @@ void orte_timeout_wakeup(int sd, short args, void *cbdata)
     ORTE_ACTIVATE_JOB_STATE(NULL, ORTE_JOB_STATE_ALL_JOBS_COMPLETE);
     /* set the global abnormal exit flag  */
     orte_abnormal_term_ordered = true;
+}
+
+static int nreports = 0;
+static orte_timer_t profile_timer;
+static int nchecks = 0;
+
+static void profile_timeout(int sd, short args, void *cbdata)
+{
+    /* abort the job */
+    ORTE_ACTIVATE_JOB_STATE(NULL, ORTE_JOB_STATE_ALL_JOBS_COMPLETE);
+    /* set the global abnormal exit flag  */
+    orte_abnormal_term_ordered = true;
+}
+
+
+static void profile_recv(int status, orte_process_name_t* sender,
+                         opal_buffer_t *buffer, orte_rml_tag_t tag,
+                         void* cbdata)
+{
+    int32_t cnt;
+    char *hostname;
+    float dpss, pss;
+
+    /* unpack the hostname where this came from */
+    cnt = 1;
+    if (OPAL_SUCCESS != opal_dss.unpack(buffer, &hostname, &cnt, OPAL_STRING)) {
+        goto done;
+    }
+    /* print the hostname */
+    fprintf(stderr, "Memory profile from host: %s\n", hostname);
+    free(hostname);
+
+    /* get the PSS of the daemon */
+    cnt = 1;
+    if (OPAL_SUCCESS != opal_dss.unpack(buffer, &dpss, &cnt, OPAL_FLOAT)) {
+        goto done;
+    }
+    /* get the average PSS of the child procs */
+    cnt = 1;
+    if (OPAL_SUCCESS != opal_dss.unpack(buffer, &pss, &cnt, OPAL_FLOAT)) {
+        goto done;
+    }
+
+    fprintf(stderr, "\tDaemon: %8.2fM\tProcs: %8.2fM\n", dpss, pss);
+
+  done:
+    --nreports;
+    if (nreports == 0) {
+        ++nchecks;
+        /* cancel the timeout */
+        OBJ_DESTRUCT(&profile_timer);
+        /* notify to release */
+        _send_notification(12345);
+        /* if this was the first measurement, then we need to
+         * let the probe move along */
+        if (2 > nchecks) {
+            /* reset the event */
+            opal_event_evtimer_set(orte_event_base, orte_memprofile_timeout->ev,
+                                   orte_profile_wakeup, NULL);
+            opal_event_set_priority(orte_memprofile_timeout->ev, ORTE_ERROR_PRI);
+            opal_event_evtimer_add(orte_memprofile_timeout->ev, &orte_memprofile_timeout->tv);
+            /* reset the timer */
+            OBJ_CONSTRUCT(&profile_timer, orte_timer_t);
+            opal_event_evtimer_set(orte_event_base,
+                                   profile_timer.ev, profile_timeout, NULL);
+            opal_event_set_priority(profile_timer.ev, ORTE_ERROR_PRI);
+            profile_timer.tv.tv_sec = 30;
+            opal_event_evtimer_add(profile_timer.ev, &profile_timer.tv);
+            return;
+        }
+    }
+}
+
+void orte_profile_wakeup(int sd, short args, void *cbdata)
+{
+    orte_job_t *dmns;
+    orte_proc_t *dmn;
+    int i;
+    int rc;
+    orte_daemon_cmd_flag_t command = ORTE_DAEMON_GET_MEMPROFILE;
+    opal_buffer_t *buffer;
+    orte_process_name_t name;
+
+    /* this function gets called when the job execution time
+     * has hit a specified limit - collect profile data and
+     * abort this job, but timeout if we cannot do so
+     */
+
+    /* set the recv */
+    nreports = 1;  // always get a report from ourselves
+
+    /* setup the buffer */
+    buffer = OBJ_NEW(opal_buffer_t);
+    /* pack the command */
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &command, 1, ORTE_DAEMON_CMD))) {
+        ORTE_ERROR_LOG(rc);
+        OBJ_RELEASE(buffer);
+        goto giveup;
+    }
+    /* goes to just the first daemon beyond ourselves - no need to get it from everyone */
+    dmns = orte_get_job_data_object(ORTE_PROC_MY_NAME->jobid);
+    if (NULL != (dmn = (orte_proc_t*)opal_pointer_array_get_item(dmns->procs, 1))) {
+        ++nreports;
+    }
+
+    /* send it out */
+    name.jobid = ORTE_PROC_MY_NAME->jobid;
+    for (i=0; i < nreports; i++) {
+        OBJ_RETAIN(buffer);
+        name.vpid = i;
+        if (0 > (rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                                              &name, buffer,
+                                              ORTE_RML_TAG_DAEMON,
+                                              orte_rml_send_callback, NULL))) {
+            ORTE_ERROR_LOG(rc);
+            OBJ_RELEASE(buffer);
+        }
+    }
+    OBJ_RELEASE(buffer); // maintain accounting
+
+    /* we will terminate after we get the profile, but set a timeout
+     * just in case we never hear back */
+    OBJ_CONSTRUCT(&profile_timer, orte_timer_t);
+    opal_event_evtimer_set(orte_event_base,
+                           profile_timer.ev, profile_timeout, NULL);
+    opal_event_set_priority(profile_timer.ev, ORTE_ERROR_PRI);
+    profile_timer.tv.tv_sec = 30;
+    opal_event_evtimer_add(profile_timer.ev, &profile_timer.tv);
+    return;
+
+  giveup:
+    /* abort the job */
+    ORTE_ACTIVATE_JOB_STATE(NULL, ORTE_JOB_STATE_ALL_JOBS_COMPLETE);
 }

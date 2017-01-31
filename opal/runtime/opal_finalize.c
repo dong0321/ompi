@@ -13,6 +13,8 @@
  * Copyright (c) 2010-2015 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2013-2015 Intel, Inc. All rights reserved
+ * Copyright (c) 2016-2017 Research Organization for Information Science
+ *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -53,21 +55,11 @@
 
 #include "opal/runtime/opal_cr.h"
 #include "opal/mca/crs/base/base.h"
+#include "opal/threads/tsd.h"
 
 extern int opal_initialized;
 extern int opal_util_initialized;
 extern bool opal_init_called;
-
-static void __opal_attribute_destructor__ opal_cleanup (void)
-{
-    if (!opal_initialized) {
-        /* nothing to do */
-        return;
-    }
-
-    /* finalize the class/object system */
-    opal_class_finalize();
-}
 
 int
 opal_finalize_util(void)
@@ -95,6 +87,8 @@ opal_finalize_util(void)
 
     (void) mca_base_framework_close(&opal_installdirs_base_framework);
 
+    mca_base_close();
+
     /* finalize the memory allocator */
     opal_malloc_finalize();
 
@@ -112,9 +106,8 @@ opal_finalize_util(void)
 
     opal_datatype_finalize();
 
-#if OPAL_NO_LIB_DESTRUCTOR
-    opal_cleanup ();
-#endif
+    /* finalize the class/object system */
+    opal_class_finalize();
 
     free (opal_process_info.nodename);
     opal_process_info.nodename = NULL;
@@ -167,6 +160,9 @@ opal_finalize(void)
 
     /* close the sec framework */
     (void) mca_base_framework_close(&opal_sec_base_framework);
+
+    /* cleanup the main thread specific stuff */
+    opal_tsd_keys_destruct();
 
     /* finalize util code */
     opal_finalize_util();

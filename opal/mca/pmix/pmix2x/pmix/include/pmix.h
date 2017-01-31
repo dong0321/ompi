@@ -1,5 +1,7 @@
 /*
  * Copyright (c) 2013-2016 Intel, Inc. All rights reserved
+ * Copyright (c) 2016      Research Organization for Information Science
+ *                         and Technology (RIST). All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -46,16 +48,12 @@
 #ifndef PMIx_H
 #define PMIx_H
 
-#include <pmix/autogen/config.h>
-
-/* Symbol transforms */
-#include <pmix/rename.h>
-
 /* Structure and constant definitions */
-#include <pmix/pmix_common.h>
+#include <pmix_common.h>
 
-
-BEGIN_C_DECLS
+#if defined(c_plusplus) || defined(__cplusplus)
+extern "C" {
+#endif
 
 /****    PMIX API    ****/
 
@@ -438,5 +436,10 @@ pmix_status_t PMIx_Query_info_nb(pmix_query_t queries[], size_t nqueries,
 pmix_status_t PMIx_Log_nb(const pmix_info_t data[], size_t ndata,
                           const pmix_info_t directives[], size_t ndirs,
                           pmix_op_cbfunc_t cbfunc, void *cbdata);
-END_C_DECLS
+
+
+#if defined(c_plusplus) || defined(__cplusplus)
+}
+#endif
+
 #endif
