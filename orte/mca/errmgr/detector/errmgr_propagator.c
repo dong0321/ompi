@@ -24,6 +24,7 @@
 
 #include "opal/util/output.h"
 #include "opal/dss/dss.h"
+#include "opal/mca/pmix/pmix.h"
 
 #include "orte/mca/rml/rml.h"
 #include "orte/mca/odls/odls.h"
@@ -34,6 +35,7 @@
 #include "orte/mca/rmaps/rmaps_types.h"
 #include "orte/mca/routed/routed.h"
 #include "orte/mca/grpcomm/grpcomm.h"
+#include "orte/mca/grpcomm/bmg/grpcomm_bmg.h"
 #include "orte/mca/ess/ess.h"
 #include "orte/mca/state/state.h"
 
@@ -56,34 +58,26 @@
 
 static int orte_errmgr_failure_propagator_cb_type = -1;
 
+int orte_errmgr_failure_propagate(orte_jobid_t *job, orte_process_name_t *daemon, orte_proc_state_t state);
+int orte_errmgr_failure_propagate_recv(opal_buffer_t* buffer);
+
 /*
  *Local functions
  */
-static void _notify_release(int status, void *cbdata)
-{   
-    orte_pmix_server_op_caddy_t *cd = (orte_pmix_server_op_caddy_t*)cbdata;
-    
-    if (NULL != cd->procs) {
-        OPAL_LIST_RELEASE(cd->procs);
-    }
-    if (NULL != cd->eprocs) {
-        OPAL_LIST_RELEASE(cd->eprocs);
-    }
-    if (NULL != cd->info) {
-        OPAL_LIST_RELEASE(cd->info);
-    }
-    OBJ_RELEASE(cd);
-}
 
 int orte_errmgr_init_failure_propagate(void)
 {
     int ret;
-    ret = orte_errmgr_xcast_register_cb_type((orte_errmgr_xcast_cb_t)orte_errmgr_failure_propagate_recv);
+    printf("dong orte errmgr init faliure propagator %p\n", orte_errmgr_failure_propagate_recv);
+
+    //ret= orte_grpcomm.register_cb((orte_grpcomm_rbcast_cb_t)orte_errmgr_failure_propagate_recv);
+    // ret = orte_grpcomm_rbcast_register_cb_type((orte_grpcomm_rbcast_cb_t)orte_errmgr_failure_propagate_recv);
     
     if ( 0 <= ret ){
         orte_errmgr_failure_propagator_cb_type = ret;
         return ORTE_SUCCESS;
     }
+    printf("dong orte errmgr init faliure propagator 1\n");
     return ret;
 }
 
@@ -93,7 +87,8 @@ int orte_errmgr_finalize_failure_propagate(void)
     if ( -1 == orte_errmgr_failure_propagator_cb_type){
         return ORTE_SUCCESS;
     }
-    ret = orte_errmgr_xcast_unregister_cb_type(orte_errmgr_failure_propagator_cb_type);
+    ret = orte_grpcomm.unregister_cb(orte_errmgr_failure_propagator_cb_type);
+    //ret = orte_grpcomm_rbcast_unregister_cb_type(orte_errmgr_failure_propagator_cb_type);
     orte_errmgr_failure_propagator_cb_type = -1;
     return ret;
 }
@@ -109,9 +104,8 @@ int orte_errmgr_failure_propagate(orte_jobid_t *job, orte_process_name_t *daemon
 
     /*packing variables*/    
     opal_list_t *procs = NULL, *edaemons = NULL, *info = NULL;
-    int status, nprocs, nedaemons;   
+    int n,status, nprocs, nedaemons;
     opal_namelist_t *nm;
-    orte_pmix_server_op_caddy_t *cd;
     status = state;
     nprocs = 0;
     nedaemons = 1;
@@ -147,7 +141,7 @@ int orte_errmgr_failure_propagate(orte_jobid_t *job, orte_process_name_t *daemon
         for (n=0; n < nprocs; n++) {
             nm = OBJ_NEW(opal_namelist_t);
             opal_list_append(procs, &nm->super);
-            if (ORTE_SUCCESS != (rc = opal_dss.unpack(propagete_buff, &nm->name, 1, OPAL_NAME))) {
+            if (ORTE_SUCCESS != (rc = opal_dss.pack(&propagete_buff, &nm->name, 1, OPAL_NAME))) {
                 ORTE_ERROR_LOG(rc);
                 OPAL_LIST_RELEASE(procs);
                 OBJ_DESTRUCT(&propagete_buff);
@@ -171,7 +165,7 @@ int orte_errmgr_failure_propagate(orte_jobid_t *job, orte_process_name_t *daemon
         for (n=0; n < nedaemons; n++) {
             nm = OBJ_NEW(opal_namelist_t);
             opal_list_append(edaemons, &nm->super);
-            if (ORTE_SUCCESS != (rc = opal_dss.unpack(propagete_buff, &nm->name, &cnt, OPAL_NAME))) {
+            if (ORTE_SUCCESS != (rc = opal_dss.pack(&propagete_buff, &nm->name, 1, OPAL_NAME))) {
                 ORTE_ERROR_LOG(rc);
                 if (NULL != procs) {
                     OPAL_LIST_RELEASE(procs);
@@ -182,14 +176,10 @@ int orte_errmgr_failure_propagate(orte_jobid_t *job, orte_process_name_t *daemon
             }
         }
     }
-    
-    cd = OBJ_NEW(orte_pmix_server_op_caddy_t);
-    cd->procs = procs;
-    cd->eprocs = edaemons;
-    cd->info = info;
 
     /* notify this error locally */
-    if (OPAL_SUCCESS != (rc = opal_pmix.server_notify_error(status, procs, edaemons, info, _notify_release, cd))) {
+   // if (OPAL_SUCCESS != (rc = opal_pmix.server_notify_event(status, daemon, info, NULL, NULL))) {
+   {
         ORTE_ERROR_LOG(rc);
         if (NULL != procs) {
             OPAL_LIST_RELEASE(procs);
@@ -200,7 +190,6 @@ int orte_errmgr_failure_propagate(orte_jobid_t *job, orte_process_name_t *daemon
         if (NULL != info) {
             OPAL_LIST_RELEASE(info);
         }
-        OBJ_RELEASE(cd);
     }
 
     /* goes to all daemons */
@@ -209,7 +198,7 @@ int orte_errmgr_failure_propagate(orte_jobid_t *job, orte_process_name_t *daemon
     sig->signature[0].jobid = daemon->jobid;
     /* all daemons hosting this jobid are participating */
     sig->signature[0].vpid = ORTE_VPID_WILDCARD;
-    if (ORTE_SUCCESS != (rc = orte_grpcomm.xcast(sig, ORTE_RML_TAG_PROPAGATE, &propagete_buff))) {
+    if (ORTE_SUCCESS != (rc = orte_grpcomm.rbcast(sig, ORTE_RML_TAG_PROPAGATE, &propagete_buff))) {
         ORTE_ERROR_LOG(rc);
     }
 
@@ -223,9 +212,12 @@ int orte_errmgr_failure_propagate(orte_jobid_t *job, orte_process_name_t *daemon
 int orte_errmgr_failure_propagate_recv(opal_buffer_t* buffer)
 {
     int ret, cnt, state;
+    orte_process_name_t temp_proc_name;
+    orte_proc_t *temp_orte_proc;
+ 
     orte_grpcomm_signature_t *sig;
     orte_rml_tag_t tag;
-  
+    int cbtype, nprocs; 
     /* get the signature for propagating */
     cnt=1;
     if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &sig, &cnt, ORTE_SIGNATURE))) {
@@ -260,8 +252,8 @@ int orte_errmgr_failure_propagate_recv(opal_buffer_t* buffer)
 
     /* unpack the target procs that are to be notified,default value is 0 */
     cnt = 1;
-    if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &nprocs, &cnt, OPAL_INT))) {
-        ORTE_ERROR_LOG(rc);
+    if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &nprocs, &cnt, OPAL_INT))) {
+        ORTE_ERROR_LOG(ret);
         return false;
     }
 
@@ -283,7 +275,7 @@ int orte_errmgr_failure_propagate_recv(opal_buffer_t* buffer)
 
     temp_orte_proc = orte_get_proc_object(&temp_proc_name);
     if( ORTE_PROC_STATE_HEARTBEAT_FAILED != temp_orte_proc->state ) {
-        orte_errmgr_failure_propagate(orte_process_info.my_daemon.jobid, &temp_proc_name, state);  
+        orte_errmgr_failure_propagate(&orte_process_info.my_daemon.jobid, &temp_proc_name, state);  
     } 
     return false;    
 }

@@ -26,8 +26,6 @@ BEGIN_C_DECLS
 ORTE_MODULE_DECLSPEC extern orte_grpcomm_base_component_t mca_grpcomm_bmg_component;
 extern orte_grpcomm_base_module_t orte_grpcomm_bmg_module;
 
-typedef int (*orte_errmgr_xcast_cb_t)(opal_buffer_t* buffer);
-
 END_C_DECLS
 
 #endif

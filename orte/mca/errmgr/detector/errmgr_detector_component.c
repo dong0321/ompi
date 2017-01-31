@@ -29,10 +29,10 @@ const char *orte_errmgr_detector_component_version_string =
 /*
  * Local functionality
  */
-static int detector_register(void);
-static int detector_open(void);
-static int detector_close(void);
-static int detector_component_query(mca_base_module_t **module, int *priority);
+static int errmgr_detector_register(void);
+static int errmgr_detector_open(void);
+static int errmgr_detector_close(void);
+static int errmgr_detector_component_query(mca_base_module_t **module, int *priority);
 
 /*
  * Instantiate the public struct with all of our public information
@@ -50,10 +50,10 @@ orte_errmgr_base_component_t mca_errmgr_detector_component = {
                               ORTE_RELEASE_VERSION),
 
         /* Component open and close functions */
-        .mca_open_component = detector_open,
-        .mca_close_component = detector_close,
-        .mca_query_component = detector_component_query,
-        .mca_register_component_params = detector_register,
+        .mca_open_component = errmgr_detector_open,
+        .mca_close_component = errmgr_detector_close,
+        .mca_query_component = errmgr_detector_component_query,
+        .mca_register_component_params = errmgr_detector_register,
     },
     .base_data = {
         /* The component is checkpoint ready */
@@ -63,11 +63,11 @@ orte_errmgr_base_component_t mca_errmgr_detector_component = {
 
 static int my_priority;
 
-static int detector_register(void)
+static int errmgr_detector_register(void)
 {
     mca_base_component_t *c = &mca_errmgr_detector_component.base_version;
 
-    my_priority = 1000;
+    my_priority = 900;
     (void) mca_base_component_var_register(c, "priority",
                                            "Priority of the detector errmgr component",
                                            MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
@@ -77,24 +77,24 @@ static int detector_register(void)
     return ORTE_SUCCESS;
 }
 
-static int detector_open(void)
+static int errmgr_detector_open(void)
 {
     return ORTE_SUCCESS;
 }
 
-static int detector_close(void)
+static int errmgr_detector_close(void)
 {
     return ORTE_SUCCESS;
 }
 
-static int detector_component_query(mca_base_module_t **module, int *priority)
+static int errmgr_detector_component_query(mca_base_module_t **module, int *priority)
 {
     /* used by DVM masters */
-    if (ORTE_PROC_IS_MASTER) {
+   // if (ORTE_PROC_IS_DAEMON || ORTE_PROC_IS_HNP ) {
         *priority = my_priority;
         *module = (mca_base_module_t *)&orte_errmgr_detector_module;
         return ORTE_SUCCESS;
-    }
+    //}
 
     *module = NULL;
     *priority = -1;

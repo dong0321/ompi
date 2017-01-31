@@ -200,10 +200,10 @@ static void mca_bcol_iboffload_device_destructor
 
     if (NULL != device->mpool) {
         IBOFFLOAD_VERBOSE(10, ("Mpool destroy - %p.\n", device->mpool));
-        if (OMPI_SUCCESS != mca_mpool_base_module_destroy(device->mpool)) {
+       /* if (OMPI_SUCCESS != mca_mpool_base_module_destroy(device->mpool)) {
             IBOFFLOAD_ERROR(("Device %s, failed to destroy mpool",
                               ibv_get_device_name(device->dev.ib_dev)));
-        }
+        }*/
     }
 
     if (NULL != device->dummy_reg.mr) {
