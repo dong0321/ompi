@@ -2360,11 +2360,10 @@ static void _send_notification(int status)
     sig.signature[0].jobid = ORTE_PROC_MY_NAME->jobid;
     sig.signature[0].vpid = ORTE_VPID_WILDCARD;
     sig.sz = 1;
-    printf("dong orte/orted/orted_submit.c xcast ORTE_RML_TAG_NOTIFICATION \n");
+
     if (ORTE_SUCCESS != (rc = orte_grpcomm.xcast(&sig, ORTE_RML_TAG_NOTIFICATION, &buf))) {
         ORTE_ERROR_LOG(rc);
-    }    printf("dong orte/orted/orted_submit.c xcast  done ORTE_RML_TAG_NOTIFICATION\n");
-
+    }
     OBJ_DESTRUCT(&sig);
     OBJ_DESTRUCT(&buf);
 }
@@ -3164,15 +3163,12 @@ void orte_timeout_wakeup(int sd, short args, void *cbdata)
         sig->signature[0].jobid = ORTE_PROC_MY_NAME->jobid;
         sig->signature[0].vpid = ORTE_VPID_WILDCARD;
         sig->sz = 1;
-        printf("dong orte/orted/orted_submit.c xcast  \n ");
         if (ORTE_SUCCESS != (rc = orte_grpcomm.xcast(sig, ORTE_RML_TAG_DAEMON, buffer))) {
             ORTE_ERROR_LOG(rc);
             OBJ_RELEASE(buffer);
             OBJ_RELEASE(sig);
             goto giveup;
-        }       
-     printf("dong orte/orted/orted_submit.c xcast  done \n ");
-
+        }
         OBJ_RELEASE(buffer);
         /* maintain accounting */
         OBJ_RELEASE(sig);

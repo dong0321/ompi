@@ -176,7 +176,7 @@ BEGIN_C_DECLS
 #define ORTE_RML_TAG_WARMUP_CONNECTION      63
 
 /* heartbeat request */
-#define ORTE_RML_TAG_HEARTBEAT_REQUEST      98
+#define ORTE_RML_TAG_HEARTBEAT_REQUEST      68
 
 /* error propagate  */
 #define ORTE_RML_TAG_PROPAGATE              99

@@ -106,12 +106,9 @@ int orte_plm_base_orted_exit(orte_daemon_cmd_flag_t command)
     sig->signature = (orte_process_name_t*)malloc(sizeof(orte_process_name_t));
     sig->signature[0].jobid = ORTE_PROC_MY_NAME->jobid;
     sig->signature[0].vpid = ORTE_VPID_WILDCARD;
-    printf("dong orte/mca/plm/base/plm_base_orted_cmds.c xcast 1\n ");
     if (ORTE_SUCCESS != (rc = orte_grpcomm.xcast(sig, ORTE_RML_TAG_DAEMON, cmd))) {
         ORTE_ERROR_LOG(rc);
     }
-    printf("dong orte/mca/plm/base/plm_base_orted_cmds.c xcast done  1\n ");
-
     OBJ_RELEASE(cmd);
     OBJ_RELEASE(sig);
 
@@ -191,13 +188,9 @@ int orte_plm_base_orted_kill_local_procs(opal_pointer_array_t *procs)
     sig->signature = (orte_process_name_t*)malloc(sizeof(orte_process_name_t));
     sig->signature[0].jobid = ORTE_PROC_MY_NAME->jobid;
     sig->signature[0].vpid = ORTE_VPID_WILDCARD;
-       printf("dong orte/mca/plm/base/plm_base_orted_cmds.c xcast 2\n ");
-
     if (ORTE_SUCCESS != (rc = orte_grpcomm.xcast(sig, ORTE_RML_TAG_DAEMON, cmd))) {
         ORTE_ERROR_LOG(rc);
     }
-    printf("dong orte/mca/plm/base/plm_base_orted_cmds.c xcast done 2 \n ");
-
     OBJ_RELEASE(cmd);
     OBJ_RELEASE(sig);
 
@@ -245,13 +238,9 @@ int orte_plm_base_orted_signal_local_procs(orte_jobid_t job, int32_t signal)
     sig->signature = (orte_process_name_t*)malloc(sizeof(orte_process_name_t));
     sig->signature[0].jobid = ORTE_PROC_MY_NAME->jobid;
     sig->signature[0].vpid = ORTE_VPID_WILDCARD;
-        printf("dong orte/mca/plm/base/plm_base_orted_cmds.c xcast 3\n ");
-
     if (ORTE_SUCCESS != (rc = orte_grpcomm.xcast(sig, ORTE_RML_TAG_DAEMON, &cmd))) {
         ORTE_ERROR_LOG(rc);
     }
-    printf("dong orte/mca/plm/base/plm_base_orted_cmds.c xcast done 3\n ");
-
     OBJ_DESTRUCT(&cmd);
     OBJ_RELEASE(sig);
 

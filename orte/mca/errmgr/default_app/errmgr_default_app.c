@@ -57,11 +57,11 @@
  * HNP module
  ******************/
  orte_errmgr_base_module_t orte_errmgr_default_app_module = {
-    .init = init,
     .finalize = finalize,
     .logfn = orte_errmgr_base_log,
     .abort = orte_errmgr_base_abort,
-    .abort_peers = abort_peers
+    .abort_peers = abort_peers,
+    NULL
 };
 
 static void proc_errors(int fd, short args, void *cbdata);

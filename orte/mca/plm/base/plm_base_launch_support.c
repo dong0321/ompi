@@ -579,7 +579,6 @@ void orte_plm_base_launch_apps(int fd, short args, void *cbdata)
     sig->signature[0].jobid = ORTE_PROC_MY_NAME->jobid;
     sig->signature[0].vpid = ORTE_VPID_WILDCARD;
     sig->sz = 1;
-    printf("dong orte/mca/plm/base/plm_base_launch_support.c xcast\n");
     if (ORTE_SUCCESS != (rc = orte_grpcomm.xcast(sig, ORTE_RML_TAG_DAEMON, buffer))) {
         ORTE_ERROR_LOG(rc);
         OBJ_RELEASE(buffer);
@@ -588,8 +587,6 @@ void orte_plm_base_launch_apps(int fd, short args, void *cbdata)
         OBJ_RELEASE(caddy);
         return;
     }
-    printf("dong orte/mca/plm/base/plm_base_launch_support.c xcast done\n");
-
     OBJ_RELEASE(buffer);
     /* maintain accounting */
     OBJ_RELEASE(sig);

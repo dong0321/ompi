@@ -452,8 +452,6 @@ void orte_daemon_recv(int status, orte_process_name_t* sender,
         sig->signature = (orte_process_name_t*)malloc(sizeof(orte_process_name_t));
         sig->signature[0].jobid = ORTE_PROC_MY_NAME->jobid;
         sig->signature[0].vpid = ORTE_VPID_WILDCARD;
-
-        printf("dong orte/orted/orted_comm.c xcast \n ");
         orte_grpcomm.xcast(sig, ORTE_RML_TAG_DAEMON, answer);
         OBJ_RELEASE(answer);
         OBJ_RELEASE(sig);

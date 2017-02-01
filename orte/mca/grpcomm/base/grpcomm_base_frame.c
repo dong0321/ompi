@@ -72,6 +72,7 @@ static int orte_grpcomm_base_close(void)
         orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_BMGXCAST);
         recv_issued = false;
     }
+
     /* Close the active modules */
     OPAL_LIST_FOREACH(active, &orte_grpcomm_base.actives, orte_grpcomm_base_active_t) {
         if (NULL != active->module->finalize) {
