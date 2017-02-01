@@ -32,6 +32,7 @@
 #include "orte/util/nidmap.h"
 #include "orte/util/proc_info.h"
 #include "orte/mca/routed/routed.h"
+#include "orte/mca/rml/base/rml_contact.h"
 #include "orte/mca/errmgr/detector/errmgr_detector.h"
 #include "orte/mca/grpcomm/base/base.h"
 #include "grpcomm_bmg.h"
@@ -161,7 +162,7 @@ static int xcast(orte_vpid_t *vpids,
     printf("xcast in bmg\n");    
     /* send it to the HNP (could be myself) for relay */
     OBJ_RETAIN(buf);  // we'll let the RML release it
-    if (0 > (rc = orte_rml.send_buffer_nb(ORTE_PROC_MY_HNP, buf, ORTE_RML_TAG_BMGXCAST,
+    if (0 > (rc = orte_rml.send_buffer_nb(orte_coll_conduit, ORTE_PROC_MY_HNP, buf, ORTE_RML_TAG_BMGXCAST,
                                           orte_rml_send_callback, NULL))) {
         ORTE_ERROR_LOG(rc);
         OBJ_RELEASE(buf);
@@ -190,7 +191,7 @@ static int rbcast(orte_vpid_t *vpids,
         daemon.jobid = orte_process_info.my_daemon.jobid;
         daemon.vpid = idx;
         OBJ_RETAIN(buf);
-        if(0 > (rc = orte_rml.send_buffer_nb(&daemon, buf, ORTE_RML_TAG_RBCAST, orte_rml_send_callback, NULL))) {
+        if(0 > (rc = orte_rml.send_buffer_nb(orte_coll_conduit, &daemon, buf, ORTE_RML_TAG_RBCAST, orte_rml_send_callback, NULL))) {
             ORTE_ERROR_LOG(rc);
         }
         if( i == 1 ) {
@@ -235,7 +236,7 @@ static int allgather(orte_grpcomm_coll_t *coll,
                          ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
 
     /* send the info to ourselves for tracking */
-    rc = orte_rml.send_buffer_nb(ORTE_PROC_MY_NAME, relay,
+    rc = orte_rml.send_buffer_nb(orte_coll_conduit, ORTE_PROC_MY_NAME, relay,
                                  ORTE_RML_TAG_ALLGATHER_BMG,
                                  orte_rml_send_callback, NULL);
     return rc;
@@ -326,7 +327,7 @@ static void allgather_recv(int status, orte_process_name_t* sender,
             /* transfer the collected bucket */
             opal_dss.copy_payload(reply, &coll->bucket);
             /* send the info to our parent */
-            rc = orte_rml.send_buffer_nb(ORTE_PROC_MY_PARENT, reply,
+            rc = orte_rml.send_buffer_nb(orte_coll_conduit, ORTE_PROC_MY_PARENT, reply,
                                          ORTE_RML_TAG_ALLGATHER_BMG,
                                          orte_rml_send_callback, NULL);
         }
@@ -351,6 +352,7 @@ static void xcast_recv(int status, orte_process_name_t* sender,
     orte_job_t *jdata;
     orte_proc_t *rec;
     opal_list_t coll;
+    char *rtmod;
     orte_grpcomm_signature_t *sig;
     orte_rml_tag_t tag;
     printf("xcast recv \n");
@@ -386,6 +388,11 @@ static void xcast_recv(int status, orte_process_name_t* sender,
     opal_dss.copy_payload(relay, buffer);
     /* setup the relay list */
     OBJ_CONSTRUCT(&coll, opal_list_t);
+
+    /* get our conduit's routed module name */
+    rtmod = orte_rml.get_routed(orte_coll_conduit);
+
+
     /* if this is headed for the daemon command processor,
      * then we first need to check for add_local_procs
      * as that command includes some needed wireup info */
@@ -426,7 +433,7 @@ static void xcast_recv(int status, orte_process_name_t* sender,
                 }
 
                 /* update the routing plan */
-                orte_routed.update_routing_plan();
+                orte_routed.update_routing_plan(rtmod);
 
                 /* see if we have wiring info as well */
                 cnt=1;
@@ -462,7 +469,7 @@ static void xcast_recv(int status, orte_process_name_t* sender,
                     OBJ_CONSTRUCT(&wireup, opal_buffer_t);
                     opal_dss.load(&wireup, bo->bytes, bo->size);
                     /* pass it for processing */
-                    if (ORTE_SUCCESS != (ret = orte_routed.init_routes(ORTE_PROC_MY_NAME->jobid, &wireup))) {
+                    if (ORTE_SUCCESS != (ret = orte_rml_base_update_contact_info(&wireup))) {
                         ORTE_ERROR_LOG(ret);
                         OBJ_DESTRUCT(&wireup);
                         goto relay;
@@ -485,7 +492,7 @@ static void xcast_recv(int status, orte_process_name_t* sender,
  relay:
 
     /* get the list of next recipients from the routed module */
-    orte_routed.get_routing_list(&coll);
+    orte_routed.get_routing_list(rtmod,&coll);
 
     /* if list is empty, no relay is required */
     if (opal_list_is_empty(&coll)) {
@@ -522,7 +529,7 @@ static void xcast_recv(int status, orte_process_name_t* sender,
             OBJ_RELEASE(item);
             continue;
         }
-        if (ORTE_SUCCESS != (ret = orte_rml.send_buffer_nb(&nm->name, rly, ORTE_RML_TAG_BMGXCAST,
+        if (ORTE_SUCCESS != (ret = orte_rml.send_buffer_nb(orte_coll_conduit, &nm->name, rly, ORTE_RML_TAG_BMGXCAST,
                                                            orte_rml_send_callback, NULL))) {
             ORTE_ERROR_LOG(ret);
             OBJ_RELEASE(rly);
@@ -539,7 +546,7 @@ static void xcast_recv(int status, orte_process_name_t* sender,
    printf("bcast recv cleanup\n");
     /* now send the relay buffer to myself for processing */
     if (ORTE_DAEMON_DVM_NIDMAP_CMD != command) {
-        if (ORTE_SUCCESS != (ret = orte_rml.send_buffer_nb(ORTE_PROC_MY_NAME, relay, tag,
+        if (ORTE_SUCCESS != (ret = orte_rml.send_buffer_nb(orte_coll_conduit, ORTE_PROC_MY_NAME, relay, tag,
                                                            orte_rml_send_callback, NULL))) {
             ORTE_ERROR_LOG(ret);
             OBJ_RELEASE(relay);

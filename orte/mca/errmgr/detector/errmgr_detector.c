@@ -281,7 +281,7 @@ static int orte_errmgr_start_detector(void) {
                        "errmgr:detector daemon %d observering %d observer %d",
                        vpid,
                        detector->hb_observing,
-                       detector->hb_observer);
+                       detector->hb_observer));
     fd_heartbeat_request(detector);
 
     opal_event_set(fd_event_base, &detector->fd_event, -1, OPAL_EV_TIMEOUT | OPAL_EV_PERSIST, fd_event_cb, detector);
@@ -306,9 +306,12 @@ static int fd_heartbeat_request(orte_errmgr_detector_t* detector) {
     if (NULL == (jdata = orte_get_job_data_object(orte_process_info.my_name.jobid))) {
         return ORTE_VPID_INVALID;
      }
-     proc = (orte_proc_t*)opal_pointer_array_get_item(jdata->procs, temp_proc_name.vpid);
+    proc = (orte_proc_t*)opal_pointer_array_get_item(jdata->procs, temp_proc_name.vpid);
 
     temp_orte_proc = (orte_proc_t*)orte_get_proc_object(&temp_proc_name);
+    if (ret=ORTE_FLAG_TEST(proc, ORTE_PROC_FLAG_ALIVE))
+        printf("dongstate %d \n",ret);
+    //proc->state == ORTE_PROC_STATE_HEARTBEAT_FAILED;
     //or ORTE_PROC_STATE_RUNNING == temp_orte_proc->state
    // if( ORTE_PROC_STATE_HEARTBEAT_FAILED != temp_orte_proc->state )
     {
@@ -338,7 +341,7 @@ static int fd_heartbeat_request(orte_errmgr_detector_t* detector) {
             ORTE_ERROR_LOG(ret); }
         if (OPAL_SUCCESS != (ret = opal_dss.pack(buffer, &orte_process_info.my_name.vpid, 1,OPAL_VPID))) {
             ORTE_ERROR_LOG(ret); }
-	    if (0 > (ret = orte_rml.send_buffer_nb(&daemon, buffer, ORTE_RML_TAG_HEARTBEAT_REQUEST, orte_rml_send_callback, NULL))) {
+	    if (0 > (ret = orte_rml.send_buffer_nb(orte_mgmt_conduit, &daemon, buffer, ORTE_RML_TAG_HEARTBEAT_REQUEST, orte_rml_send_callback, NULL))) {
 	        ORTE_ERROR_LOG(ret);}
             break;
     }
@@ -363,7 +366,7 @@ static int fd_heartbeat_request_cb(int status, orte_process_name_t* sender,
     OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                         "errmgr:detector %d receive %d",
                         orte_process_info.my_name.vpid,
-                        detector->hb_observer);
+                        detector->hb_observer));
     ndmns = orte_process_info.num_nodes;
     rr = (ndmns-orte_process_info.my_name.vpid+vpid) % ndmns; /* translate msg->from in circular space so that myrank==0 */
     ro = (ndmns-orte_process_info.my_name.vpid+detector->hb_observer) % ndmns; /* same for the observer rank */
@@ -453,7 +456,7 @@ static int fd_heartbeat_send(orte_errmgr_detector_t* detector) {
             ORTE_ERROR_LOG(ret);
     }
     /* send the heartbeat with eager send */
-    if (0 > (ret  = orte_rml.send_buffer_nb(&daemon, buffer,ORTE_RML_TAG_HEARTBEAT, orte_rml_send_callback, NULL))) {
+    if (0 > (ret  = orte_rml.send_buffer_nb(orte_mgmt_conduit,&daemon, buffer,ORTE_RML_TAG_HEARTBEAT, orte_rml_send_callback, NULL))) {
            ORTE_ERROR_LOG(ret);
     }
     return ORTE_SUCCESS;
@@ -489,7 +492,7 @@ static int fd_heartbeat_recv_cb(int status, orte_process_name_t* sender,
                              "errmgr:detector: daemon %s receive heartbeat from vpid %d tag %d at timestamp %g (remained %.1e of %.1e before suspecting)",
                              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                              vpid,
-                             tag,
+                             tg,
                              stamp,
                              grace,
                              detector->hb_timeout));

@@ -167,9 +167,9 @@ BEGIN_C_DECLS
 #define ORTE_RML_TAG_STACK_TRACE            60
 
 
-/* heartbeat request */                     
+/* heartbeat request */
 #define ORTE_RML_TAG_HEARTBEAT_REQUEST      68
-/* error propagate  */                      
+/* error propagate  */
 #define ORTE_RML_TAG_PROPAGATE              63
 /* error propagate  */
 #define ORTE_RML_TAG_RBCAST                 64

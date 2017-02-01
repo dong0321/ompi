@@ -25,6 +25,8 @@ int main(int argc, char *argv[])
     }*/
     MPI_Init(&argc, &argv);
     printf("Init done\n");
+    sleep(30);
+
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     printf("Ranks %d\n", rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
