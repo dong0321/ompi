@@ -1,0 +1,83 @@
+[dancer.icl.utk.edu:14854] mca: base: components_register: registering framework errmgr components
+[dancer.icl.utk.edu:14854] mca: base: components_register: found loaded component detector
+[dancer.icl.utk.edu:14854] mca: base: components_register: component detector register function successful
+[dancer.icl.utk.edu:14854] mca: base: components_register: found loaded component default_orted
+[dancer.icl.utk.edu:14854] mca: base: components_register: component default_orted register function successful
+[dancer.icl.utk.edu:14854] mca: base: components_register: found loaded component default_tool
+[dancer.icl.utk.edu:14854] mca: base: components_register: component default_tool register function successful
+[dancer.icl.utk.edu:14854] mca: base: components_register: found loaded component default_app
+[dancer.icl.utk.edu:14854] mca: base: components_register: component default_app register function successful
+[dancer.icl.utk.edu:14854] mca: base: components_register: found loaded component dvm
+[dancer.icl.utk.edu:14854] mca: base: components_register: component dvm register function successful
+[dancer.icl.utk.edu:14854] mca: base: components_register: found loaded component default_hnp
+[dancer.icl.utk.edu:14854] mca: base: components_register: component default_hnp register function successful
+[dancer.icl.utk.edu:14854] mca: base: components_open: opening errmgr components
+[dancer.icl.utk.edu:14854] mca: base: components_open: found loaded component detector
+[dancer.icl.utk.edu:14854] mca: base: components_open: component detector open function successful
+[dancer.icl.utk.edu:14854] mca: base: components_open: found loaded component default_orted
+[dancer.icl.utk.edu:14854] mca: base: components_open: component default_orted open function successful
+[dancer.icl.utk.edu:14854] mca: base: components_open: found loaded component default_tool
+[dancer.icl.utk.edu:14854] mca: base: components_open: component default_tool open function successful
+[dancer.icl.utk.edu:14854] mca: base: components_open: found loaded component default_app
+[dancer.icl.utk.edu:14854] mca: base: components_open: component default_app open function successful
+[dancer.icl.utk.edu:14854] mca: base: components_open: found loaded component dvm
+[dancer.icl.utk.edu:14854] mca: base: components_open: component dvm open function successful
+[dancer.icl.utk.edu:14854] mca: base: components_open: found loaded component default_hnp
+[dancer.icl.utk.edu:14854] mca: base: components_open: component default_hnp open function successful
+[dancer.icl.utk.edu:14854] mca: base: components_register: registering framework grpcomm components
+[dancer.icl.utk.edu:14854] mca: base: components_register: found loaded component bmg
+[dancer.icl.utk.edu:14854] mca: base: components_register: component bmg register function successful
+[dancer.icl.utk.edu:14854] mca: base: components_register: found loaded component direct
+[dancer.icl.utk.edu:14854] mca: base: components_register: component direct register function successful
+[dancer.icl.utk.edu:14854] mca: base: components_open: opening grpcomm components
+[dancer.icl.utk.edu:14854] mca: base: components_open: found loaded component bmg
+[dancer.icl.utk.edu:14854] mca: base: components_open: component bmg open function successful
+[dancer.icl.utk.edu:14854] mca: base: components_open: found loaded component direct
+[dancer.icl.utk.edu:14854] mca: base: components_open: component direct open function successful
+[dancer.icl.utk.edu:14854] mca:grpcomm:select: checking available component bmg
+[dancer.icl.utk.edu:14854] mca:grpcomm:select: Querying component [bmg]
+[dancer.icl.utk.edu:14854] mca:grpcomm:select: checking available component direct
+[dancer.icl.utk.edu:14854] mca:grpcomm:select: Querying component [direct]
+[dancer.icl.utk.edu:14854] [[57027,0],0]: Final grpcomm priorities
+[dancer.icl.utk.edu:14854] 	Component: bmg Priority: 90
+[dancer.icl.utk.edu:14854] 	Component: direct Priority: 85
+[dancer.icl.utk.edu:14854] mca:base:select: Auto-selecting errmgr components
+[dancer.icl.utk.edu:14854] mca:base:select:(errmgr) Querying component [detector]
+[dancer.icl.utk.edu:14854] mca:base:select:(errmgr) Query of component [detector] set priority to 1005
+[dancer.icl.utk.edu:14854] mca:base:select:(errmgr) Querying component [default_orted]
+[dancer.icl.utk.edu:14854] mca:base:select:(errmgr) Querying component [default_tool]
+[dancer.icl.utk.edu:14854] mca:base:select:(errmgr) Querying component [default_app]
+[dancer.icl.utk.edu:14854] mca:base:select:(errmgr) Querying component [dvm]
+[dancer.icl.utk.edu:14854] mca:base:select:(errmgr) Querying component [default_hnp]
+[dancer.icl.utk.edu:14854] mca:base:select:(errmgr) Query of component [default_hnp] set priority to 1000
+[dancer.icl.utk.edu:14854] mca:base:select:(errmgr) Selected component [detector]
+[dancer.icl.utk.edu:14854] mca: base: close: component default_orted closed
+[dancer.icl.utk.edu:14854] mca: base: close: unloading component default_orted
+[dancer.icl.utk.edu:14854] mca: base: close: component default_tool closed
+[dancer.icl.utk.edu:14854] mca: base: close: unloading component default_tool
+[dancer.icl.utk.edu:14854] mca: base: close: component default_app closed
+[dancer.icl.utk.edu:14854] mca: base: close: unloading component default_app
+[dancer.icl.utk.edu:14854] mca: base: close: component dvm closed
+[dancer.icl.utk.edu:14854] mca: base: close: unloading component dvm
+[dancer.icl.utk.edu:14854] mca: base: close: component default_hnp closed
+[dancer.icl.utk.edu:14854] mca: base: close: unloading component default_hnp
+Killed by signal 2.
+Killed by signal 2.
+[dancer.icl.utk.edu:14854] [[57027,0],0]:ess_hnp_module.c(926) updating exit status to 1
+Killed by signal 2.
+[dancer.icl.utk.edu:14854] [[57027,0],0] grpcomm:base:xcast sending 8 bytes to tag 1
+[dancer.icl.utk.edu:14854] [[57027,0],0] grpcomm:base:create_dmns called with NON-NULL signature
+[dancer.icl.utk.edu:14854] [[57027,0],0] grpcomm:direct:xcast:recv: with 47 bytes
+[dancer.icl.utk.edu:14854] [[57027,0],0] grpcomm:direct:send_relay sending relay msg of 47 bytes to [[57027,0],1]
+[dancer.icl.utk.edu:14854] [[57027,0],0] grpcomm:direct:send_relay sending relay msg of 47 bytes to [[57027,0],2]
+[dancer.icl.utk.edu:14854] [[57027,0],0] grpcomm:direct:send_relay sending relay msg of 47 bytes to [[57027,0],3]
+[dancer.icl.utk.edu:14854] [[57027,0],0] grpcomm:direct:send_relay sending relay msg of 47 bytes to [[57027,0],4]
+Killed by signal 2.
+[dancer.icl.utk.edu:14854] [[57027,0],0] orted:comm:process_commands() Processing Command: ORTE_DAEMON_EXIT_CMD
+[dancer.icl.utk.edu:14854] [[57027,0],0] orted_cmd: received exit cmd
+[dancer.icl.utk.edu:14854] [[57027,0],0] orted_cmd: exit cmd, 4 routes still exist
+dong orte/mca/plm/base/plm_base_orted_cmds.c xcast 1
+ dong base_stubs tag 1
+ xcast in bmg
+dong orte/mca/plm/base/plm_base_orted_cmds.c xcast done  1
+ 

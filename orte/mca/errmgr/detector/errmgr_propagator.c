@@ -68,16 +68,12 @@ int orte_errmgr_failure_propagate_recv(opal_buffer_t* buffer);
 int orte_errmgr_init_failure_propagate(void)
 {
     int ret;
-    printf("dong orte errmgr init faliure propagator %p\n", orte_errmgr_failure_propagate_recv);
-
-    //ret= orte_grpcomm.register_cb((orte_grpcomm_rbcast_cb_t)orte_errmgr_failure_propagate_recv);
-    // ret = orte_grpcomm_rbcast_register_cb_type((orte_grpcomm_rbcast_cb_t)orte_errmgr_failure_propagate_recv);
-    
+    if(orte_grpcomm.register_cb!=NULL)
+    ret= orte_grpcomm.register_cb((orte_grpcomm_rbcast_cb_t)orte_errmgr_failure_propagate_recv);
     if ( 0 <= ret ){
         orte_errmgr_failure_propagator_cb_type = ret;
         return ORTE_SUCCESS;
     }
-    printf("dong orte errmgr init faliure propagator 1\n");
     return ret;
 }
 
@@ -88,7 +84,6 @@ int orte_errmgr_finalize_failure_propagate(void)
         return ORTE_SUCCESS;
     }
     ret = orte_grpcomm.unregister_cb(orte_errmgr_failure_propagator_cb_type);
-    //ret = orte_grpcomm_rbcast_unregister_cb_type(orte_errmgr_failure_propagator_cb_type);
     orte_errmgr_failure_propagator_cb_type = -1;
     return ret;
 }
@@ -101,20 +96,28 @@ int orte_errmgr_failure_propagate(orte_jobid_t *job, orte_process_name_t *daemon
 
     orte_grpcomm_signature_t *sig;
     opal_buffer_t propagete_buff;
-
-    /*packing variables*/    
-    opal_list_t *procs = NULL, *edaemons = NULL, *info = NULL;
-    int n,status, nprocs, nedaemons;
-    opal_namelist_t *nm;
+    opal_list_t *info;
+    opal_value_t *kv, *kvptr;
+    /*packing variables*/
+    int status;
     status = state;
-    nprocs = 0;
-    nedaemons = 1;
+    orte_process_name_t temp_daemon;
+    temp_daemon.jobid =  daemon->jobid; temp_daemon.vpid = daemon->vpid;
 
-    /* change the error daemon state*/ 
-    ORTE_ACTIVATE_PROC_STATE(daemon, ORTE_PROC_STATE_HEARTBEAT_FAILED);
+    /* change the error daemon state*/
+    orte_proc_t *temp_orte_proc;
+    temp_orte_proc = (orte_proc_t*)orte_get_proc_object(daemon);
+    OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
+                        "errmgr:daemon %d prp error daemon %d with state",
+                        ORTE_PROC_MY_NAME->vpid,
+                        daemon->vpid,
+                        errmgr_get_daemon_status(temp_daemon)));
 
-    OBJ_CONSTRUCT(&propagete_buff, opal_buffer_t);        
-
+    if(!errmgr_get_daemon_status(temp_daemon))
+        return rc;
+   // errmgr_set_daemon_status(temp_daemon, false);
+    OBJ_CONSTRUCT(&propagete_buff, opal_buffer_t);
+    info = OBJ_NEW(opal_list_t);
     /* pack the callback type */
     if (ORTE_SUCCESS != (rc = opal_dss.pack(&propagete_buff, &orte_errmgr_failure_propagator_cb_type, 1, OPAL_INT))) {
         ORTE_ERROR_LOG(rc);
@@ -129,64 +132,44 @@ int orte_errmgr_failure_propagate(orte_jobid_t *job, orte_process_name_t *daemon
         return rc;
     }
 
-    /* pack the nprocs,default val is 0 */
-    if (ORTE_SUCCESS != (rc = opal_dss.pack(&propagete_buff, &nprocs, 1, OPAL_INT))) {
+    /* pack dead daemom */
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(&propagete_buff, daemon, 1, ORTE_NAME))) {
         ORTE_ERROR_LOG(rc);
         OBJ_DESTRUCT(&propagete_buff);
         return rc;
-    }
-    /* if targets is not 0 , add them to the list */
-    if (0 < nprocs) {
-        procs = OBJ_NEW(opal_list_t);
-        for (n=0; n < nprocs; n++) {
-            nm = OBJ_NEW(opal_namelist_t);
-            opal_list_append(procs, &nm->super);
-            if (ORTE_SUCCESS != (rc = opal_dss.pack(&propagete_buff, &nm->name, 1, OPAL_NAME))) {
-                ORTE_ERROR_LOG(rc);
-                OPAL_LIST_RELEASE(procs);
-                OBJ_DESTRUCT(&propagete_buff);
-                return rc;
-            }
-        }
-    }
-     
-   /* pack the num of error daemons */
-    if (ORTE_SUCCESS != (rc = opal_dss.pack(&propagete_buff, &nedaemons, 1, OPAL_INT))) {
-        ORTE_ERROR_LOG(rc);
-        if (NULL != procs) {
-            OPAL_LIST_RELEASE(procs);
-        }
-        OBJ_DESTRUCT(&propagete_buff);
-        return rc;
-    }
-    /* if error daemons is not 0, add them to the list */
-    if (0 < nedaemons) {
-        edaemons = OBJ_NEW(opal_list_t);
-        for (n=0; n < nedaemons; n++) {
-            nm = OBJ_NEW(opal_namelist_t);
-            opal_list_append(edaemons, &nm->super);
-            if (ORTE_SUCCESS != (rc = opal_dss.pack(&propagete_buff, &nm->name, 1, OPAL_NAME))) {
-                ORTE_ERROR_LOG(rc);
-                if (NULL != procs) {
-                    OPAL_LIST_RELEASE(procs);
-                }
-                OPAL_LIST_RELEASE(edaemons);
-                OBJ_DESTRUCT(&propagete_buff);
-                return rc;
-            }
-        }
     }
 
-    /* notify this error locally */
-   // if (OPAL_SUCCESS != (rc = opal_pmix.server_notify_event(status, daemon, info, NULL, NULL))) {
-   {
+    /* pass thru opal_values */
+    rc = 1;
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(&propagete_buff, &rc, 1, OPAL_INT))) {
         ORTE_ERROR_LOG(rc);
-        if (NULL != procs) {
-            OPAL_LIST_RELEASE(procs);
-        }
-        if (NULL != edaemons) {
-            OPAL_LIST_RELEASE(edaemons);
-        }
+        OBJ_DESTRUCT(&propagete_buff);
+        return rc;
+    }
+
+    /* pass along the affected proc(s) */
+    kv = OBJ_NEW(opal_value_t);
+    /* #define OPAL_PMIX_EVENT_TERMINATE_NODE "pmix.evterm.node"      (bool) RM intends to terminate all procs on this node */
+    // kv->key = strdup(OPAL_PMIX_EVENT_AFFECTED_PROC);
+    kv->key = strdup(OPAL_PMIX_EVENT_TERMINATE_NODE);
+
+    kv->type = OPAL_NAME;
+    kv->data.name.jobid = daemon->jobid;
+    kv->data.name.vpid = daemon->vpid;
+
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(&propagete_buff, &kv, 1, OPAL_VALUE))) {
+        ORTE_ERROR_LOG(rc);
+        //OBJ_DESTRUCT(&kv);
+        OBJ_DESTRUCT(&propagete_buff);
+        return rc;
+    }
+    opal_list_append(info, &kv->super);
+    //OBJ_DESTRUCT(&kv);
+
+    // #define PMIX_ERR_NODE_DOWN  (PMIX_ERR_SYS_BASE -  1) source: ORTE_PROC_MY_NAME
+    /* notify this error locally */
+   if (OPAL_SUCCESS != (rc = opal_pmix.server_notify_event(status, daemon, info, NULL, NULL))) {
+        ORTE_ERROR_LOG(rc);
         if (NULL != info) {
             OPAL_LIST_RELEASE(info);
         }
@@ -204,7 +187,6 @@ int orte_errmgr_failure_propagate(orte_jobid_t *job, orte_process_name_t *daemon
 
     OBJ_DESTRUCT(&propagete_buff);
     OBJ_RELEASE(sig);
-
     /* we're done! */
     return ORTE_SUCCESS;
 }
@@ -213,70 +195,55 @@ int orte_errmgr_failure_propagate_recv(opal_buffer_t* buffer)
 {
     int ret, cnt, state;
     orte_process_name_t temp_proc_name;
-    orte_proc_t *temp_orte_proc;
- 
+    orte_proc_t *temp_orte_proc, *checkoproc;
     orte_grpcomm_signature_t *sig;
     orte_rml_tag_t tag;
-    int cbtype, nprocs; 
-    /* get the signature for propagating */
-    cnt=1;
-    if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &sig, &cnt, ORTE_SIGNATURE))) {
-        ORTE_ERROR_LOG(ret);
-        ORTE_FORCED_TERMINATE(ret);
-        return false;
-    }
-    OBJ_RELEASE(sig);
+    int cbtype, nprocs;
 
-    /* get the target tag */
-    cnt=1;
-    if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &tag, &cnt, ORTE_RML_TAG))) {
-        ORTE_ERROR_LOG(ret);
-        ORTE_FORCED_TERMINATE(ret);
-        return false;
-    }
-
+    opal_pointer_array_t cmd;
     /* get the cbtype */
     cnt=1;
     if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &cbtype, &cnt,OPAL_INT ))) {
         ORTE_ERROR_LOG(ret);
-        ORTE_FORCED_TERMINATE(ret);
         return false;
     }
-
     cnt = 1;
     if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &state, &cnt, OPAL_INT))) {
         ORTE_ERROR_LOG(ret);
-        ORTE_FORCED_TERMINATE(ret);
         return false;
     }
-
-    /* unpack the target procs that are to be notified,default value is 0 */
-    cnt = 1;
-    if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &nprocs, &cnt, OPAL_INT))) {
-        ORTE_ERROR_LOG(ret);
-        return false;
-    }
-
-    /* unpack the procs that were impacted by the error */
-    cnt = 1;
-    if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &nprocs, &cnt, OPAL_INT))) {
-        ORTE_ERROR_LOG(ret);
-        ORTE_FORCED_TERMINATE(ret);
-        return false;
-    }
-
     /* for propagate, only one daemon is affected per call */
     cnt = 1;
     if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &temp_proc_name, &cnt, OPAL_NAME))) {
         ORTE_ERROR_LOG(ret);
-        ORTE_FORCED_TERMINATE(ret);
         return false;
     }
-
     temp_orte_proc = orte_get_proc_object(&temp_proc_name);
-    if( ORTE_PROC_STATE_HEARTBEAT_FAILED != temp_orte_proc->state ) {
-        orte_errmgr_failure_propagate(&orte_process_info.my_daemon.jobid, &temp_proc_name, state);  
-    } 
-    return false;    
-}
+    OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
+                "errmgr:daemon %d received %d",
+                orte_process_info.my_name.vpid,
+                temp_proc_name.vpid));
 
+    if(errmgr_get_daemon_status(temp_proc_name)){ 
+    OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
+                "errmgr:daemon %d begin forwarding state is %d",
+                orte_process_info.my_name.vpid,
+                 errmgr_get_daemon_status(temp_proc_name)));
+    //errmgr_set_daemon_status(temp_proc_name , false) ;
+    // temp_orte_proc->state = ORTE_PROC_STATE_HEARTBEAT_FAILED;
+     //OBJ_CONSTRUCT(&cmd, opal_pointer_array_t);
+   //opal_pointer_array_add(&cmd, temp_orte_proc);
+
+//if (ORTE_SUCCESS != (ret = orte_odls.kill_local_procs(&cmd))) {
+  //           ORTE_ERROR_LOG(ret);
+    //   }
+   //orte_plm.terminate_procs(&cmd);
+    // OBJ_DESTRUCT(&cmd);
+    //    ORTE_ACTIVATE_PROC_STATE(&temp_orte_proc->name, ORTE_PROC_STATE_HEARTBEAT_FAILED);
+     //   checkoproc =  orte_get_proc_object(&temp_proc_name);
+      //  printf("\n check proc %d", checkoproc->state);
+        orte_errmgr_failure_propagate(&orte_process_info.my_name.jobid, &temp_proc_name, state);
+     errmgr_set_daemon_status(temp_proc_name , false) ;
+    }
+    return false;
+}

@@ -13,19 +13,19 @@
 int main(int argc, char *argv[])
 {
     int rank, size, next, prev, message, tag = 201;
-
+     MPI_Init(&argc, &argv);
     /* Start up MPI */
     printf("MPI_initating\n");
-   /* {
+    {
                   char name[255];
                   gethostname(name,255);
                   printf("ssh -t zhongdong@%s gdb -p %d\n", name, getpid());
                   int c=1;
                   while (c){}
-    }*/
-    MPI_Init(&argc, &argv);
+    }
+    //MPI_Init(&argc, &argv);
     printf("Init done\n");
-    sleep(30);
+    sleep(100);
 
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     printf("Ranks %d\n", rank);
