@@ -115,7 +115,6 @@ int orte_errmgr_failure_propagate(orte_jobid_t *job, orte_process_name_t *daemon
 
     if(!errmgr_get_daemon_status(temp_daemon))
         return rc;
-   // errmgr_set_daemon_status(temp_daemon, false);
     OBJ_CONSTRUCT(&propagete_buff, opal_buffer_t);
     info = OBJ_NEW(opal_list_t);
     /* pack the callback type */
@@ -229,21 +228,9 @@ int orte_errmgr_failure_propagate_recv(opal_buffer_t* buffer)
                 "errmgr:daemon %d begin forwarding state is %d",
                 orte_process_info.my_name.vpid,
                  errmgr_get_daemon_status(temp_proc_name)));
-    //errmgr_set_daemon_status(temp_proc_name , false) ;
-    // temp_orte_proc->state = ORTE_PROC_STATE_HEARTBEAT_FAILED;
-     //OBJ_CONSTRUCT(&cmd, opal_pointer_array_t);
-   //opal_pointer_array_add(&cmd, temp_orte_proc);
 
-//if (ORTE_SUCCESS != (ret = orte_odls.kill_local_procs(&cmd))) {
-  //           ORTE_ERROR_LOG(ret);
-    //   }
-   //orte_plm.terminate_procs(&cmd);
-    // OBJ_DESTRUCT(&cmd);
-    //    ORTE_ACTIVATE_PROC_STATE(&temp_orte_proc->name, ORTE_PROC_STATE_HEARTBEAT_FAILED);
-     //   checkoproc =  orte_get_proc_object(&temp_proc_name);
-      //  printf("\n check proc %d", checkoproc->state);
         orte_errmgr_failure_propagate(&orte_process_info.my_name.jobid, &temp_proc_name, state);
-     errmgr_set_daemon_status(temp_proc_name , false) ;
+        errmgr_set_daemon_status(temp_proc_name , false) ;
     }
     return false;
 }
