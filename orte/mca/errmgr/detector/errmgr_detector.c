@@ -305,7 +305,7 @@ static int fd_heartbeat_request(orte_errmgr_detector_t* detector) {
     }
     OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                 "errmgr:detector updated ring daemon %d observering %d observer %d",
-                vpid,
+                ORTE_PROC_MY_NAME->vpid,
                 detector->hb_observing,
                 detector->hb_observer));
     /* if everybody else is dead, then it's a success */

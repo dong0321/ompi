@@ -100,7 +100,9 @@ int orte_errmgr_failure_propagate(orte_jobid_t *job, orte_process_name_t *daemon
     opal_value_t *kv, *kvptr;
     /*packing variables*/
     int status;
-    status = state;
+
+    status =OPAL_ERR_PROC_ABORTED;
+
     orte_process_name_t temp_daemon;
     temp_daemon.jobid =  daemon->jobid; temp_daemon.vpid = daemon->vpid;
 
@@ -149,8 +151,8 @@ int orte_errmgr_failure_propagate(orte_jobid_t *job, orte_process_name_t *daemon
     /* pass along the affected proc(s) */
     kv = OBJ_NEW(opal_value_t);
     /* #define OPAL_PMIX_EVENT_TERMINATE_NODE "pmix.evterm.node"      (bool) RM intends to terminate all procs on this node */
-    // kv->key = strdup(OPAL_PMIX_EVENT_AFFECTED_PROC);
-    kv->key = strdup(OPAL_PMIX_EVENT_TERMINATE_NODE);
+    kv->key = strdup(OPAL_PMIX_EVENT_AFFECTED_PROC);
+    //kv->key = strdup(OPAL_PMIX_EVENT_TERMINATE_NODE);
 
     kv->type = OPAL_NAME;
     kv->data.name.jobid = daemon->jobid;
