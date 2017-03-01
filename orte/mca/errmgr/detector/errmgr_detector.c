@@ -175,7 +175,7 @@ int finalize(void) {
 
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT_REQUEST);
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT);
-//    orte_errmgr_finalize_failure_propagate();
+    orte_errmgr_finalize_failure_propagate();
     return ORTE_SUCCESS;
 }
 

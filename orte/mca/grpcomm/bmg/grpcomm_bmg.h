@@ -1,14 +1,14 @@
  /*- C -*-
  *
- *  * Copyright (c)   All rights reserved.
- *   * Copyright (c)  All rights reserved.
- *    * $COPYRIGHT$
- *     *
- *      * Additional copyrights may follow
- *       *
- *        * $HEADER$
- *         *
- *          */
+ * Copyright (c)   All rights reserved.
+ * Copyright (c)  All rights reserved.
+ * $COPYRIGHT$
+ *
+ * Additional copyrights may follow
+ *
+ * $HEADER$
+ *
+ */
 #ifndef GRPCOMM_BMG_H
 #define GRPCOMM_BMG_H
 
@@ -20,7 +20,7 @@
 BEGIN_C_DECLS
 
 /*
- *  * Grpcomm interfaces
+ * Grpcomm interfaces
  */
 
 ORTE_MODULE_DECLSPEC extern orte_grpcomm_base_component_t mca_grpcomm_bmg_component;

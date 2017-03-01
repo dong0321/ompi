@@ -27,7 +27,7 @@ static int bmg_query(mca_base_module_t **module, int *priority);
 static int bmg_register(void);
 
 /*
- *  * Struct of function pointers that need to be initialized
+ * Struct of function pointers that need to be initialized
  */
 orte_grpcomm_base_component_t mca_grpcomm_bmg_component = {
     .base_version = {
@@ -53,7 +53,7 @@ static int bmg_register(void)
 
     /* make the priority adjustable so users can select
      * bmg for use by apps without affecting daemons
-    */
+     */
     my_priority = 50;
     (void) mca_base_component_var_register(c, "priority",
                                            "Priority of the grpcomm bmg component",
