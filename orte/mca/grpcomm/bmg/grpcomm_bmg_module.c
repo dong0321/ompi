@@ -188,6 +188,10 @@ static int rbcast(orte_vpid_t *vpids,
         daemon.vpid = idx;
         OBJ_RETAIN(buf);
         if(idx!=0){
+            OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output,
+                        "%s grpcomm:bmg: broadcast message to %s",
+                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                        ORTE_NAME_PRINT(&daemon)));
             if(0 > (rc = orte_rml.send_buffer_nb(orte_coll_conduit, &daemon, buf, ORTE_RML_TAG_RBCAST, orte_rml_send_callback, NULL))) {
             ORTE_ERROR_LOG(rc);
         }

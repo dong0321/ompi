@@ -55,6 +55,7 @@
 #include "orte/mca/errmgr/base/base.h"
 #include "orte/mca/errmgr/base/errmgr_private.h"
 
+#include "orte/mca/propagate/propagate.h"
 #include "errmgr_detector.h"
 
 static int init(void);
@@ -175,7 +176,7 @@ int finalize(void) {
 
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT_REQUEST);
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT);
-    orte_errmgr_finalize_failure_propagate();
+    //orte_errmgr_finalize_failure_propagate();
     return ORTE_SUCCESS;
 }
 
@@ -210,19 +211,8 @@ static double Wtime(void)
     return wtime;
 }
 
-int orte_errmgr_start_detector(void) {
-
-    if ( ORTE_PROC_IS_DAEMON )
-    {
-        /*{
-                 char name[255];
-                           gethostname(name,255);
-                                     printf("ssh -t zhongdong@%s gdb -p %d\n", name, getpid());
-                                               int c=1;
-                                                         while (c){}
-        }*/
-
-
+int orte_errmgr_start_detector(void)
+{
     orte_errmgr_detector_t* detector = &orte_errmgr_world_detector;
     int  ndmns, i;
     uint32_t vpid;
@@ -371,10 +361,16 @@ static void fd_event_cb(int fd, short flags, void* pdetector) {
             OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                         "errmgr:detector %d observing %d",
                         orte_process_info.my_name.vpid, detector->hb_observing));
-            orte_errmgr_failure_propagate(&temp_proc_name.jobid, &temp_proc_name, ORTE_PROC_STATE_HEARTBEAT_FAILED);
-            printf("\nLLLL dong daemons%d  %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d ",ORTE_PROC_MY_NAME->vpid, detector->daemons_state[0], detector->daemons_state[1], detector->daemons_state[2], detector->daemons_state[3], detector->daemons_state[4], detector->daemons_state[5], detector->daemons_state[6], detector->daemons_state[7], detector->daemons_state[8], detector->daemons_state[9], detector->daemons_state[10], detector->daemons_state[11], detector->daemons_state[12], detector->daemons_state[13], detector->daemons_state[14], detector->daemons_state[15], detector->daemons_state[16]);
+                {   
+                    char name[255];
+                    gethostname(name,255);
+                    printf("ssh -t zhongdong@%s gdb -p %d\n", name, getpid());
+                    int c=1;
+                    //while (c){}
+                }
+            orte_propagate.prp(&temp_proc_name.jobid, &temp_proc_name, ORTE_PROC_STATE_HEARTBEAT_FAILED);
+            //orte_errmgr_failure_propagate(&temp_proc_name.jobid, &temp_proc_name, ORTE_PROC_STATE_HEARTBEAT_FAILED);
             errmgr_set_daemon_status(temp_proc_name, false);
-            printf("\nLLLL1 dong daemons %d %d %d", detector->daemons_state[0], detector->daemons_state[1], detector->daemons_state[2]);
             fd_heartbeat_request(detector);
         }
     }
