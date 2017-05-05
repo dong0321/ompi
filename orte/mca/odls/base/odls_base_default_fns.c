@@ -75,6 +75,7 @@
 #include "orte/mca/state/state.h"
 #include "orte/mca/filem/filem.h"
 #include "orte/mca/dfs/dfs.h"
+#include "orte/mca/propagate/propagate.h"
 
 #include "orte/util/context_fns.h"
 #include "orte/util/name_fns.h"
@@ -100,6 +101,141 @@
 
 #include "orte/mca/odls/base/base.h"
 #include "orte/mca/odls/base/odls_private.h"
+#include "orte/orted/pmix/pmix_server.h"
+
+static void notifycbfunc(int status, void *cbdata)
+{
+   // orte_pmix_server_op_caddy_t *cd = (orte_pmix_server_op_caddy_t*)cbdata;
+    opal_list_t *codes = (opal_list_t*)cbdata;
+    OPAL_OUTPUT_VERBOSE((5, orte_odls_base_framework.framework_output,
+                "odls: notify call back..."));
+    volatile int *active = (volatile int*)cbdata;
+
+    //*active = status;
+}
+
+static void _send_notification(int status,
+        orte_process_name_t *proc,
+        orte_process_name_t *target)
+{
+    opal_buffer_t *buf;
+    orte_grpcomm_signature_t sig;
+    int rc;
+    opal_value_t kv, *kvptr;
+    orte_process_name_t daemon;
+
+    buf = OBJ_NEW(opal_buffer_t);
+
+    opal_output_verbose(5, orte_state_base_framework.framework_output,
+            "%s state:base:sending notification %s proc %s target %s",
+            ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+            ORTE_ERROR_NAME(status),
+            ORTE_NAME_PRINT(proc),
+            ORTE_NAME_PRINT(target));
+
+    /* pack the status */
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, &status, 1, OPAL_INT))) {
+        ORTE_ERROR_LOG(rc);
+        OBJ_RELEASE(buf);
+        return;
+    }
+
+    /* the source is me */
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, ORTE_PROC_MY_NAME, 1, ORTE_NAME))) {
+        ORTE_ERROR_LOG(rc);
+        OBJ_RELEASE(buf);
+        return;
+    }
+
+    /* we are going to pass three opal_value_t's */
+    rc = 3;
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, &rc, 1, OPAL_INT))) {
+        ORTE_ERROR_LOG(rc);
+        OBJ_RELEASE(buf);
+        return;
+    }
+
+    /* pass along the affected proc(s) */
+    OBJ_CONSTRUCT(&kv, opal_value_t);
+    kv.key = strdup(OPAL_PMIX_EVENT_AFFECTED_PROC);
+    kv.type = OPAL_NAME;
+    kv.data.name.jobid = proc->jobid;
+    kv.data.name.vpid = proc->vpid;
+    kvptr = &kv;
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, &kvptr, 1, OPAL_VALUE))) {
+        ORTE_ERROR_LOG(rc);
+        OBJ_DESTRUCT(&kv);
+        OBJ_RELEASE(buf);
+        return;
+    }
+    OBJ_DESTRUCT(&kv);
+
+    /* pass along the proc(s) to be notified */
+    OBJ_CONSTRUCT(&kv, opal_value_t);
+    kv.key = strdup(OPAL_PMIX_EVENT_CUSTOM_RANGE);
+    kv.type = OPAL_NAME;
+    kv.data.name.jobid = target->jobid;
+    kv.data.name.vpid = target->vpid;
+    kvptr = &kv;
+
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, &kvptr, 1, OPAL_VALUE))) {
+        ORTE_ERROR_LOG(rc);
+        OBJ_DESTRUCT(&kv);
+        OBJ_RELEASE(buf);
+        return;
+    }
+    OBJ_DESTRUCT(&kv);
+
+    /* mark this as intended for non-default event handlers */
+    OBJ_CONSTRUCT(&kv, opal_value_t);
+    kv.key = strdup(OPAL_PMIX_EVENT_NON_DEFAULT);
+    kv.type = OPAL_BOOL;
+    kv.data.flag = true;
+    kvptr = &kv;
+
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, &kvptr, 1, OPAL_VALUE))) {
+        ORTE_ERROR_LOG(rc);
+        OBJ_DESTRUCT(&kv);
+        OBJ_RELEASE(buf);
+        return;
+    }
+    OBJ_DESTRUCT(&kv);
+
+    /* if the targets are a wildcard, then xcast it to everyone */
+    if (ORTE_VPID_WILDCARD == target->vpid) {
+        OBJ_CONSTRUCT(&sig, orte_grpcomm_signature_t);
+        sig.signature = (orte_process_name_t*)malloc(sizeof(orte_process_name_t));
+        sig.signature[0].jobid = ORTE_PROC_MY_NAME->jobid;
+        sig.signature[0].vpid = ORTE_VPID_WILDCARD;
+        sig.sz = 1;
+
+        if (ORTE_SUCCESS != (rc = orte_grpcomm.xcast(&sig, ORTE_RML_TAG_NOTIFICATION, buf))) {
+            ORTE_ERROR_LOG(rc);
+        }
+        OBJ_DESTRUCT(&sig);
+        OBJ_RELEASE(buf);
+    } else {
+        /* get the daemon hosting the proc to be notified */
+        daemon.jobid = ORTE_PROC_MY_NAME->jobid;
+        daemon.vpid = orte_get_proc_daemon_vpid(target);
+        /* send the notification to that daemon */
+        opal_output_verbose(5, orte_state_base_framework.framework_output,
+                "%s state:base:sending notification %s to proc %s at daemon %s",
+                ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                ORTE_ERROR_NAME(status),
+                ORTE_NAME_PRINT(target),
+                ORTE_NAME_PRINT(&daemon));
+
+        if (ORTE_SUCCESS != (rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                        &daemon, buf,
+                        ORTE_RML_TAG_NOTIFICATION,
+                        orte_rml_send_callback, NULL))) {
+            ORTE_ERROR_LOG(rc);
+            OBJ_RELEASE(buf);
+        }
+    }
+}
+
 
 /* IT IS CRITICAL THAT ANY CHANGE IN THE ORDER OF THE INFO PACKED IN
  * THIS FUNCTION BE REFLECTED IN THE CONSTRUCT_CHILD_LIST PARSER BELOW
@@ -1329,11 +1465,18 @@ void ompi_odls_base_default_wait_local_proc(orte_proc_t *proc, void* cbdata)
     orte_job_t *jobdat;
     orte_proc_state_t state=ORTE_PROC_STATE_WAITPID_FIRED;
     orte_proc_t *cptr;
-
+    /* event codes for error propagating */
+    opal_list_t *codes;
+    opal_list_t *einfo;
+    opal_value_t *kv,*ekv;
+    volatile int active;
+    //orte_pmix_server_op_caddy_t *cd;
+    opal_process_name_t *source;
     opal_output_verbose(5, orte_odls_base_framework.framework_output,
                         "%s odls:wait_local_proc child process %s pid %ld terminated",
                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                         ORTE_NAME_PRINT(&proc->name), (long)proc->pid);
+
 
     /* if the child was previously flagged as dead, then just
      * update its exit status and
@@ -1373,6 +1516,7 @@ void ompi_odls_base_default_wait_local_proc(orte_proc_t *proc, void* cbdata)
         /* regardless of our eventual code path, we need to
          * flag that this proc has had its waitpid fired */
         ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_WAITPID);
+
         goto MOVEON;
     }
 
@@ -1521,6 +1665,36 @@ void ompi_odls_base_default_wait_local_proc(orte_proc_t *proc, void* cbdata)
                              "%s odls:waitpid_fired child process %s terminated with signal",
                              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                              ORTE_NAME_PRINT(&proc->name) ));
+        //---------------------
+        /* register an event handler for the OPAL_ERR_PROC_ABORTED event */
+        einfo = OBJ_NEW(opal_list_t);
+        kv = OBJ_NEW(opal_value_t);
+        /* error handler registration and notification info keys :"pmix.evprepend" */
+        kv->key = strdup(OPAL_PMIX_EVENT_AFFECTED_PROC);
+        kv->type = OPAL_NAME;
+        kv->data.name.jobid = proc->name.jobid;
+        kv->data.name.vpid = proc->name.vpid;
+        opal_list_append(einfo, &kv->super);
+
+        /*
+         if (OPAL_SUCCESS != opal_pmix.server_notify_event(OPAL_ERR_PROC_ABORTED, (opal_process_name_t*)ORTE_PROC_MY_NAME,
+                    einfo, notifycbfunc, einfo)) {
+                        fprintf(stderr, "Notify event failed\n");
+        }
+        active =-1;
+        if (OPAL_SUCCESS != opal_pmix.notify_event(OPAL_ERR_PROC_ABORTED, (opal_process_name_t*)ORTE_PROC_MY_NAME,
+                    //OPAL_PMIX_RANGE_GLOBAL, einfo,
+                    OPAL_PMIX_RANGE_LOCAL,einfo,
+                    notifycbfunc, (void*)&active)) {
+            fprintf(stderr, "Notify event failed\n");
+        }*/
+        OPAL_OUTPUT_VERBOSE((5, orte_odls_base_framework.framework_output,
+                    "event notify in odls.."));
+        //--------------------------
+        OPAL_OUTPUT_VERBOSE((5, orte_odls_base_framework.framework_output,
+                    "event notify xcast for %s..",
+                    ORTE_NAME_PRINT(&proc->name)));
+        _send_notification(OPAL_ERR_PROC_ABORTED,&proc->name,ORTE_NAME_WILDCARD);
         /* Do not decrement the number of local procs here. That is handled in the errmgr */
     }
 

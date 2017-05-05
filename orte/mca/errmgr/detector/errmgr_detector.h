@@ -23,6 +23,7 @@
 #include "orte_config.h"
 
 #include "orte/mca/errmgr/errmgr.h"
+#include "opal/mca/pmix/pmix_types.h"
 
 BEGIN_C_DECLS
 
@@ -37,6 +38,9 @@ typedef struct {
     bool daemons_state[256]; 
 } orte_errmgr_detector_t;
 static orte_errmgr_detector_t orte_errmgr_world_detector;
+
+static size_t myerrhandle = SIZE_MAX;
+
 /*
  * Local Component structures
  */
@@ -45,6 +49,16 @@ ORTE_MODULE_DECLSPEC extern orte_errmgr_base_component_t mca_errmgr_detector_com
 
 ORTE_DECLSPEC extern orte_errmgr_base_module_t orte_errmgr_detector_module;
 
+/*
+ * Errhanler
+ */
+/*static void register_cbfunc(int status, size_t errhndler, void *cbdata);
+static void error_notify_cbfunc(int status,
+        const opal_process_name_t *source,
+        opal_list_t *info, opal_list_t *results,
+        opal_pmix_notification_complete_fn_t cbfunc, void *cbdata);
+void reg_errhandler();
+*/
 /*
  * Propagator functions
  */
