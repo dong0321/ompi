@@ -56,6 +56,8 @@ BEGIN_C_DECLS
  * collective completion */
 typedef void (*prrte_grpcomm_cbfunc_t)(int status, prrte_buffer_t *buf, void *cbdata);
 
+typedef int (*orte_grpcomm_rbcast_cb_t)(opal_buffer_t* buffer);
+
 /* Define a collective signature so we don't need to
  * track global collective id's */
 typedef struct {
@@ -123,6 +125,15 @@ typedef int (*prrte_grpcomm_base_module_xcast_fn_t)(prrte_vpid_t *vpids,
 typedef int (*prrte_grpcomm_base_module_allgather_fn_t)(prrte_grpcomm_coll_t *coll,
                                                        prrte_buffer_t *buf, int mode);
 
+/* Reliable broadcast a message thru BMG.
+ * only need to provide a message buffer, dont need create dmns
+ */
+typedef int (*orte_grpcomm_base_module_rbcast_fn_t)(opal_buffer_t *msg);
+
+typedef int (*orte_grpcomm_base_module_rbcast_register_cb_fn_t)(orte_grpcomm_rbcast_cb_t callback);
+
+typedef int (*orte_grpcomm_base_module_rbcast_unregister_cb_fn_t)(int type);
+
 /*
  * Ver 3.0 - internal modules
  */
@@ -132,6 +143,9 @@ typedef struct {
     /* collective operations */
     prrte_grpcomm_base_module_xcast_fn_t          xcast;
     prrte_grpcomm_base_module_allgather_fn_t      allgather;
+    prrte_grpcomm_base_module_rbcast_fn_t         rbcast;
+    prrte_grpcomm_base_module_rbcast_register_cb_fn_t        register_cb;
+    prrte_grpcomm_base_module_rbcast_unregister_cb_fn_t       unregister_cb;
 } prrte_grpcomm_base_module_t;
 
 /* the Public APIs */
@@ -159,10 +173,26 @@ typedef int (*prrte_grpcomm_base_API_allgather_fn_t)(prrte_grpcomm_signature_t *
                                                     prrte_buffer_t *buf, int mode,
                                                     prrte_grpcomm_cbfunc_t cbfunc,
                                                     void *cbdata);
+/* Reliable broadcast a message. Caller will provide an array
+ * of daemon. A NULL pointer indicates that all known daemons are in the BMG.
+ * A pointer to a name that includes ORTE_VPID_WILDCARD
+ * all daemons in the specified jobid.*/
+typedef int (*orte_grpcomm_base_API_rbcast_fn_t)(orte_grpcomm_signature_t *sig,
+                                                orte_rml_tag_t tag,
+                                                opal_buffer_t *msg);
+
+
+typedef int (*orte_grpcomm_base_API_rbcast_register_cb_fn_t)(orte_grpcomm_rbcast_cb_t callback);
+
+typedef int (*orte_grpcomm_base_API_rbcast_unregister_cb_fn_t)(int type);
+
 typedef struct {
     /* collective operations */
     prrte_grpcomm_base_API_xcast_fn_t             xcast;
     prrte_grpcomm_base_API_allgather_fn_t         allgather;
+    prrte_grpcomm_base_API_rbcast_fn_t            rbcast;
+    prrte_grpcomm_base_API_rbcast_register_cb_fn_t     register_cb;
+    prrte_grpcomm_base_API_rbcast_unregister_cb_fn_t   unregister_cb;
 } prrte_grpcomm_API_module_t;
 
 
