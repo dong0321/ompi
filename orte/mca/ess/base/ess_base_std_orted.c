@@ -60,6 +60,11 @@
 #include "orte/mca/regx/base/base.h"
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/mca/rmaps/base/base.h"
+#include "orte/mca/propagate/base/base.h"
+#if OPAL_ENABLE_FT_CR == 1
+#include "orte/mca/snapc/base/base.h"
+#include "orte/mca/sstore/base/base.h"
+#endif
 #include "orte/mca/filem/base/base.h"
 #include "orte/util/proc_info.h"
 #include "orte/util/session_dir.h"
@@ -218,6 +223,12 @@ int orte_ess_base_orted_setup(void)
     if (ORTE_SUCCESS != (ret = mca_base_framework_open(&orte_errmgr_base_framework, 0))) {
         ORTE_ERROR_LOG(ret);
         error = "orte_errmgr_base_open";
+        goto error;
+    }
+    /* open the propagate */
+    if (ORTE_SUCCESS != (ret = mca_base_framework_open(&orte_propagate_base_framework, 0))) {
+        ORTE_ERROR_LOG(ret);
+        error = "orte_propagate_base_open";
         goto error;
     }
     /* some environments allow remote launches - e.g., ssh - so
@@ -426,6 +437,13 @@ int orte_ess_base_orted_setup(void)
     if (ORTE_SUCCESS != (ret = orte_errmgr_base_select())) {
         ORTE_ERROR_LOG(ret);
         error = "orte_errmgr_base_select";
+        goto error;
+    }
+
+    /* select the propagate */
+    if (ORTE_SUCCESS != (ret = orte_propagate_base_select())) {
+        ORTE_ERROR_LOG(ret);
+        error = "orte_propagate_base_select";
         goto error;
     }
 
@@ -640,6 +658,8 @@ int orte_ess_base_orted_finalize(void)
     /* shutdown the pmix server */
     pmix_server_finalize();
 
+     (void) mca_base_framework_close(&orte_errmgr_base_framework);
+
     /* release the conduits */
     orte_rml.close_conduit(orte_mgmt_conduit);
     orte_rml.close_conduit(orte_coll_conduit);
@@ -651,6 +671,8 @@ int orte_ess_base_orted_finalize(void)
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml and oob are offline */
     orte_errmgr.finalize();
+    //(void) mca_base_framework_close(&orte_errmgr_base_framework);
+    (void) mca_base_framework_close(&orte_propagate_base_framework);
     (void) mca_base_framework_close(&orte_plm_base_framework);
     /* make sure our local procs are dead */
     orte_odls.kill_local_procs(NULL);
