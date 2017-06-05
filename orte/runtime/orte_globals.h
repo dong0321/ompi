@@ -585,6 +585,9 @@ ORTE_DECLSPEC extern int orte_stack_trace_wait_timeout;
 /* whether or not hwloc shmem support is available */
 ORTE_DECLSPEC extern bool orte_hwloc_shmem_available;
 
+/* Detector enable/disable flag */
+ORTE_DECLSPEC extern bool orte_errmgr_detector_enable_flag;
+
 END_C_DECLS
 
 #endif /* ORTE_RUNTIME_ORTE_GLOBALS_H */
