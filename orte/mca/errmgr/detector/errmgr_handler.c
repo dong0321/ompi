@@ -89,7 +89,7 @@ static void error_notify_cbfunc(int status,
     if (NULL != cbfunc) {
         cbfunc(ORTE_SUCCESS, NULL, NULL, NULL, cbdata);
     }
-    orte_propagate.prp(&proc.jobid, &proc, ORTE_PROC_FLAG_ABORT);
+    //orte_propagate.prp(&proc.jobid, &proc, ORTE_PROC_FLAG_ABORT);
 }
 
 void reg_errhandler()

@@ -68,7 +68,7 @@ int orte_errmgr_init_failure_propagate(void);
 int orte_errmgr_finalize_failure_propagate(void);
 int errmgr_get_daemon_status(orte_process_name_t daemon);
 void errmgr_set_daemon_status(orte_process_name_t daemon, bool state);
-extern int orte_errmgr_start_detector(void);
+extern int orte_errmgr_enable_detector(bool flag);
 END_C_DECLS
 
 #endif /* MCA_ERRMGR_detector_EXPORT_H */

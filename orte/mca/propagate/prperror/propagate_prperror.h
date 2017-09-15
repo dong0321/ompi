@@ -32,6 +32,8 @@ ORTE_MODULE_DECLSPEC extern orte_propagate_base_component_t mca_propagate_prperr
 
 ORTE_DECLSPEC extern orte_propagate_base_module_t orte_propagate_prperror_module;
 
+ORTE_DECLSPEC extern opal_list_t orte_error_procs;
+
 END_C_DECLS
 
 #endif /* MCA_PROPAGATE_prperror_EXPORT_H */

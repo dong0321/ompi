@@ -69,7 +69,7 @@ static int suggest_map_targets(orte_proc_t *proc,
                                orte_node_t *oldnode,
                                opal_list_t *node_list);
 
-int orte_errmgr_start_detector(void);
+int orte_errmgr_enable_detector(bool flag);
 /******************
  * detector module
  ******************/
@@ -85,22 +85,22 @@ orte_errmgr_base_module_t orte_errmgr_detector_module = {
     orte_errmgr_base_register_migration_warning,
     NULL,
     orte_errmgr_base_execute_error_callbacks,
-    orte_errmgr_start_detector
+    orte_errmgr_enable_detector
 };
 
 orte_errmgr_base_module_t orte_errmgr = {
-          NULL,
-          NULL,
-            orte_errmgr_base_log,
-            NULL,
-             NULL,
-              NULL,
-               NULL,
-                NULL,
-                  NULL,
-                   NULL,
-                    orte_errmgr_start_detector
-                     };
+    NULL,
+    finalize,
+    orte_errmgr_base_log,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    orte_errmgr_enable_detector
+};
 
 /*
  * Local functions
@@ -130,42 +130,44 @@ static void* fd_progress(opal_object_t* obj);
 
 static void register_cbfunc(int status, size_t errhndler, void *cbdata)
 {
-    opal_list_t *codes = (opal_list_t*)cbdata;
     myerrhandle = errhndler;
     OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                 "errmgr:detector:event register cbfunc with status %d", status));
-    //OPAL_LIST_RELEASE(codes);
 }
 static void error_notify_cbfunc(int status,
         const opal_process_name_t *source,
         opal_list_t *info, opal_list_t *results,
         opal_pmix_notification_complete_fn_t cbfunc, void *cbdata)
 {
-    OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,"errmgr:detector:notify call back called"));
     orte_process_name_t proc;
     opal_value_t *kv;
+    proc.jobid = ORTE_JOBID_INVALID;
+    proc.vpid = ORTE_VPID_INVALID;
     OPAL_LIST_FOREACH(kv, info, opal_value_t) {
+        OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,"recv notify check list "));
         if (0 == strcmp(kv->key, OPAL_PMIX_EVENT_AFFECTED_PROC)) {
             proc.jobid = kv->data.name.jobid;
             proc.vpid = kv->data.name.vpid;
+            OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
+                        "errmgr:detector %s error proc %d:%d with key %s notified from %d:%d",
+                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), proc.jobid, proc.vpid, kv->key, source->jobid, source->vpid));
+            orte_propagate.prp(&source->jobid, source, &proc, OPAL_ERR_PROC_ABORTED);
             break;
-        }
+       }
     }
-    OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
-                "register evhandler error callback.."));
+
     if (NULL != cbfunc) {
         cbfunc(ORTE_SUCCESS, NULL, NULL, NULL, cbdata);
     }
-    orte_propagate.prp(&proc.jobid, &proc, ORTE_PROC_FLAG_ABORT);
+    OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,"TT check -1 error from %d:%d", source->jobid, source->vpid));
 }
 
 static int init(void) {
     int ret;
-    opal_list_t *codes;
-    opal_value_t *ekv;
     fd_event_base = opal_sync_event_base;
     volatile int active;
     active = -1;
+
     orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT_REQUEST,
                            ORTE_RML_PERSISTENT,fd_heartbeat_request_cb,NULL);
     orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT,
@@ -206,16 +208,19 @@ int finalize(void) {
         opal_thread_join(&fd_thread, &tret);
     }
 #endif /* OPAL_ENABLE_MULTI_THREADS */
-
     opal_event_del(&orte_errmgr_world_detector.fd_event);
-    if( opal_sync_event_base != fd_event_base ) opal_event_base_free(fd_event_base);
-
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT_REQUEST);
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT);
+    if( opal_sync_event_base != fd_event_base ) opal_event_base_free(fd_event_base);
+
     if (SIZE_MAX != myerrhandle) {
         opal_pmix.deregister_evhandler(myerrhandle, NULL, NULL);
     }
-    //orte_errmgr_finalize_failure_propagate();
+
+    /* set heartbeat peroid to infinity and observer to invalid */
+    orte_errmgr_world_detector.hb_period = INFINITY;
+    orte_errmgr_world_detector.hb_observer = ORTE_VPID_INVALID;
+
     return ORTE_SUCCESS;
 }
 
@@ -250,89 +255,59 @@ static double Wtime(void)
     return wtime;
 }
 
-int orte_errmgr_start_detector(void)
+int orte_errmgr_enable_detector(bool enable_flag)
 {
-    if ( ORTE_PROC_IS_DAEMON )
+    OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,"%s errmgr:detector report detector_enable_status %d",
+                ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), enable_flag));
+    if ( ORTE_PROC_IS_DAEMON && enable_flag )
     {
+        orte_errmgr_detector_t* detector = &orte_errmgr_world_detector;
+        int  ndmns, i;
+        uint32_t vpid;
 
-        {   
-            char name[255];
-            gethostname(name,255);
-            printf("ssh -t zhongdong@%s gdb -p %d\n", name, getpid());
-            int c=1;
-            //while (c){}
-        } 
-    orte_errmgr_detector_t* detector = &orte_errmgr_world_detector;
-    int  ndmns, i;
-    uint32_t vpid;
-    orte_job_t *jdata;
+        opal_list_t *codes;
+        opal_value_t *ekv;
 
-    opal_list_t *codes, *infos, *codes1;
-    opal_value_t *ekv, *ikv, *i1kv, *ekv1;
-    volatile int active;
-    active = -1;
-    codes = OBJ_NEW(opal_list_t);
-    ekv = OBJ_NEW(opal_value_t);
-    //ekv->key = strdup("errorcode");
-    ekv->key = strdup("OPAL_PMIX_EVENT_AFFECTED_PROC");
-    ekv->type = OPAL_INT;
-    ekv->data.integer =OPAL_ERR_PROC_ABORTED; //ORTE_ERR_PROC_ABORTED;
-    opal_list_append(codes, &ekv->super);
-    OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
-                "errmgr:detector: register evhandler in errmgr.."));
-    active =-1;
-    infos = OBJ_NEW(opal_list_t);
-    ikv = OBJ_NEW(opal_value_t);
-    ikv->key = strdup(OPAL_PMIX_EVENT_ENVIRO_LEVEL);// strdup("errorcode");
-    ikv->type =OPAL_BOOL;// OPAL_INT;
-    //ikv->data.integer = ORTE_ERR_PROC_ABORTED;
-    ikv->data.flag = true;
-    opal_list_append(infos, &ikv->super);
+        codes = OBJ_NEW(opal_list_t);
+        ekv = OBJ_NEW(opal_value_t);
+        ekv->key = strdup("OPAL_PMIX_EVENT_AFFECTED_PROC");//OPAL_ERR_NODE_DOWN");//OPAL_PMIX_EVENT_AFFECTED_PROC");
+        ekv->type = OPAL_INT;
+        ekv->data.integer =OPAL_ERR_PROC_ABORTED; //ORTE_ERR_PROC_ABORTED;
+        opal_list_append(codes, &ekv->super);
+        OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
+                    "errmgr:detector: register evhandler in errmgr.."));
 
-    i1kv = OBJ_NEW(opal_value_t);
-    i1kv->key = strdup("OPAL_PMIX_EVENT_AFFECTED_PROC");
-    i1kv->type = OPAL_INT;
-    i1kv->data.integer =OPAL_ERR_PROC_ABORTED;// ORTE_ERR_PROC_ABORTED;
-    opal_list_append(infos, &i1kv->super);
+        opal_pmix.register_evhandler(codes, NULL, error_notify_cbfunc, register_cbfunc, NULL);
 
-    codes1 = OBJ_NEW(opal_list_t);
-    ekv1 = OBJ_NEW(opal_value_t);
-    ekv1->key = strdup("errorcode");
-    ekv1->type = OPAL_INT;
-    ekv1->data.integer =OPAL_ERR_PROC_ABORTED;
-    opal_list_append(codes1, &ekv1->super);
+        orte_propagate.register_cb();
 
-//    opal_pmix.register_evhandler(codes1, NULL, error_notify_cbfunc, register_cbfunc, codes1);
-  //  opal_pmix.register_evhandler(codes, NULL, error_notify_cbfunc, register_cbfunc, codes);
-    //opal_pmix.register_evhandler(codes, infos, error_notify_cbfunc, register_cbfunc, (void*)&active);
-    orte_errmgr_init_failure_propagate();
-    ndmns = orte_process_info.num_procs-1;                /* num of daemon in this jobid */
-    vpid = orte_process_info.my_name.vpid;
-    if( 0 != (vpid - 1) )
-        detector->hb_observing = vpid - 1;               /*  we observing somebody {n,1,2,...n-1}, the ring */
-    else detector->hb_observing = ndmns;
-    jdata = orte_get_job_data_object(orte_process_info.my_name.jobid);
-    detector->hb_observer = (ndmns+vpid) % ndmns + 1 ;   /* someone is observing us: range [1~n], the observing ring */
-    detector->hb_period = orte_errmgr_heartbeat_period;
-    detector->hb_timeout = orte_errmgr_heartbeat_timeout;
-    detector->hb_sstamp = 0.;
-    detector->hb_rstamp = Wtime()+(double)ndmns;        /* give some slack for MPIInit */
+        ndmns = orte_process_info.num_procs-1;                /* num of daemon in this jobid */
+        vpid = orte_process_info.my_name.vpid;
+        if( 0 != (vpid - 1) )
+            detector->hb_observing = vpid - 1;               /*  we observing somebody {n,1,2,...n-1}, the ring */
+        else detector->hb_observing = ndmns;
 
-    for(i=0; i<orte_process_info.num_procs; i++)
-    {
-        detector->daemons_state[i] = true;
-    }
-    OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
-                       "errmgr:detector daemon %d observering %d observer %d",
-                       vpid,
-                       detector->hb_observing,
-                       detector->hb_observer));
+        detector->hb_observer = (ndmns+vpid) % ndmns + 1 ;   /* someone is observing us: range [1~n], the observing ring */
+        detector->hb_period = orte_errmgr_heartbeat_period;
+        detector->hb_timeout = orte_errmgr_heartbeat_timeout;
+        detector->hb_sstamp = 0.;
+        detector->hb_rstamp = Wtime()+(double)ndmns;        /* give some slack for MPIInit */
 
-    opal_event_set(fd_event_base, &detector->fd_event, -1, OPAL_EV_TIMEOUT | OPAL_EV_PERSIST, fd_event_cb, detector);
-    struct timeval tv;
-    tv.tv_sec = (int)(detector->hb_period / 10.);
-    tv.tv_usec = (-tv.tv_sec + (detector->hb_period / 10.)) * 1e6;
-    opal_event_add(&detector->fd_event, &tv);
+        for(i=0; i<orte_process_info.num_procs; i++)
+        {
+            detector->daemons_state[i] = true;
+        }
+        OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
+                    "errmgr:detector daemon %d observering %d observer %d",
+                    vpid,
+                    detector->hb_observing,
+                    detector->hb_observer));
+
+        opal_event_set(fd_event_base, &detector->fd_event, -1, OPAL_EV_TIMEOUT | OPAL_EV_PERSIST, fd_event_cb, detector);
+        struct timeval tv;
+        tv.tv_sec = (int)(detector->hb_period / 10.);
+        tv.tv_usec = (-tv.tv_sec + (detector->hb_period / 10.)) * 1e6;
+        opal_event_add(&orte_errmgr_world_detector.fd_event, &tv);
     }
     return ORTE_SUCCESS;
 }
@@ -343,8 +318,7 @@ static int fd_heartbeat_request(orte_errmgr_detector_t* detector) {
     uint32_t vpid;
 
     orte_process_name_t temp_proc_name;
-    orte_proc_t *temp_orte_proc,* proc;
-    orte_job_t *jdata;
+    orte_proc_t * proc;
     temp_proc_name.jobid = orte_process_info.my_name.jobid;
     temp_proc_name.vpid = detector->hb_observing;
 
@@ -386,7 +360,15 @@ static int fd_heartbeat_request(orte_errmgr_detector_t* detector) {
                 ORTE_PROC_MY_NAME->vpid,
                 detector->hb_observing,
                 detector->hb_observer));
-    /* if everybody else is dead, then it's a success */
+    /* if everybody else is gone, i dont need to monitor myself */
+    if (orte_process_info.my_name.vpid == daemon.vpid)
+    {
+        detector->hb_observing = detector->hb_observer = ORTE_VPID_INVALID;
+        detector->hb_rstamp = INFINITY;
+        detector->hb_period = INFINITY;
+        return OMPI_SUCCESS;
+    }
+
     detector->hb_rstamp = Wtime()+detector->hb_timeout; /* we add one timeout slack to account for the send time */
     return ORTE_SUCCESS;
 }
@@ -431,14 +413,14 @@ static void fd_event_cb(int fd, short flags, void* pdetector) {
     double stamp = Wtime();
     orte_errmgr_detector_t* detector = pdetector;
 
-    int i;
     // temp proc name for get the orte object
     orte_process_name_t temp_proc_name;
-    orte_proc_t *temp_orte_proc;
 
     if( (stamp - detector->hb_sstamp) >= detector->hb_period ) {
         fd_heartbeat_send(detector);
     }
+
+    if( ORTE_VPID_INVALID == detector->hb_observing ) return;
 
     if( (stamp - detector->hb_rstamp) > detector->hb_timeout ) {
         /* this process is now suspected dead. */
@@ -449,16 +431,7 @@ static void fd_event_cb(int fd, short flags, void* pdetector) {
             OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                         "errmgr:detector %d observing %d",
                         orte_process_info.my_name.vpid, detector->hb_observing));
-                {   
-                    char name[255];
-                    gethostname(name,255);
-                    printf("ssh -t zhongdong@%s gdb -p %d\n", name, getpid());
-                    int c=1;
-                    //while (c){}
-                }
-            //orte_propagate.prp(&temp_proc_name.jobid, &temp_proc_name, ORTE_PROC_STATE_HEARTBEAT_FAILED);
-            orte_propagate.prp(&temp_proc_name.jobid, &temp_proc_name,OPAL_ERR_PROC_ABORTED );
-            //orte_errmgr_failure_propagate(&temp_proc_name.jobid, &temp_proc_name, ORTE_PROC_STATE_HEARTBEAT_FAILED);
+            orte_propagate.prp(&temp_proc_name.jobid, &temp_proc_name, &temp_proc_name,OPAL_ERR_PROC_ABORTED );
             errmgr_set_daemon_status(temp_proc_name, false);
             fd_heartbeat_request(detector);
         }
@@ -467,10 +440,6 @@ static void fd_event_cb(int fd, short flags, void* pdetector) {
 
 #if OPAL_ENABLE_MULTI_THREADS
 void* fd_progress(opal_object_t* obj) {
-    /*if( ORTE_SUCCESS != orte_errmgr_start_detector()) {
-        OPAL_THREAD_ADD32(&fd_thread_active, -1);
-        return OPAL_THREAD_CANCELLED;
-    }*/
     OPAL_THREAD_ADD32(&fd_thread_active, 1);
     while( fd_thread_active ) {
         opal_event_loop(fd_event_base, OPAL_EVLOOP_ONCE);
@@ -486,13 +455,14 @@ static int fd_heartbeat_send(orte_errmgr_detector_t* detector) {
 
     double now = Wtime();
     if( 0. != detector->hb_sstamp
-     && (now - detector->hb_sstamp) >= 2.*detector->hb_period ) {
+            && (now - detector->hb_sstamp) >= 2.*detector->hb_period ) {
          /* missed my send deadline find a verbose to use */
          OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                              "errmgr:detector: daemon %s MISSED my deadline by %.1e, this could trigger a false suspicion for me",
                              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                              now-detector->hb_sstamp));
     }
+    OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,"detector enable %d", orte_errmgr_detector_enable_flag));
     detector->hb_sstamp = now;
 
     opal_buffer_t *buffer = NULL;

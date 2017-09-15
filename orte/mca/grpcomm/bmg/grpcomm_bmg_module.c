@@ -149,6 +149,9 @@ static void finalize(void)
 {
     /* cancel the rbcast recv */
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_RBCAST);
+    orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_BMGXCAST);
+    orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_BMG_COLL_RELEASE);
+    orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_RBCAST);
     OPAL_LIST_DESTRUCT(&tracker);
     return;
 }
@@ -663,7 +666,6 @@ static void rbcast_recv(int status, orte_process_name_t* sender,
                          "%s grpcomm:bmg:rbcast:recv: with %d bytes",
                          ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                          (int)buffer->bytes_used));
-    printf("\ndong bmg rbcast %d recv from %d ,tag  %d \n", ORTE_PROC_MY_NAME->vpid,sender->vpid, tg);
     /* we need a passthru buffer to forward and to the callback */
     rly = OBJ_NEW(opal_buffer_t);
     relay =  OBJ_NEW(opal_buffer_t);
@@ -724,7 +726,6 @@ static void rbcast_recv(int status, orte_process_name_t* sender,
         ORTE_FORCED_TERMINATE(ret);
         goto CLEANUP;
     }
-
     /* get the target tag */
     cnt=1;
     if (ORTE_SUCCESS != (ret = opal_dss.unpack(data, &tag, &cnt, ORTE_RML_TAG))) {
@@ -742,8 +743,8 @@ static void rbcast_recv(int status, orte_process_name_t* sender,
     }
     if( orte_grpcomm_rbcast_cb[cbtype](relay) ) {
         /* forward the rbcast */
-        printf("\n bmg rbcast %d forward %d \n ",ORTE_PROC_MY_NAME->vpid,cbtype);
         /* create the array of participating daemons */
+         OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output, "grpcomm:bmg:rbtest for test TT3 %s %s", cbtype,relay));
           if (ORTE_SUCCESS != (ret = create_dmns(sig, &dmns, &ndmns))) {
               ORTE_ERROR_LOG(ret);
               goto CLEANUP;

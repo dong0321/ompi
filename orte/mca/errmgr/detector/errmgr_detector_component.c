@@ -74,6 +74,13 @@ static int errmgr_detector_register(void)
                                            OPAL_INFO_LVL_9,
                                            MCA_BASE_VAR_SCOPE_READONLY, &my_priority);
 
+    orte_errmgr_detector_enable_flag = true;
+    (void) mca_base_component_var_register(c, "enable",
+            "Enable/disable detector in errmgr component",
+            MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+            OPAL_INFO_LVL_9,
+            MCA_BASE_VAR_SCOPE_READONLY, &orte_errmgr_detector_enable_flag);
+
     return ORTE_SUCCESS;
 }
 

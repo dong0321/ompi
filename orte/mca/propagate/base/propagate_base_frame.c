@@ -37,6 +37,7 @@
 orte_propagate_base_module_t orte_propagate = {
     NULL,
     NULL,
+    NULL,
     NULL
 };
 

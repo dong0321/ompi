@@ -54,8 +54,12 @@ typedef int (*orte_propagate_base_module_init_fn_t)(void);
 typedef int (*orte_propagate_base_module_finalize_fn_t)(void);
 
 typedef int (*orte_propagate_base_module_prp_fn_t)(orte_jobid_t *job,
-        orte_process_name_t *daemon,
+        orte_process_name_t *source,
+        orte_process_name_t *sickproc,
         orte_proc_state_t state);
+
+typedef int (*orte_propagate_base_module_registercb_fn_t)(void);
+
 /*
  * Module Structure
  */
@@ -63,6 +67,7 @@ typedef int (*orte_propagate_base_module_prp_fn_t)(orte_jobid_t *job,
     orte_propagate_base_module_init_fn_t          init;
     orte_propagate_base_module_finalize_fn_t      finalize;
     orte_propagate_base_module_prp_fn_t           prp;
+    orte_propagate_base_module_registercb_fn_t    register_cb;
  };
 
 typedef struct orte_propagate_base_module_2_3_0_t orte_propagate_base_module_2_3_0_t;
