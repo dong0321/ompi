@@ -295,8 +295,9 @@ int orte_init(int* pargc, char*** pargv, orte_proc_type_t flags)
             error = "orte_start_listening";
             goto error;
         }
-        if(NULL != orte_errmgr.start_detector){
-            orte_errmgr.start_detector();
+
+        if(NULL != orte_errmgr.enable_detector){
+            orte_errmgr.enable_detector(orte_errmgr_detector_enable_flag);
         }
     }
     OPAL_TIMING_ENV_NEXT(tmng, "finalize");
