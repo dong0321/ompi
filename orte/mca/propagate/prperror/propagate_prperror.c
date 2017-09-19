@@ -110,7 +110,8 @@ static int finalize(void)
     if ( -1 == orte_propagate_error_cb_type){
         return ORTE_SUCCESS;
     }
-    ret = orte_grpcomm.unregister_cb(orte_propagate_error_cb_type);
+    /* do we need unregister ? cause all module is unloading, those memory maybe collecred may have illegal access */
+    //ret = orte_grpcomm.unregister_cb(orte_propagate_error_cb_type);
     orte_propagate_error_cb_type = -1;
     OBJ_DESTRUCT(&orte_error_procs);
     return ret;
@@ -211,8 +212,8 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
     val->data.name.vpid = sickproc->vpid;
     opal_list_append(info, &(val->super));
 
-    /* check this is a daemon or not*/
-    if (sickproc->vpid == orte_get_proc_daemon_vpid(sickproc)){
+    /* check this is a daemon or not, if vpid is same cannot ensure this is daemon also need check jobid*/
+    if (sickproc->vpid == orte_get_proc_daemon_vpid(sickproc) && (sickproc->jobid == ORTE_PROC_MY_NAME->jobid) ){
         /* Given a node name, return an array of processes within the specified jobid
          * on that node. If the specified node does not currently host any processes,
          * then the returned list will be empty.
