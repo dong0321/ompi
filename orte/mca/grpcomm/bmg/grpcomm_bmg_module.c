@@ -57,7 +57,7 @@ static int rbcast(orte_vpid_t *vpids,
 
 static int register_cb_type(orte_grpcomm_rbcast_cb_t callback);
 
-static int unregister_cb_type(int typr);
+static int unregister_cb_type(int type);
 /* Module def */
 orte_grpcomm_base_module_t orte_grpcomm_bmg_module = {
     init,

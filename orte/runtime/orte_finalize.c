@@ -69,10 +69,6 @@ int orte_finalize(void)
         /* stop listening for connections - will
          * be ignored if no listeners were registered */
         orte_stop_listening();
-        printf("errmgr finalize in orte runtime");
-        if(NULL != orte_errmgr.finalize){
-        //    orte_errmgr.finalize();
-        }
     }
 
     /* flush the show_help system */
