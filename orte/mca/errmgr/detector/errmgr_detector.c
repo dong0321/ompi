@@ -57,6 +57,7 @@
 
 #include "orte/mca/propagate/propagate.h"
 #include "errmgr_detector.h"
+#include <math.h>
 
 static int init(void);
 static int finalize(void);
@@ -121,13 +122,6 @@ static double orte_errmgr_heartbeat_timeout = 5e-1;
 static opal_event_base_t* fd_event_base = NULL;
 static void fd_event_cb(int fd, short flags, void* pdetector);
 
-#if OPAL_ENABLE_MULTI_THREADS
-static bool orte_errmgr_detector_use_thread =false;
-static volatile int32_t fd_thread_active = 0;
-static opal_thread_t fd_thread;
-static void* fd_progress(opal_object_t* obj);
-#endif /* OPAL_ENABLE_MULTI_THREADS */
-
 static void register_cbfunc(int status, size_t errhndler, void *cbdata)
 {
     myerrhandle = errhndler;
@@ -173,54 +167,33 @@ static int init(void) {
     orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT,
                            ORTE_RML_PERSISTENT,fd_heartbeat_recv_cb,NULL);
 
-#if OPAL_ENABLE_MULTI_THREADS
-        if( orte_errmgr_detector_use_thread ) {
-            fd_event_base = opal_event_base_create();
-            if( NULL == fd_event_base ) {
-                fd_event_base = opal_sync_event_base;
-                ret = ORTE_ERR_OUT_OF_RESOURCE;
-                goto cleanup;
-            }
-            opal_event_use_threads();
-            opal_set_using_threads(true);
-            OBJ_CONSTRUCT(&fd_thread, opal_thread_t);
-            fd_thread.t_run = fd_progress;
-            fd_thread.t_arg = NULL;
-            ret = opal_thread_start(&fd_thread);
-            if( OPAL_SUCCESS != ret ) goto cleanup;
-            while( 0 == fd_thread_active ); /* wait for the fd thread initialization */
-            return ORTE_SUCCESS;
-        }
-#endif /* OPAL_ENABLE_MULTI_THREADS */
     opal_progress_event_users_increment();
-    return ORTE_SUCCESS;
-cleanup:
-    finalize();
     return ORTE_SUCCESS;
 }
 
 int finalize(void) {
-#if OPAL_ENABLE_MULTI_THREADS
-    if( 1 == fd_thread_active ) {
-        void* tret;
-        OPAL_THREAD_ADD32(&fd_thread_active, -1);
-        opal_event_base_loopbreak(fd_event_base);
-        opal_thread_join(&fd_thread, &tret);
+
+    orte_errmgr_detector_t* detector = &orte_errmgr_world_detector;
+    /*if(detector->hb_observer != ORTE_VPID_INVALID)
+    {
+        OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,"TT send last msg"));
+        detector->hb_period = INFINITY;
+        detector->hb_observer = ORTE_VPID_INVALID;
     }
-#endif /* OPAL_ENABLE_MULTI_THREADS */
+    if( ORTE_VPID_INVALID != detector->hb_observing )
+    {
+        while(ORTE_VPID_INVALID != detector->hb_observing)
+        {};
+    }*/
+
     opal_event_del(&orte_errmgr_world_detector.fd_event);
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT_REQUEST);
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT);
     if( opal_sync_event_base != fd_event_base ) opal_event_base_free(fd_event_base);
 
-    if (SIZE_MAX != myerrhandle) {
-        opal_pmix.deregister_evhandler(myerrhandle, NULL, NULL);
-    }
-
     /* set heartbeat peroid to infinity and observer to invalid */
     orte_errmgr_world_detector.hb_period = INFINITY;
     orte_errmgr_world_detector.hb_observer = ORTE_VPID_INVALID;
-
     return ORTE_SUCCESS;
 }
 
@@ -261,6 +234,14 @@ int orte_errmgr_enable_detector(bool enable_flag)
                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), enable_flag));
     if ( ORTE_PROC_IS_DAEMON && enable_flag )
     {
+        {   
+            char name[255];
+            gethostname(name,255);
+            printf("ssh -t zhongdong@%s gdb -p %d\n", name, getpid());
+            int c=1;
+            //while (c){}
+        }   
+
         orte_errmgr_detector_t* detector = &orte_errmgr_world_detector;
         int  ndmns, i;
         uint32_t vpid;
@@ -343,6 +324,16 @@ static int fd_heartbeat_request(orte_errmgr_detector_t* detector) {
 
             // this daemon is not alive
             if(!errmgr_get_daemon_status(daemon)) continue;
+
+            /* everyone is gone, i dont need to monitor myself */
+            if(daemon.vpid == orte_process_info.my_name.vpid)
+            {
+                detector->hb_observer = detector->hb_observing = ORTE_VPID_INVALID;
+                detector->hb_rstamp = INFINITY;
+                detector->hb_period = INFINITY;
+                return ORTE_SUCCESS;
+            }
+
             OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                                     "errmgr:detector hb request updating ring"));
             detector->hb_observing = daemon.vpid;
@@ -360,14 +351,6 @@ static int fd_heartbeat_request(orte_errmgr_detector_t* detector) {
                 ORTE_PROC_MY_NAME->vpid,
                 detector->hb_observing,
                 detector->hb_observer));
-    /* if everybody else is gone, i dont need to monitor myself */
-    if (orte_process_info.my_name.vpid == daemon.vpid)
-    {
-        detector->hb_observing = detector->hb_observer = ORTE_VPID_INVALID;
-        detector->hb_rstamp = INFINITY;
-        detector->hb_period = INFINITY;
-        return OMPI_SUCCESS;
-    }
 
     detector->hb_rstamp = Wtime()+detector->hb_timeout; /* we add one timeout slack to account for the send time */
     return ORTE_SUCCESS;
@@ -419,8 +402,9 @@ static void fd_event_cb(int fd, short flags, void* pdetector) {
     if( (stamp - detector->hb_sstamp) >= detector->hb_period ) {
         fd_heartbeat_send(detector);
     }
+    if( INFINITY == detector->hb_rstamp ) return;
 
-    if( ORTE_VPID_INVALID == detector->hb_observing ) return;
+    // rte_process_info.my_name.vpid == observing ? or observe mean quit msg
 
     if( (stamp - detector->hb_rstamp) > detector->hb_timeout ) {
         /* this process is now suspected dead. */
@@ -437,16 +421,6 @@ static void fd_event_cb(int fd, short flags, void* pdetector) {
         }
     }
 }
-
-#if OPAL_ENABLE_MULTI_THREADS
-void* fd_progress(opal_object_t* obj) {
-    OPAL_THREAD_ADD32(&fd_thread_active, 1);
-    while( fd_thread_active ) {
-        opal_event_loop(fd_event_base, OPAL_EVLOOP_ONCE);
-    }
-    return OPAL_THREAD_CANCELLED;
-}
-#endif /* OPAL_ENABLE_MULTI_THREADS */
 
 /*
  * send eager based heartbeats
@@ -492,6 +466,18 @@ static int fd_heartbeat_recv_cb(int status, orte_process_name_t* sender,
     int rc;
     int32_t cnt;
     uint32_t vpid, jobid;
+
+    if ( sender->vpid == orte_process_info.my_name.vpid)
+    {
+        /* this is a quit msg from observed process, stop detector */
+        OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
+                    "%s %s Received heartbeat from %d, which is myself, quit msg to close detector",
+                    ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),__func__, sender->vpid));
+         detector->hb_observing = ORTE_VPID_INVALID;
+         detector->hb_rstamp = INFINITY;
+         return false;
+    }
+
     cnt = 1;
     if (OPAL_SUCCESS != (rc = opal_dss.unpack(buffer, &jobid, &cnt, OPAL_JOBID))){
            ORTE_ERROR_LOG(rc);
