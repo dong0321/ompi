@@ -59,7 +59,7 @@ orte_errmgr_base_module_t orte_errmgr_default_fns = {
     .abort = orte_errmgr_base_abort,
     .abort_peers = orte_errmgr_base_abort_peers,
     NULL
-}
+};
 
  /* NOTE: ABSOLUTELY MUST initialize this
  * struct to include the log function as it
@@ -67,7 +67,12 @@ orte_errmgr_base_module_t orte_errmgr_default_fns = {
  * opened yet due to error
  */
 orte_errmgr_base_module_t orte_errmgr = {
-    .logfn = orte_errmgr_base_log
+    .init = NULL, /* init     */
+    .finalize = NULL, /* finalize */
+    .logfn = orte_errmgr_base_log,
+    .abort = orte_errmgr_base_abort,
+    .abort_peers = orte_errmgr_base_abort_peers,
+    NULL
 };
 
 static int orte_errmgr_base_close(void)

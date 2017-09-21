@@ -62,14 +62,6 @@
 static int init(void);
 static int finalize(void);
 
-static int predicted_fault(opal_list_t *proc_list,
-                           opal_list_t *node_list,
-                           opal_list_t *suggested_map);
-
-static int suggest_map_targets(orte_proc_t *proc,
-                               orte_node_t *oldnode,
-                               opal_list_t *node_list);
-
 int orte_errmgr_enable_detector(bool flag);
 /******************
  * detector module
@@ -80,12 +72,6 @@ orte_errmgr_base_module_t orte_errmgr_detector_module = {
     orte_errmgr_base_log,
     orte_errmgr_base_abort,
     orte_errmgr_base_abort_peers,
-    predicted_fault,
-    suggest_map_targets,
-    NULL,
-    orte_errmgr_base_register_migration_warning,
-    NULL,
-    orte_errmgr_base_execute_error_callbacks,
     orte_errmgr_enable_detector
 };
 
@@ -93,11 +79,6 @@ orte_errmgr_base_module_t orte_errmgr = {
     NULL,
     finalize,
     orte_errmgr_base_log,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
     NULL,
     NULL,
     orte_errmgr_enable_detector
@@ -516,17 +497,4 @@ static int fd_heartbeat_recv_cb(int status, orte_process_name_t* sender,
     return false;
 }
 
-static int predicted_fault(opal_list_t *proc_list,
-                           opal_list_t *node_list,
-                           opal_list_t *suggested_map)
-{
-    return ORTE_ERR_NOT_IMPLEMENTED;
-}
-
-static int suggest_map_targets(orte_proc_t *proc,
-                               orte_node_t *oldnode,
-                               opal_list_t *node_list)
-{
-    return ORTE_ERR_NOT_IMPLEMENTED;
-}
 

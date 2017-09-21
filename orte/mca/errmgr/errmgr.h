@@ -199,7 +199,6 @@ typedef int (*orte_errmgr_base_module_register_error_callback_fn_t)(orte_errmgr_
 typedef void (*orte_errmgr_base_module_execute_error_callbacks_fn_t)(opal_pointer_array_t *errors);
 
 typedef void (*orte_errmgr_base_module_enable_detector_fn_t)(bool flag);
->>>>>>> update detector:enable, notify, regitser event and propagate:store error proc info
 /*
  * Module Structure
  */
