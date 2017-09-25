@@ -76,7 +76,7 @@ orte_errmgr_base_module_t orte_errmgr_detector_module = {
 };
 
 orte_errmgr_base_module_t orte_errmgr = {
-    NULL,
+    init,
     finalize,
     orte_errmgr_base_log,
     NULL,
@@ -149,6 +149,7 @@ static int init(void) {
                            ORTE_RML_PERSISTENT,fd_heartbeat_recv_cb,NULL);
 
     opal_progress_event_users_increment();
+
     return ORTE_SUCCESS;
 }
 
@@ -175,6 +176,7 @@ int finalize(void) {
     /* set heartbeat peroid to infinity and observer to invalid */
     orte_errmgr_world_detector.hb_period = INFINITY;
     orte_errmgr_world_detector.hb_observer = ORTE_VPID_INVALID;
+
     return ORTE_SUCCESS;
 }
 
@@ -215,14 +217,6 @@ int orte_errmgr_enable_detector(bool enable_flag)
                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), enable_flag));
     if ( ORTE_PROC_IS_DAEMON && enable_flag )
     {
-        {   
-            char name[255];
-            gethostname(name,255);
-            printf("ssh -t zhongdong@%s gdb -p %d\n", name, getpid());
-            int c=1;
-            //while (c){}
-        }   
-
         orte_errmgr_detector_t* detector = &orte_errmgr_world_detector;
         int  ndmns, i;
         uint32_t vpid;

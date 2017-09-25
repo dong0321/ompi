@@ -57,6 +57,7 @@
  * HNP module
  ******************/
  orte_errmgr_base_module_t orte_errmgr_default_app_module = {
+    .init = init,
     .finalize = finalize,
     .logfn = orte_errmgr_base_log,
     .abort = orte_errmgr_base_abort,

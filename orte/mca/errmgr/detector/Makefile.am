@@ -11,8 +11,7 @@
 sources = \
         errmgr_detector.h \
         errmgr_detector_component.c \
-        errmgr_detector.c \
-        errmgr_propagator.c
+        errmgr_detector.c 
 
 # Make the output library in this directory, and name it either
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la

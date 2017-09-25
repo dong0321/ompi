@@ -300,14 +300,6 @@ int orte_init(int* pargc, char*** pargv, orte_proc_type_t flags)
             orte_errmgr.enable_detector(orte_errmgr_detector_enable_flag);
         }
     }
-     if ( ORTE_PROC_IS_DAEMON)
-    {
-        char name[255];
-        gethostname(name,255);
-        printf("ssh -t zhongdong@%s gdb -p %d\n", name, getpid());
-        int c=1;
-        while (c){}
-    }
     OPAL_TIMING_ENV_NEXT(tmng, "finalize");
     /* All done */
     return ORTE_SUCCESS;

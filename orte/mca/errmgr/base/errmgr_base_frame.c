@@ -67,12 +67,7 @@ orte_errmgr_base_module_t orte_errmgr_default_fns = {
  * opened yet due to error
  */
 orte_errmgr_base_module_t orte_errmgr = {
-    .init = NULL, /* init     */
-    .finalize = NULL, /* finalize */
-    .logfn = orte_errmgr_base_log,
-    .abort = orte_errmgr_base_abort,
-    .abort_peers = orte_errmgr_base_abort_peers,
-    NULL
+    .logfn = orte_errmgr_base_log
 };
 
 static int orte_errmgr_base_close(void)

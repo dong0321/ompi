@@ -368,7 +368,6 @@ static void xcast_recv(int status, orte_process_name_t* sender,
     int32_t nvals, i;
     opal_value_t *kv;
     orte_process_name_t dmn;
-
     OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:bmg:xcast:recv: with %d bytes",
                          ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
@@ -381,7 +380,6 @@ static void xcast_recv(int status, orte_process_name_t* sender,
     OBJ_CONSTRUCT(&datbuf, opal_buffer_t);
     /* setup the relay list */
     OBJ_CONSTRUCT(&coll, opal_list_t);
-    OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output, "TT1"));
     /* unpack the flag to see if this payload is compressed */
     cnt=1;
     if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &flag, &cnt, OPAL_INT8))) {
@@ -439,7 +437,6 @@ static void xcast_recv(int status, orte_process_name_t* sender,
     } else {
         data = buffer;
     }
-OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output, "TT2"));
         /* get the signature that we do not need */
         cnt=1;
         if (ORTE_SUCCESS != (ret = opal_dss.unpack(data, &sig, &cnt, ORTE_SIGNATURE))) {
@@ -462,7 +459,6 @@ OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output, "TT2"));
             ORTE_FORCED_TERMINATE(ret);
             return;
         }
- OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output, "TT3"));
         /* get our conduit's routed module name */
         rtmod = orte_rml.get_routed(orte_coll_conduit);
 
@@ -482,7 +478,6 @@ OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output, "TT2"));
                          /* this is an abnormal termination */
                          orte_abnormal_term_ordered = true;
                      }
-                     OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output, "TT4"));
                      /* copy the msg for relay to ourselves */
                      relay = OBJ_NEW(opal_buffer_t);
                      /* repack the command */
@@ -503,11 +498,10 @@ OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output, "TT2"));
                      }
                      /* unpack the nidmap string - may be NULL */
                      cnt = 1;
-                     if (OPAL_SUCCESS != (ret = opal_dss.unpack(data, &flag, &cnt, OPAL_STRING))) {
+                     if (OPAL_SUCCESS != (ret = opal_dss.unpack(data, &nidmap, &cnt, OPAL_STRING))) {
                          ORTE_ERROR_LOG(ret);
                          goto relay;
                      }
-                     OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output, "TT5"));
                      if (NULL != nidmap) {
                          if (ORTE_SUCCESS != (ret = orte_util_nidmap_parse(nidmap))) {
                              ORTE_ERROR_LOG(ret);
@@ -521,7 +515,6 @@ OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output, "TT2"));
                          ORTE_ERROR_LOG(ret);
                          goto relay;
                      }
-                     OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output, "TT6"));
                      if (0 != flag) {
                      /* update our local nidmap, if required - the decode function
                       * knows what to do
@@ -610,7 +603,6 @@ OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output, "TT2"));
         relay = OBJ_NEW(opal_buffer_t);
         opal_dss.copy_payload(relay, data);
     }
-OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output, "TT3"));
    relay:
     if (!orte_do_not_launch) {
         /* get the list of next recipients from the routed module */
@@ -790,7 +782,6 @@ static void rbcast_recv(int status, orte_process_name_t* sender,
     if( orte_grpcomm_rbcast_cb[cbtype](relay) ) {
         /* forward the rbcast */
         /* create the array of participating daemons */
-         OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output, "grpcomm:bmg:rbtest for test TT3 %s %s", cbtype,relay));
           if (ORTE_SUCCESS != (ret = create_dmns(sig, &dmns, &ndmns))) {
               ORTE_ERROR_LOG(ret);
               goto CLEANUP;
