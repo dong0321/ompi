@@ -119,7 +119,6 @@ static void error_notify_cbfunc(int status,
     proc.jobid = ORTE_JOBID_INVALID;
     proc.vpid = ORTE_VPID_INVALID;
     OPAL_LIST_FOREACH(kv, info, opal_value_t) {
-        OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,"recv notify check list "));
         if (0 == strcmp(kv->key, OPAL_PMIX_EVENT_AFFECTED_PROC)) {
             proc.jobid = kv->data.name.jobid;
             proc.vpid = kv->data.name.vpid;
@@ -134,7 +133,6 @@ static void error_notify_cbfunc(int status,
     if (NULL != cbfunc) {
         cbfunc(ORTE_SUCCESS, NULL, NULL, NULL, cbdata);
     }
-    OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,"TT check -1 error from %d:%d", source->jobid, source->vpid));
 }
 
 static int init(void) {
@@ -226,9 +224,9 @@ int orte_errmgr_enable_detector(bool enable_flag)
 
         codes = OBJ_NEW(opal_list_t);
         ekv = OBJ_NEW(opal_value_t);
-        ekv->key = strdup("OPAL_PMIX_EVENT_AFFECTED_PROC");//OPAL_ERR_NODE_DOWN");//OPAL_PMIX_EVENT_AFFECTED_PROC");
+        ekv->key = strdup("OPAL_PMIX_EVENT_AFFECTED_PROC");
         ekv->type = OPAL_INT;
-        ekv->data.integer =OPAL_ERR_PROC_ABORTED; //ORTE_ERR_PROC_ABORTED;
+        ekv->data.integer =OPAL_ERR_PROC_ABORTED;
         opal_list_append(codes, &ekv->super);
         OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                     "errmgr:detector: register evhandler in errmgr.."));

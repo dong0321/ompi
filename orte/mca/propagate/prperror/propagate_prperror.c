@@ -243,7 +243,10 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
     }
 
     //notify this error locally
-    if (OPAL_SUCCESS != (rc = opal_pmix.server_notify_event(status, (opal_process_name_t*)ORTE_PROC_MY_NAME, info, NULL, NULL))) {
+    if (OPAL_SUCCESS != opal_pmix.notify_event(OPAL_ERR_PROC_ABORTED, (opal_process_name_t*)ORTE_PROC_MY_NAME,
+                OPAL_PMIX_RANGE_LOCAL,info,
+                NULL,NULL ))
+    {
         ORTE_ERROR_LOG(rc);
         OBJ_RELEASE(info);
     }
