@@ -448,6 +448,7 @@ static int fd_heartbeat_recv_cb(int status, orte_process_name_t* sender,
                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),__func__, sender->vpid));
          detector->hb_observing = ORTE_VPID_INVALID;
          detector->hb_rstamp = INFINITY;
+         detector->hb_period = INFINITY;
          return false;
     }
 

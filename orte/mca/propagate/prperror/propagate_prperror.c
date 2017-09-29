@@ -218,8 +218,10 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
          * on that node. If the specified node does not currently host any processes,
          * then the returned list will be empty.
          */
+        OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,"propagate:daemon prperror this is a daemon error %s", orte_get_proc_hostname(sickproc)));
         OBJ_CONSTRUCT(&affected_list, opal_list_t);
-        opal_pmix.resolve_peers(orte_get_proc_hostname(sickproc), sickproc->jobid, &affected_list);
+        // daemon and procs have different jobid, so cannot pass sickproc->jobid, need to pass wildcard
+        opal_pmix.resolve_peers(orte_get_proc_hostname(sickproc), sickproc->jobid, &affected_list);//sickproc->jobid
         OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,"propagate:daemon prperror this is a daemon error"));
         /* add those procs in the buffer*/
         if (!opal_list_is_empty(&affected_list)){
