@@ -186,28 +186,30 @@ static int rbcast(orte_vpid_t *vpids,
     vpid = orte_process_info.my_name.vpid;
     for(i=1; i <= nprocs/2; i*=2) for(d=1; d >= -1; d-=2) {
         int idx = (nprocs+vpid+d*i)%nprocs;
-     redo:
-        if( idx == vpid ) continue;
+
+        /* daemon.vpid cannot be 0, because daemond id ranges 1-nprocs, thus if idx==0, change it to NO.nprocs */
+        if (idx ==0 ){
+            idx = nprocs;
+        }
         daemon.jobid = orte_process_info.my_name.jobid;
         daemon.vpid = idx;
         OBJ_RETAIN(buf);
-        if(idx!=0){
-            OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output,
-                        "%s grpcomm:bmg: broadcast message to %s",
-                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                        ORTE_NAME_PRINT(&daemon)));
-            if(0 > (rc = orte_rml.send_buffer_nb(orte_coll_conduit, &daemon, buf, ORTE_RML_TAG_RBCAST, orte_rml_send_callback, NULL))) {
+
+        OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output,
+                    "%s grpcomm:bmg: broadcast message in %d daemons to %s",
+                    ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), nprocs,
+                    ORTE_NAME_PRINT(&daemon)));
+        if(0 > (rc = orte_rml.send_buffer_nb(orte_coll_conduit, &daemon, buf, ORTE_RML_TAG_RBCAST, orte_rml_send_callback, NULL))) {
             ORTE_ERROR_LOG(rc);
         }
-        else continue;}
-        if( i == 1 ) {
-            /* The ring is cut, find the closest alive neighbor in that direction */
-            idx = (nprocs+idx+d)%nprocs;
-            /* TODO: find a way to not send twice the message if idx is one of
-             * my neighbors for i>1 */
-            goto redo;
-        }
-     }
+    }
+        //if( i == 1 ) {
+        //    /* The ring is cut, find the closest alive neighbor in that direction */
+        //    idx = (nprocs+idx+d)%nprocs;
+        //    /* TODO: find a way to not send twice the message if idx is one of
+        //     * my neighbors for i>1 */
+        //    goto redo;
+        //}
     return rc;
 }
 
