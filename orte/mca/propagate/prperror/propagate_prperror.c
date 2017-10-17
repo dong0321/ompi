@@ -221,7 +221,7 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
         OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,"propagate:daemon prperror this is a daemon error %s", orte_get_proc_hostname(sickproc)));
         OBJ_CONSTRUCT(&affected_list, opal_list_t);
         // daemon and procs have different jobid, so cannot pass sickproc->jobid, need to pass wildcard
-        opal_pmix.resolve_peers(orte_get_proc_hostname(sickproc), sickproc->jobid, &affected_list);//sickproc->jobid
+        opal_pmix.resolve_peers(orte_get_proc_hostname(sickproc), ORTE_PROC_MY_NAME->jobid, &affected_list);//sickproc->jobid
         OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,"propagate:daemon prperror this is a daemon error"));
         /* add those procs in the buffer*/
         if (!opal_list_is_empty(&affected_list)){
@@ -292,14 +292,10 @@ int orte_propagate_prperror_recv(opal_buffer_t* buffer)
         ORTE_ERROR_LOG(ret);
         return false;
     }
-    OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
-                "propagate:proerror daemon %d received %d gone",
-                orte_process_info.my_name.vpid,
-                sickproc.vpid));
 
     OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
-                "propagete:prperror daemon %d begin forwarding error proc %d:%d",
-                orte_process_info.my_name.vpid,sickproc.jobid,sickproc.vpid));
+                "propagete:prperror daemon %d  received %d:%d gone begin forwarding with status %d",
+                orte_process_info.my_name.vpid, sickproc.jobid, sickproc.vpid, state));
 
     orte_propagate_prperror(&orte_process_info.my_name.jobid, ORTE_PROC_MY_NAME, &sickproc, state);
     return false;
