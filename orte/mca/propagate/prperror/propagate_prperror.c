@@ -134,7 +134,7 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
         if ((nmcheck->name.jobid == sickproc->jobid) && (nmcheck->name.vpid == sickproc->vpid))
         {
             OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
-                        "propagate:prperror already propagated this error msg process id %d:%d",sickproc->jobid, sickproc->vpid));
+                        "propagate: prperror: already propagated this msg: error proc is %s", ORTE_NAME_PRINT(sickproc) ));
             return rc;
         }
     }
@@ -156,8 +156,6 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
     /* set the status for pmix to use */
     orte_proc_state_t status;
     status = state;
-    /*use a tempproc to get the orte_proc obj*/
-    orte_process_name_t temp_daemon;
 
     /* register callback for rbcast for forwarding */
     int ret;
@@ -171,16 +169,10 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
         cbflag = 0;
     }
 
-    temp_daemon.jobid = ORTE_PROC_MY_NAME->jobid;
-    temp_daemon.vpid = source->vpid;
-
     /* change the error daemon state*/
     OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
-                        "propagate:daemon %d prperror error msg from daemon %d:%d with error proc %d:%d",
-                        ORTE_PROC_MY_NAME->vpid,
-                        temp_daemon.jobid,
-                        temp_daemon.vpid,
-                        sickproc->jobid,sickproc->vpid));
+                        "propagate: prperror: daemon %s rbcast state %d of proc %s",
+                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),state, ORTE_NAME_PRINT(sickproc)));
 
     OBJ_CONSTRUCT(&prperror_buffer, opal_buffer_t);
     info = OBJ_NEW(opal_list_t);
@@ -249,15 +241,6 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
         }
     }
 
-    //notify this error locally
-    if (OPAL_SUCCESS != opal_pmix.notify_event(OPAL_ERR_PROC_ABORTED, (opal_process_name_t*)ORTE_PROC_MY_NAME,
-                OPAL_PMIX_RANGE_LOCAL,info,
-                NULL,NULL ))
-    {
-        ORTE_ERROR_LOG(rc);
-        OBJ_RELEASE(info);
-    }
-
     /* goes to all daemons */
     sig = OBJ_NEW(orte_grpcomm_signature_t);
     sig->signature = (orte_process_name_t*)malloc(sizeof(orte_process_name_t));
@@ -267,6 +250,17 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
     if (ORTE_SUCCESS != (rc = orte_grpcomm.rbcast(sig, ORTE_RML_TAG_PROPAGATE, &prperror_buffer))) {
         ORTE_ERROR_LOG(rc);
     }
+
+    /* notify this error locally, only from rbcast dont have a source id */
+        if( source==NULL ) {
+            if (OPAL_SUCCESS != opal_pmix.notify_event(state, (opal_process_name_t*)ORTE_PROC_MY_NAME,
+                        OPAL_PMIX_RANGE_LOCAL,info,
+                        NULL,NULL ))
+            {
+                ORTE_ERROR_LOG(rc);
+                OBJ_RELEASE(info);
+            }
+        }
 
     OBJ_DESTRUCT(&prperror_buffer);
     OBJ_RELEASE(sig);
@@ -302,6 +296,6 @@ int orte_propagate_prperror_recv(opal_buffer_t* buffer)
                 "%s propagete: prperror: daemon received %s gone forwarding with status %d",
                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ORTE_NAME_PRINT(&sickproc), state));
 
-    orte_propagate_prperror(&orte_process_info.my_name.jobid, ORTE_PROC_MY_NAME, &sickproc, state);
+    orte_propagate_prperror(&orte_process_info.my_name.jobid, NULL, &sickproc, state);
     return false;
 }
