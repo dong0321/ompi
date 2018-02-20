@@ -49,9 +49,7 @@ static int xcast(orte_vpid_t *vpids,
 static int allgather(orte_grpcomm_coll_t *coll,
                      opal_buffer_t *buf);
 
-static int rbcast(orte_vpid_t *vpids,
-                 size_t nprocs,
-                 opal_buffer_t *buf);
+static int rbcast(opal_buffer_t *buf);
 
 static int register_cb_type(orte_grpcomm_rbcast_cb_t callback);
 
@@ -172,11 +170,12 @@ static int xcast(orte_vpid_t *vpids,
 }
 
 
-static int rbcast(orte_vpid_t *vpids,
-                 size_t nprocs,
-                 opal_buffer_t *buf)
+static int rbcast(opal_buffer_t *buf)
 {
     int rc = false;
+
+    /* number of "daemons" equal 1hnp + num of daemons, so here pass ndmns -1 */
+    int nprocs = orte_process_info.num_procs -1;
     int vpid;
     int i, d;
     orte_process_name_t daemon;
@@ -773,17 +772,12 @@ static void rbcast_recv(int status, orte_process_name_t* sender,
     }
     if( orte_grpcomm_rbcast_cb[cbtype](relay) ) {
         /* forward the rbcast */
-        /* create the array of participating daemons */
-          if (ORTE_SUCCESS != (ret = create_dmns(sig, &dmns, &ndmns))) {
-              ORTE_ERROR_LOG(ret);
-              goto CLEANUP;
-          }
-          if (ORTE_SUCCESS == (ret = rbcast(dmns, ndmns, rly))) {
-              if (NULL != dmns) {
-                 free(dmns);
-              }
-          }
-      }
+        if (ORTE_SUCCESS == (ret = rbcast(rly))) {
+            if (NULL != dmns) {
+                free(dmns);
+            }
+        }
+    }
 
 CLEANUP:
     OBJ_RELEASE(rly);
