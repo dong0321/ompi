@@ -39,8 +39,8 @@
 #include "grpcomm_bmg.h"
 
 /* Static API's */
-static int init(void);
-static void finalize(void);
+static int bmg_init(void);
+static void bmg_finalize(void);
 
 static int xcast(orte_vpid_t *vpids,
                  size_t nprocs,
@@ -49,17 +49,15 @@ static int xcast(orte_vpid_t *vpids,
 static int allgather(orte_grpcomm_coll_t *coll,
                      opal_buffer_t *buf);
 
-static int rbcast(orte_vpid_t *vpids,
-                 size_t nprocs,
-                 opal_buffer_t *buf);
+static int rbcast(opal_buffer_t *buf);
 
 static int register_cb_type(orte_grpcomm_rbcast_cb_t callback);
 
 static int unregister_cb_type(int type);
 /* Module def */
 orte_grpcomm_base_module_t orte_grpcomm_bmg_module = {
-    init,
-    finalize,
+    bmg_init,
+    bmg_finalize,
     xcast,
     allgather,
     rbcast,
@@ -112,7 +110,7 @@ int unregister_cb_type(int type) {
 /*
  *  Initialize the module
  */
-static int init(void)
+static int bmg_init(void)
 {
     OBJ_CONSTRUCT(&tracker, opal_list_t);
 
@@ -143,11 +141,11 @@ static int init(void)
 /*
  * Finalize the module
  */
-static void finalize(void)
+static void bmg_finalize(void)
 {
     /* cancel the rbcast recv */
-    orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_RBCAST);
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_BMGXCAST);
+    orte_rml.recv_cancel(ORTE_NAME_WILDCARD,ORTE_RML_TAG_ALLGATHER_BMG);
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_BMG_COLL_RELEASE);
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_RBCAST);
     OPAL_LIST_DESTRUCT(&tracker);
@@ -172,11 +170,12 @@ static int xcast(orte_vpid_t *vpids,
 }
 
 
-static int rbcast(orte_vpid_t *vpids,
-                 size_t nprocs,
-                 opal_buffer_t *buf)
+static int rbcast(opal_buffer_t *buf)
 {
     int rc = false;
+
+    /* number of "daemons" equal 1hnp + num of daemons, so here pass ndmns -1 */
+    int nprocs = orte_process_info.num_procs -1;
     int vpid;
     int i, d;
     orte_process_name_t daemon;
@@ -773,17 +772,12 @@ static void rbcast_recv(int status, orte_process_name_t* sender,
     }
     if( orte_grpcomm_rbcast_cb[cbtype](relay) ) {
         /* forward the rbcast */
-        /* create the array of participating daemons */
-          if (ORTE_SUCCESS != (ret = create_dmns(sig, &dmns, &ndmns))) {
-              ORTE_ERROR_LOG(ret);
-              goto CLEANUP;
-          }
-          if (ORTE_SUCCESS == (ret = rbcast(dmns, ndmns, rly))) {
-              if (NULL != dmns) {
-                 free(dmns);
-              }
-          }
-      }
+        if (ORTE_SUCCESS == (ret = rbcast(rly))) {
+            if (NULL != dmns) {
+                free(dmns);
+            }
+        }
+    }
 
 CLEANUP:
     OBJ_RELEASE(rly);

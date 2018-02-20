@@ -125,12 +125,10 @@ typedef int (*orte_grpcomm_base_module_xcast_fn_t)(orte_vpid_t *vpids,
 typedef int (*orte_grpcomm_base_module_allgather_fn_t)(orte_grpcomm_coll_t *coll,
                                                        opal_buffer_t *buf, int mode);
 
-/* Reliable broadcast a message thru BMG.Caller will provide an array
- * of daemon vpids in the daemon namespace. A NULL
- * pointer indicates that all daemons are participating. */
-typedef int (*orte_grpcomm_base_module_rbcast_fn_t)(orte_vpid_t *vpids,
-                                                   size_t nprocs,
-                                                   opal_buffer_t *msg);
+/* Reliable broadcast a message thru BMG.
+ * only need to provide a message buffer, dont need create dmns
+ */
+   typedef int (*orte_grpcomm_base_module_rbcast_fn_t)(opal_buffer_t *msg);
 
 typedef int (*orte_grpcomm_base_module_rbcast_register_cb_fn_t)(orte_grpcomm_rbcast_cb_t callback);
 

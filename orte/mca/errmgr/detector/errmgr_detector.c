@@ -106,14 +106,44 @@ static double Wtime();
 static double orte_errmgr_heartbeat_period = 2e-1;
 static double orte_errmgr_heartbeat_timeout = 5e-1;
 static opal_event_base_t* fd_event_base = NULL;
+
 static void fd_event_cb(int fd, short flags, void* pdetector);
+
+
+static int pack_state_for_proc(opal_buffer_t *alert, orte_proc_t *child)
+{
+    int rc;
+
+    /* pack the child's vpid */
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(alert, &(child->name.vpid), 1, ORTE_VPID))) {
+        ORTE_ERROR_LOG(rc);
+        return rc;
+    }
+    /* pack the pid */
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(alert, &child->pid, 1, OPAL_PID))) {
+        ORTE_ERROR_LOG(rc);
+        return rc;
+    }
+    /* pack its state */
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(alert, &child->state, 1, ORTE_PROC_STATE))) {
+        ORTE_ERROR_LOG(rc);
+        return rc;
+    }
+    /* pack its exit code */
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(alert, &child->exit_code, 1, ORTE_EXIT_CODE))) {
+        ORTE_ERROR_LOG(rc);
+        return rc;
+    }
+
+    return ORTE_SUCCESS;
+}
 
 static void register_cbfunc(int status, size_t errhndler, void *cbdata)
 {
-    myerrhandle = errhndler;
     OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
-                "errmgr:detector:event register cbfunc with status %d", status));
+                "errmgr:detector:event register cbfunc with status %d ", status));
 }
+
 static void error_notify_cbfunc(int status,
         const opal_process_name_t *source,
         opal_list_t *info, opal_list_t *results,
@@ -123,10 +153,19 @@ static void error_notify_cbfunc(int status,
     opal_value_t *kv;
     proc.jobid = ORTE_JOBID_INVALID;
     proc.vpid = ORTE_VPID_INVALID;
+
+    int rc;
+    orte_proc_t *temp_orte_proc;
+    opal_buffer_t *alert;
+    orte_job_t *jdata;
+    orte_plm_cmd_flag_t cmd;
+
     OPAL_LIST_FOREACH(kv, info, opal_value_t) {
         if (0 == strcmp(kv->key, OPAL_PMIX_EVENT_AFFECTED_PROC)) {
+
             proc.jobid = kv->data.name.jobid;
             proc.vpid = kv->data.name.vpid;
+
             OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                         "%s errmgr: detector: error proc %s with key-value %s notified from %s",
                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ORTE_NAME_PRINT(&proc),
@@ -207,17 +246,26 @@ static int init(void) {
 }
 
 int finalize(void) {
-    orte_errmgr_detector_t* detector = &orte_errmgr_world_detector;
+    if ( ORTE_PROC_IS_DAEMON )
+    {
+        orte_errmgr_detector_t* detector = &orte_errmgr_world_detector;
 
-    opal_event_del(&orte_errmgr_world_detector.fd_event);
-    orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT_REQUEST);
-    orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT);
-    if( opal_sync_event_base != fd_event_base ) opal_event_base_free(fd_event_base);
+        if(detector->hb_observer != ORTE_VPID_INVALID)
+        {
+            detector->hb_observer = orte_process_info.my_name.vpid;
+            OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,"errmgr:detector: send last heartbeat message"));
+            fd_heartbeat_send(detector);
+            detector->hb_period = INFINITY;
+        }
+        opal_event_del(&orte_errmgr_world_detector.fd_event);
+        orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT_REQUEST);
+        orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT);
+        if( opal_sync_event_base != fd_event_base ) opal_event_base_free(fd_event_base);
 
-    /* set heartbeat peroid to infinity and observer to invalid */
-    orte_errmgr_world_detector.hb_period = INFINITY;
-    orte_errmgr_world_detector.hb_observer = ORTE_VPID_INVALID;
-
+        /* set heartbeat peroid to infinity and observer to invalid */
+        orte_errmgr_world_detector.hb_period = INFINITY;
+        orte_errmgr_world_detector.hb_observer = ORTE_VPID_INVALID;
+    }
     return ORTE_SUCCESS;
 }
 
@@ -257,6 +305,7 @@ int orte_errmgr_enable_detector(bool enable_flag)
     OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                 "%s errmgr:detector report detector_enable_status %d",
                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), enable_flag));
+
     if ( ORTE_PROC_IS_DAEMON && enable_flag )
     {
         orte_errmgr_detector_t* detector = &orte_errmgr_world_detector;
@@ -459,7 +508,6 @@ static int fd_heartbeat_send(orte_errmgr_detector_t* detector) {
                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                     now-detector->hb_sstamp));
     }
-    OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,"detector enable %d", orte_errmgr_detector_enable_flag));
     detector->hb_sstamp = now;
 
     opal_buffer_t *buffer = NULL;
@@ -500,9 +548,9 @@ static int fd_heartbeat_recv_cb(int status, orte_process_name_t* sender,
     {
         /* this is a quit msg from observed process, stop detector */
         OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
-                    "%s %s Received heartbeat from %d, which is myself, quit msg to close detector",
+                    "errmgr:detector:%s %s Received heartbeat from %d, which is myself, quit msg to close detector",
                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),__func__, sender->vpid));
-         detector->hb_observing = ORTE_VPID_INVALID;
+         detector->hb_observing = detector->hb_observer = ORTE_VPID_INVALID;
          detector->hb_rstamp = INFINITY;
          detector->hb_period = INFINITY;
          return false;
