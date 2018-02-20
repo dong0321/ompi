@@ -144,8 +144,8 @@ static int bmg_init(void)
 static void bmg_finalize(void)
 {
     /* cancel the rbcast recv */
-    orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_RBCAST);
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_BMGXCAST);
+    orte_rml.recv_cancel(ORTE_NAME_WILDCARD,ORTE_RML_TAG_ALLGATHER_BMG);
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_BMG_COLL_RELEASE);
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_RBCAST);
     OPAL_LIST_DESTRUCT(&tracker);
