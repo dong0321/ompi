@@ -207,17 +207,26 @@ static int init(void) {
 }
 
 int finalize(void) {
-    orte_errmgr_detector_t* detector = &orte_errmgr_world_detector;
+    if ( ORTE_PROC_IS_DAEMON )
+    {
+        orte_errmgr_detector_t* detector = &orte_errmgr_world_detector;
+        if(detector->hb_observer != ORTE_VPID_INVALID)
+        {
+            detector->hb_observer = orte_process_info.my_name.vpid;
+            OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,"errmgr:detector: send last heartbeat message"));
+            fd_heartbeat_send(detector);
+            detector->hb_period = INFINITY;
+        }
 
-    opal_event_del(&orte_errmgr_world_detector.fd_event);
-    orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT_REQUEST);
-    orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT);
-    if( opal_sync_event_base != fd_event_base ) opal_event_base_free(fd_event_base);
+        opal_event_del(&orte_errmgr_world_detector.fd_event);
+        orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT_REQUEST);
+        orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_HEARTBEAT);
+        if( opal_sync_event_base != fd_event_base ) opal_event_base_free(fd_event_base);
 
-    /* set heartbeat peroid to infinity and observer to invalid */
-    orte_errmgr_world_detector.hb_period = INFINITY;
-    orte_errmgr_world_detector.hb_observer = ORTE_VPID_INVALID;
-
+        /* set heartbeat peroid to infinity and observer to invalid */
+        orte_errmgr_world_detector.hb_period = INFINITY;
+        orte_errmgr_world_detector.hb_observer = ORTE_VPID_INVALID;
+    }
     return ORTE_SUCCESS;
 }
 
@@ -502,7 +511,7 @@ static int fd_heartbeat_recv_cb(int status, orte_process_name_t* sender,
         OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                     "%s %s Received heartbeat from %d, which is myself, quit msg to close detector",
                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),__func__, sender->vpid));
-         detector->hb_observing = ORTE_VPID_INVALID;
+         detector->hb_observing = detector->hb_observer = ORTE_VPID_INVALID;
          detector->hb_rstamp = INFINITY;
          detector->hb_period = INFINITY;
          return false;

@@ -39,8 +39,8 @@
 #include "grpcomm_bmg.h"
 
 /* Static API's */
-static int init(void);
-static void finalize(void);
+static int bmg_init(void);
+static void bmg_finalize(void);
 
 static int xcast(orte_vpid_t *vpids,
                  size_t nprocs,
@@ -56,8 +56,8 @@ static int register_cb_type(orte_grpcomm_rbcast_cb_t callback);
 static int unregister_cb_type(int type);
 /* Module def */
 orte_grpcomm_base_module_t orte_grpcomm_bmg_module = {
-    init,
-    finalize,
+    bmg_init,
+    bmg_finalize,
     xcast,
     allgather,
     rbcast,
@@ -110,7 +110,7 @@ int unregister_cb_type(int type) {
 /*
  *  Initialize the module
  */
-static int init(void)
+static int bmg_init(void)
 {
     OBJ_CONSTRUCT(&tracker, opal_list_t);
 
@@ -141,7 +141,7 @@ static int init(void)
 /*
  * Finalize the module
  */
-static void finalize(void)
+static void bmg_finalize(void)
 {
     /* cancel the rbcast recv */
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_RBCAST);
