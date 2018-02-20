@@ -161,10 +161,12 @@ static void error_notify_cbfunc(int status,
     orte_plm_cmd_flag_t cmd;
 
     OPAL_LIST_FOREACH(kv, info, opal_value_t) {
-        if (0 == strcmp(kv->key, OPAL_PMIX_EVENT_AFFECTED_PROC)) {
-
+        if( (0 == strcmp(kv->key, OPAL_PMIX_EVENT_AFFECTED_PROC)) && (kv->type == OPAL_NAME) ) {
             proc.jobid = kv->data.name.jobid;
             proc.vpid = kv->data.name.vpid;
+            if( orte_get_proc_daemon_vpid(&proc) != ORTE_PROC_MY_NAME->vpid){
+                return;
+            }
 
             OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                         "%s errmgr: detector: error proc %s with key-value %s notified from %s",
@@ -317,7 +319,7 @@ int orte_errmgr_enable_detector(bool enable_flag)
 
         codes = OBJ_NEW(opal_list_t);
         ekv = OBJ_NEW(opal_value_t);
-        ekv->key = strdup("OPAL_PMIX_EVENT_AFFECTED_PROC");
+        ekv->key = strdup(OPAL_PMIX_EVENT_AFFECTED_PROC);
         ekv->type = OPAL_INT;
         ekv->data.integer =OPAL_ERR_PROC_ABORTED;
         opal_list_append(codes, &ekv->super);
