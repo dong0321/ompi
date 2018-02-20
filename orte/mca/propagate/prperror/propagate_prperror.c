@@ -106,7 +106,7 @@ static int register_prp_callback(void)
 
 static int finalize(void)
 {
-    int ret;
+    int ret=0;
     if ( -1 == orte_propagate_error_cb_type){
         return ORTE_SUCCESS;
     }
