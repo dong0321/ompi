@@ -176,8 +176,7 @@ int orte_grpcomm_API_rbcast(orte_grpcomm_signature_t *sig,
     /* cycle thru the actives and see who can send it */
     OPAL_LIST_FOREACH(active, &orte_grpcomm_base.actives, orte_grpcomm_base_active_t) {
         if (NULL != active->module->rbcast) {
-            /* number of "daemons" equal 1hnp + num of daemons, so here pass ndmns -1 */
-            if (ORTE_SUCCESS == (rc = active->module->rbcast(dmns, ndmns - 1, buf))) {
+            if (ORTE_SUCCESS == (rc = active->module->rbcast(buf))) {
                 break;
             }
         }
