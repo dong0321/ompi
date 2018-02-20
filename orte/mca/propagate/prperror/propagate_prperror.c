@@ -134,7 +134,7 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
         if ((nmcheck->name.jobid == sickproc->jobid) && (nmcheck->name.vpid == sickproc->vpid))
         {
             OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
-                                 "propagate:prperror already propagated this error msg process id %d:%d",sickproc->jobid, sickproc->vpid));
+                        "propagate:prperror already propagated this error msg process id %d:%d",sickproc->jobid, sickproc->vpid));
             return rc;
         }
     }
