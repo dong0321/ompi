@@ -144,8 +144,6 @@ int orte_grpcomm_API_rbcast(orte_grpcomm_signature_t *sig,
     int rc = ORTE_ERROR;
     opal_buffer_t *buf;
     orte_grpcomm_base_active_t *active;
-    orte_vpid_t *dmns;
-    size_t ndmns;
 
     OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:base:rbcast sending %u bytes to tag %ld",
@@ -157,20 +155,11 @@ int orte_grpcomm_API_rbcast(orte_grpcomm_signature_t *sig,
 
     /* prep the output buffer */
     buf = OBJ_NEW(opal_buffer_t);
-    /* create the array of participating daemons */
-    if (ORTE_SUCCESS != (rc = create_dmns(sig, &dmns, &ndmns))) {
-        ORTE_ERROR_LOG(rc);
-        OBJ_RELEASE(buf);
-        return rc;
-    }
 
     /* setup the payload */
     if (ORTE_SUCCESS != (rc = pack_xcast(sig, buf, msg, tag))) {
         ORTE_ERROR_LOG(rc);
         OBJ_RELEASE(buf);
-        if (NULL != dmns) {
-            free(dmns);
-        }
         return rc;
     }
     /* cycle thru the actives and see who can send it */
@@ -182,9 +171,6 @@ int orte_grpcomm_API_rbcast(orte_grpcomm_signature_t *sig,
         }
     }
 
-    if (NULL != dmns) {
-        free(dmns);
-    }
     return rc;
 }
 
