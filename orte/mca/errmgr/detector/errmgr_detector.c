@@ -44,7 +44,6 @@
 #include "orte/util/name_fns.h"
 #include "orte/util/proc_info.h"
 #include "orte/util/show_help.h"
-#include "orte/util/nidmap.h"
 
 #include "orte/runtime/orte_globals.h"
 #include "orte/runtime/orte_locks.h"
@@ -197,7 +196,6 @@ static void error_notify_cbfunc(int status,
 
             /* proc state now is ORTE_PROC_STATE_ABORTED_BY_SIG, cause odls set state to this; code is 128+9 */
             temp_orte_proc->state = ORTE_PROC_STATE_ABORTED_BY_SIG;
-
             /* now pack the child's info */
             if (ORTE_SUCCESS != (rc = pack_state_for_proc(alert, temp_orte_proc))) {
                 ORTE_ERROR_LOG(rc);
@@ -298,7 +296,6 @@ static double Wtime(void)
     wtime = tv.tv_sec;
     wtime += (double)tv.tv_usec / 1000000.0;
 #endif
-    OPAL_CR_NOOP_PROGRESS();
     return wtime;
 }
 
