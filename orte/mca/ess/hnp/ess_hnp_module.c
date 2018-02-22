@@ -377,6 +377,7 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
 
+
     /* setup the error manager */
     if (ORTE_SUCCESS != (ret = orte_errmgr_base_select())) {
         error = "orte_errmgr_base_select";

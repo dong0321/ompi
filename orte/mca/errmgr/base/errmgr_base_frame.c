@@ -61,7 +61,7 @@ orte_errmgr_base_module_t orte_errmgr_default_fns = {
     NULL
 };
 
- /* NOTE: ABSOLUTELY MUST initialize this
+/* NOTE: ABSOLUTELY MUST initialize this
  * struct to include the log function as it
  * gets called even if the errmgr hasn't been
  * opened yet due to error

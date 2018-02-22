@@ -75,7 +75,6 @@
 #include "orte/mca/schizo/schizo.h"
 #include "orte/mca/state/state.h"
 #include "orte/mca/filem/filem.h"
-#include "orte/mca/dfs/dfs.h"
 #include "orte/mca/propagate/propagate.h"
 
 #include "orte/util/context_fns.h"
@@ -1538,7 +1537,6 @@ void orte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                         ORTE_NAME_PRINT(&proc->name), (long)proc->pid);
 
-
     /* if the child was previously flagged as dead, then just
      * update its exit status and
      * ensure that its exit state gets reported to avoid hanging
@@ -1577,7 +1575,6 @@ void orte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         /* regardless of our eventual code path, we need to
          * flag that this proc has had its waitpid fired */
         ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_WAITPID);
-
         goto MOVEON;
     }
 
@@ -1746,7 +1743,9 @@ void orte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         OPAL_OUTPUT_VERBOSE((5, orte_odls_base_framework.framework_output,
                     "%s odls:event notify in odls proc %d:%d gone",
                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), proc->name.jobid,proc->name.vpid));
-
+        /* regardless of our eventual code path, we need to
+         * flag that this proc has had its waitpid fired */
+        ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_WAITPID);
         /* Do not decrement the number of local procs here. That is handled in the errmgr */
     }
 

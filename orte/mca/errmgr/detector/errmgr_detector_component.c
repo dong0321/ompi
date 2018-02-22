@@ -80,6 +80,20 @@ static int errmgr_detector_register(void)
             OPAL_INFO_LVL_9,
             MCA_BASE_VAR_SCOPE_READONLY, &orte_errmgr_detector_enable_flag);
 
+    orte_errmgr_heartbeat_period = 5.0;
+    (void) mca_base_component_var_register(c, "heartbeat_period",
+            "Set heartbeat period for ring detector in errmgr component",
+            MCA_BASE_VAR_TYPE_DOUBLE, NULL, 0, 0,
+            OPAL_INFO_LVL_9,
+            MCA_BASE_VAR_SCOPE_READONLY, &orte_errmgr_heartbeat_period);
+
+    orte_errmgr_heartbeat_timeout = 10.0;
+    (void) mca_base_component_var_register(c, "heartbeat_timeout",
+            "Set heartbeat timeout for ring detector in errmgr component",
+            MCA_BASE_VAR_TYPE_DOUBLE, NULL, 0, 0,
+            OPAL_INFO_LVL_9,
+            MCA_BASE_VAR_SCOPE_READONLY, &orte_errmgr_heartbeat_timeout);
+
     return ORTE_SUCCESS;
 }
 
@@ -96,7 +110,7 @@ static int errmgr_detector_close(void)
 static int errmgr_detector_component_query(mca_base_module_t **module, int *priority)
 {
     /* used by DVM masters */
-    if (ORTE_PROC_IS_DAEMON || ORTE_PROC_IS_HNP ) {
+    if ( ORTE_PROC_IS_DAEMON ) {
         *priority = my_priority;
         *module = (mca_base_module_t *)&orte_errmgr_detector_module;
         return ORTE_SUCCESS;

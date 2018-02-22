@@ -41,7 +41,6 @@
 #include "orte/util/name_fns.h"
 #include "orte/util/proc_info.h"
 #include "orte/util/show_help.h"
-#include "orte/util/nidmap.h"
 
 #include "orte/runtime/orte_globals.h"
 #include "orte/runtime/orte_locks.h"
@@ -149,7 +148,7 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
      * | cb_type | status | sickproc | nprocs afftected | procs|
      * --------------------------------------------------------*/
     opal_buffer_t prperror_buffer;
-    opal_list_t affected_list;
+    opal_list_t *affected_list;
     opal_list_t *info;
     opal_value_t *val;
 
@@ -211,32 +210,39 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
          * then the returned list will be empty.
          */
         OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
-                    "%s propagate:daemon prperror this is a daemon error %s",
+                    "%s propagate:daemon prperror this is a daemon error on %s \n",
                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                     orte_get_proc_hostname(sickproc)));
-        OBJ_CONSTRUCT(&affected_list, opal_list_t);
-        /* daemon and procs have different jobid, so cannot pass sickproc->jobid, need to pass wildcard */
-        opal_pmix.resolve_peers(orte_get_proc_hostname(sickproc), ORTE_PROC_MY_NAME->jobid, &affected_list);
-        OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
-                    "%s propagate:daemon prperror this is a daemon error",
-                    ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
-        /* add those procs in the buffer*/
-        if (!opal_list_is_empty(&affected_list)){
-            cnt =affected_list.opal_list_length;
-            if (ORTE_SUCCESS != (rc = opal_dss.pack(&prperror_buffer, &cnt, 1, OPAL_INT))) {
-                ORTE_ERROR_LOG(rc);
-                OBJ_DESTRUCT(&prperror_buffer);
-                return rc;
-            }
-            if (0 < cnt) {
-                OPAL_LIST_FOREACH(val, &affected_list, opal_value_t) {
-                    if (OPAL_SUCCESS != (rc = opal_dss.pack(&prperror_buffer, &val, 1, OPAL_VALUE))) {
-                        ORTE_ERROR_LOG(rc);
-                        OBJ_DESTRUCT(&prperror_buffer);
-                        return rc;
-                     }
-                    opal_list_append(info, &val->super);
+
+        orte_node_t *node;
+        node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, sickproc->vpid);
+
+        cnt=node->num_procs;
+        if (ORTE_SUCCESS != (rc = opal_dss.pack(&prperror_buffer, &cnt, 1, OPAL_INT))) {
+            ORTE_ERROR_LOG(rc);
+            OBJ_DESTRUCT(&prperror_buffer);
+            return rc;
+        }
+
+        orte_proc_t *pptr;
+        int i;
+        for (i=0; i < node->procs->size; i++) {
+            if (NULL != (pptr = (orte_proc_t*)opal_pointer_array_get_item(node->procs, i))) {
+                OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
+                            " %d children are afftected  %s\n",cnt, ORTE_NAME_PRINT(&pptr->name)));
+
+                if (OPAL_SUCCESS != (rc = opal_dss.pack(&prperror_buffer, &pptr->name, 1, OPAL_NAME))) {
+                    ORTE_ERROR_LOG(rc);
+                    OBJ_DESTRUCT(&prperror_buffer);
+                    return rc;
                 }
+                val = OBJ_NEW(opal_value_t);
+                val->key = strdup(OPAL_PMIX_EVENT_AFFECTED_PROC);
+                val->type = OPAL_NAME;
+                val->data.name.jobid = pptr->name.jobid;
+                val->data.name.vpid = pptr->name.vpid;
+
+                opal_list_append(info, &val->super);
             }
         }
     }
@@ -250,7 +256,6 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
     if (ORTE_SUCCESS != (rc = orte_grpcomm.rbcast(sig, ORTE_RML_TAG_PROPAGATE, &prperror_buffer))) {
         ORTE_ERROR_LOG(rc);
     }
-
     /* notify this error locally, only from rbcast dont have a source id */
         if( source==NULL ) {
             if (OPAL_SUCCESS != opal_pmix.notify_event(state, (opal_process_name_t*)ORTE_PROC_MY_NAME,
@@ -261,7 +266,6 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
                 OBJ_RELEASE(info);
             }
         }
-
     OBJ_DESTRUCT(&prperror_buffer);
     OBJ_RELEASE(sig);
     /* we're done! */

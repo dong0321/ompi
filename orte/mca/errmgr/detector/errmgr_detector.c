@@ -44,7 +44,6 @@
 #include "orte/util/name_fns.h"
 #include "orte/util/proc_info.h"
 #include "orte/util/show_help.h"
-#include "orte/util/nidmap.h"
 
 #include "orte/runtime/orte_globals.h"
 #include "orte/runtime/orte_locks.h"
@@ -103,8 +102,8 @@ static int fd_heartbeat_recv_cb(int status,
         void *cbdata);
 
 static double Wtime();
-static double orte_errmgr_heartbeat_period = 2e-1;
-static double orte_errmgr_heartbeat_timeout = 5e-1;
+//static double orte_errmgr_heartbeat_period = 5;
+//static double orte_errmgr_heartbeat_timeout = 10;
 static opal_event_base_t* fd_event_base = NULL;
 
 static void fd_event_cb(int fd, short flags, void* pdetector);
@@ -197,7 +196,6 @@ static void error_notify_cbfunc(int status,
 
             /* proc state now is ORTE_PROC_STATE_ABORTED_BY_SIG, cause odls set state to this; code is 128+9 */
             temp_orte_proc->state = ORTE_PROC_STATE_ABORTED_BY_SIG;
-
             /* now pack the child's info */
             if (ORTE_SUCCESS != (rc = pack_state_for_proc(alert, temp_orte_proc))) {
                 ORTE_ERROR_LOG(rc);
@@ -271,16 +269,16 @@ int finalize(void) {
     return ORTE_SUCCESS;
 }
 
-int errmgr_get_daemon_status(orte_process_name_t daemon)
+bool errmgr_get_daemon_status(orte_process_name_t daemon)
 {
     orte_errmgr_detector_t* detector = &orte_errmgr_world_detector;
-    return detector->daemons_state[daemon.vpid];
+    return *(detector->daemons_state + daemon.vpid);
 }
 
 void errmgr_set_daemon_status(orte_process_name_t daemon, bool state)
 {
     orte_errmgr_detector_t* detector = &orte_errmgr_world_detector;
-    detector->daemons_state[daemon.vpid] = state;
+    *(detector->daemons_state + daemon.vpid) = state;
 }
 
 static double Wtime(void)
@@ -298,7 +296,6 @@ static double Wtime(void)
     wtime = tv.tv_sec;
     wtime += (double)tv.tv_usec / 1000000.0;
 #endif
-    OPAL_CR_NOOP_PROGRESS();
     return wtime;
 }
 
@@ -346,10 +343,12 @@ int orte_errmgr_enable_detector(bool enable_flag)
         /* give some slack for MPIInit */
         detector->hb_rstamp = Wtime()+(double)ndmns;
 
+        detector->daemons_state = malloc(orte_process_info.num_procs* sizeof(bool));
         for(i=0; i<orte_process_info.num_procs; i++)
         {
-            detector->daemons_state[i] = true;
+            *(detector->daemons_state + i) = true;
         }
+
         OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                     "errmgr:detector daemon %d observering %d observer %d",
                     vpid,
@@ -489,7 +488,7 @@ static void fd_event_cb(int fd, short flags, void* pdetector) {
             OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                         "errmgr:detector %d observing %d",
                         orte_process_info.my_name.vpid, detector->hb_observing));
-            orte_propagate.prp(&temp_proc_name.jobid, &temp_proc_name, &temp_proc_name,OPAL_ERR_PROC_ABORTED );
+            orte_propagate.prp(&temp_proc_name.jobid, NULL, &temp_proc_name,OPAL_ERR_PROC_ABORTED );
             errmgr_set_daemon_status(temp_proc_name, false);
             fd_heartbeat_request(detector);
         }
