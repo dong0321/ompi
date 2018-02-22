@@ -96,7 +96,7 @@ static int errmgr_detector_close(void)
 static int errmgr_detector_component_query(mca_base_module_t **module, int *priority)
 {
     /* used by DVM masters */
-    if (ORTE_PROC_IS_DAEMON || ORTE_PROC_IS_HNP ) {
+    if ( ORTE_PROC_IS_DAEMON ) {
         *priority = my_priority;
         *module = (mca_base_module_t *)&orte_errmgr_detector_module;
         return ORTE_SUCCESS;

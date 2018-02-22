@@ -41,7 +41,6 @@
 #include "orte/util/name_fns.h"
 #include "orte/util/proc_info.h"
 #include "orte/util/show_help.h"
-#include "orte/util/nidmap.h"
 
 #include "orte/runtime/orte_globals.h"
 #include "orte/runtime/orte_locks.h"

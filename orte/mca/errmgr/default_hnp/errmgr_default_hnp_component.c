@@ -66,7 +66,7 @@ static int default_hnp_register(void)
 {
     mca_base_component_t *c = &mca_errmgr_default_hnp_component.base_version;
 
-    my_priority = 1000;
+    my_priority = 1010;
     (void) mca_base_component_var_register(c, "priority",
                                            "Priority of the default_hnp errmgr component",
                                            MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
@@ -88,7 +88,8 @@ static int default_hnp_close(void)
 
 static int default_hnp_component_query(mca_base_module_t **module, int *priority)
 {
-    if (ORTE_PROC_IS_HNP && !ORTE_PROC_IS_MASTER) {
+    if (ORTE_PROC_IS_HNP) {
+    //if (ORTE_PROC_IS_HNP && !ORTE_PROC_IS_MASTER) {
         /* we are the default HNP component */
         *priority = my_priority;
         *module = (mca_base_module_t *)&orte_errmgr_default_hnp_module;
