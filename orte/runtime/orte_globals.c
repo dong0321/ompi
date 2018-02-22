@@ -214,6 +214,8 @@ char *orte_daemon_cores = NULL;
 
 /* enable/disable value for errmgr error detector */
 bool orte_errmgr_detector_enable_flag = false;
+double orte_errmgr_heartbeat_period = 5;
+double orte_errmgr_heartbeat_timeout = 10;
 
 int orte_dt_init(void)
 {

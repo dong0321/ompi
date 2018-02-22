@@ -34,6 +34,7 @@
 #include "opal/util/output.h"
 #include "opal/util/printf.h"
 #include "opal/dss/dss.h"
+#include "opal/mca/pmix/pmix.h"
 
 #include "orte/mca/iof/base/base.h"
 #include "orte/mca/rml/rml.h"
@@ -63,6 +64,7 @@
 #include "orte/mca/errmgr/base/base.h"
 #include "orte/mca/errmgr/base/errmgr_private.h"
 
+#include "orte/mca/propagate/propagate.h"
 #include "errmgr_default_hnp.h"
 
 static int init(void);
@@ -89,6 +91,123 @@ static void default_hnp_abort(orte_job_t *jdata);
 static void job_errors(int fd, short args, void *cbdata);
 static void proc_errors(int fd, short args, void *cbdata);
 
+static int pack_state_for_proc(opal_buffer_t *alert, orte_proc_t *child)
+{
+    int rc;
+
+    /* pack the child's vpid */
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(alert, &(child->name.vpid), 1, ORTE_VPID))) {
+        ORTE_ERROR_LOG(rc);
+        return rc;
+    }
+    /* pack the pid */
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(alert, &child->pid, 1, OPAL_PID))) {
+        ORTE_ERROR_LOG(rc);
+        return rc;
+    }
+    /* pack its state */
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(alert, &child->state, 1, ORTE_PROC_STATE))) {
+        ORTE_ERROR_LOG(rc);
+        return rc;
+                                            }
+    /* pack its exit code */
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(alert, &child->exit_code, 1, ORTE_EXIT_CODE))) {
+        ORTE_ERROR_LOG(rc);
+        return rc;
+    }
+
+    return ORTE_SUCCESS;
+}
+
+static void register_cbfunc(int status, size_t errhndler, void *cbdata)
+{
+        OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
+                                    "errmgr:default_hnp:event register cbfunc with status %d ", status));
+}
+
+static void error_notify_cbfunc(int status,
+        const opal_process_name_t *source,
+        opal_list_t *info, opal_list_t *results,
+        opal_pmix_notification_complete_fn_t cbfunc, void *cbdata)
+{
+    orte_process_name_t proc;
+    opal_value_t *kv;
+    proc.jobid = ORTE_JOBID_INVALID;
+    proc.vpid = ORTE_VPID_INVALID;
+
+    int rc;
+    orte_proc_t *temp_orte_proc;
+    opal_buffer_t *alert;
+    orte_job_t *jdata;
+    orte_plm_cmd_flag_t cmd;
+
+    OPAL_LIST_FOREACH(kv, info, opal_value_t) {
+        if( (0 == strcmp(kv->key, OPAL_PMIX_EVENT_AFFECTED_PROC)) && (kv->type == OPAL_NAME) ) {
+            proc.jobid = kv->data.name.jobid;
+            proc.vpid = kv->data.name.vpid;
+            if( orte_get_proc_daemon_vpid(&proc) != ORTE_PROC_MY_NAME->vpid){
+                return;
+            }
+
+            OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
+                        "%s errmgr: default_hnp: error proc %s with key-value %s notified from %s",
+                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ORTE_NAME_PRINT(&proc),
+                        kv->key, ORTE_NAME_PRINT(source)));
+
+            if (NULL == (jdata = orte_get_job_data_object(proc.jobid))) {
+                /* must already be complete */
+                OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
+                            "%s errmgr:default_hnp:error_notify_callback NULL jdata - ignoring error",
+                            ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
+            }
+            temp_orte_proc= (orte_proc_t*)opal_pointer_array_get_item(jdata->procs, proc.vpid);
+
+            alert = OBJ_NEW(opal_buffer_t);
+            /* pack update state command */
+            cmd = ORTE_PLM_UPDATE_PROC_STATE;
+            if (ORTE_SUCCESS != (rc = opal_dss.pack(alert, &cmd, 1, ORTE_PLM_CMD))) {
+                ORTE_ERROR_LOG(rc);
+                return;
+            }
+            if (ORTE_SUCCESS != (rc = opal_dss.pack(alert, &proc.jobid, 1, ORTE_JOBID))) {
+                ORTE_ERROR_LOG(rc);
+                return;
+            }
+
+            /* proc state now is ORTE_PROC_STATE_ABORTED_BY_SIG, cause odls set state to this; code is 128+9 */
+            temp_orte_proc->state = ORTE_PROC_STATE_ABORTED_BY_SIG;
+            /* now pack the child's info */
+            if (ORTE_SUCCESS != (rc = pack_state_for_proc(alert, temp_orte_proc))) {
+                ORTE_ERROR_LOG(rc);
+                return;
+            }
+
+            /* send this process's info to hnp */
+            if (0 > (rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                            ORTE_PROC_MY_HNP, alert,
+                            ORTE_RML_TAG_PLM,
+                            orte_rml_send_callback, NULL))) {
+                OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
+                            "%s errmgr:default_hnp: send to hnp failed",
+                            ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
+                ORTE_ERROR_LOG(rc);
+                OBJ_RELEASE(alert);
+            }
+            if (ORTE_FLAG_TEST(temp_orte_proc, ORTE_PROC_FLAG_IOF_COMPLETE) &&
+                    ORTE_FLAG_TEST(temp_orte_proc, ORTE_PROC_FLAG_WAITPID) &&
+                    !ORTE_FLAG_TEST(temp_orte_proc, ORTE_PROC_FLAG_RECORDED)) {
+                ORTE_ACTIVATE_PROC_STATE(&proc, ORTE_PROC_STATE_TERMINATED);
+            }
+
+            orte_propagate.prp(&source->jobid, source, &proc, OPAL_ERR_PROC_ABORTED);
+            break;
+        }
+    }
+
+    if (NULL != cbfunc) {
+        cbfunc(ORTE_SUCCESS, NULL, NULL, NULL, cbdata);
+    }
+}
 /**********************
  * From DEFAULT_HNP
  **********************/
@@ -104,6 +223,21 @@ static int init(void)
 
     /* setup state machine to trap proc errors */
     orte_state.add_proc_state(ORTE_PROC_STATE_ERROR, proc_errors, ORTE_ERROR_PRI);
+
+    opal_list_t *codes;
+    opal_value_t *ekv;
+
+    codes = OBJ_NEW(opal_list_t);
+    ekv = OBJ_NEW(opal_value_t);
+    ekv->key = strdup(OPAL_PMIX_EVENT_AFFECTED_PROC);
+    ekv->type = OPAL_INT;
+    ekv->data.integer =OPAL_ERR_PROC_ABORTED;
+    opal_list_append(codes, &ekv->super);
+    OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
+                "%s errmgr:default_hnp: register evhandler in errmgr",
+                    ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
+
+    opal_pmix.register_evhandler(codes, NULL, error_notify_cbfunc, register_cbfunc, NULL);
 
     return ORTE_SUCCESS;
 }
@@ -353,6 +487,7 @@ static void job_errors(int fd, short args, void *cbdata)
 
 static void proc_errors(int fd, short args, void *cbdata)
 {
+    orte_propagate.register_cb();
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
     orte_job_t *jdata;
     orte_proc_t *pptr, *proct;

@@ -594,6 +594,8 @@ ORTE_DECLSPEC extern bool orte_hwloc_shmem_available;
 
 /* Detector enable/disable flag */
 ORTE_DECLSPEC extern bool orte_errmgr_detector_enable_flag;
+ORTE_DECLSPEC extern double orte_errmgr_heartbeat_period;
+ORTE_DECLSPEC extern double orte_errmgr_heartbeat_timeout;
 
 END_C_DECLS
 

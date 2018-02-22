@@ -1,0 +1,96 @@
+This README documents the features and options specific to the
+**ORTE Level Failure Tolerant** PMIx reference server implementation.
+
+[TOC]
+
+Features
+========
+This implementation provides an orte level detector and propagator for fault
+detection and propagation. Also has a new module in grpcomm using binaminal tree
+to boardcast a message.
+
+
+Building
+======================
+```bash
+./autogen.pl
+
+./configure --prefix=...  --enable-debug --enable-orterun-prefix-by-default --no-create --no-recursion
+
+make [-j N] all install
+#    use an integer value of N for parallel builds
+```
+There are many available configure options (see `./configure --help`
+for a full list); a summary of the more commonly used ones is included
+in the upstream Open MPI README file.
+
+
+Running
+=====================
+## Building your application
+
+Compile your application as usual, using the provided `pcc`
+
+## Running your application
+
+You need to launch your daemons by `psrvr`
+
+You can launch your application with fault tolerance by simply using the
+provided `prun`. Beware that your distribution may already provide a
+version of MPI, make sure to set your `PATH` and `LD_LIBRARY_PATH` properly.
+
+## Running under a batch scheduler
+
+This code can operate under a job/batch scheduler, and is tested routinely with Slurm.
+One difficulty comes from the fact that many job schedulers will "cleanup" the
+application as soon as a process fails. In order to avoid this problem, it is preferred
+that you use `-k` within an allocation (e.g. `salloc`, `sbatch`) rather than
+a direct launch (e.g. `srun`).
+
+## Run-time tuning knobs
+
+This code comes with a variety of knobs for controlling how it runs. The default
+parameters are sane and should result in very good performance in most
+cases. You can change those default by '-pmca parameter value'
+
+- `orte_enable_recovery <true|false> (default: true)` controls automatic
+  cleanup of apps with failed processes within mpirun. The default
+  differs from upstream Open MPI.
+
+- 'orte_abort_non_zero_exit <true|false> (default: false)` controls the job
+  termination after a error happpens.
+
+- 'errmgr_detector_enable <true|false> (default: true)` enable or disable error
+  detection and propagation.
+
+## Tesing
+=====================
+Step 1: salloc -k -n x -w host1,host2...
+        -k, --no-kill do not kill job on node failure
+
+Step 2: psrvr -pmca pmix pmix3x -pmca grpcomm bmg  -debug-daemons
+        using '-pmca pmix pmix3x' choose pmix3x as dafault pmix module.
+        using '-pmca grpcomm bmg' choose bmg as dafault grpcomm module(binominal graph)
+        using '-debug-daemons' give more info about your job.
+        Also you can using '-pmca componentname_base_verbose value' to get out put from that component.
+        eg: psrvr -pmca pmix pmix3x -pmca grpcomm bmg -pmca odls_base_verbose 10 -pmca errmgr_base_verbose 10 -pmca propagate_base_verbose 10  -debug-daemons
+
+Step 3: under example we have a test code error_notify.c
+        compile: pcc -g error_notify.c -o error_notify
+        run: prun --oversubscribe -v error_notify
+
+
+Copyright
+=========
+
+```
+Copyright (c) 2018      The University of Tennessee and The University
+                        of Tennessee Research Foundation.  All rights
+                        reserved.
+
+$COPYRIGHT$
+
+Additional copyrights may follow
+
+$HEADER$
+mps_base_oversubscribe``
