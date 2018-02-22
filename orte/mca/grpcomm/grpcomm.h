@@ -128,12 +128,11 @@ typedef int (*orte_grpcomm_base_module_allgather_fn_t)(orte_grpcomm_coll_t *coll
 /* Reliable broadcast a message thru BMG.
  * only need to provide a message buffer, dont need create dmns
  */
-   typedef int (*orte_grpcomm_base_module_rbcast_fn_t)(opal_buffer_t *msg);
+typedef int (*orte_grpcomm_base_module_rbcast_fn_t)(opal_buffer_t *msg);
 
 typedef int (*orte_grpcomm_base_module_rbcast_register_cb_fn_t)(orte_grpcomm_rbcast_cb_t callback);
 
 typedef int (*orte_grpcomm_base_module_rbcast_unregister_cb_fn_t)(int type);
-
 
 /*
  * Ver 3.0 - internal modules

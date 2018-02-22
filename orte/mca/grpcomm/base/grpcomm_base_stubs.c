@@ -54,7 +54,7 @@ static int pack_xcast(orte_grpcomm_signature_t *sig,
                       opal_buffer_t *message,
                       orte_rml_tag_t tag);
 
-int create_dmns(orte_grpcomm_signature_t *sig,
+static int create_dmns(orte_grpcomm_signature_t *sig,
                        orte_vpid_t **dmns, size_t *ndmns);
 
 typedef struct {
@@ -343,7 +343,7 @@ orte_grpcomm_coll_t* orte_grpcomm_base_get_tracker(orte_grpcomm_signature_t *sig
     return coll;
 }
 
-int create_dmns(orte_grpcomm_signature_t *sig,
+static int create_dmns(orte_grpcomm_signature_t *sig,
                        orte_vpid_t **dmns, size_t *ndmns)
 {
     size_t n;
