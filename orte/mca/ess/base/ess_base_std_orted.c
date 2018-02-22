@@ -657,7 +657,6 @@ int orte_ess_base_orted_finalize(void)
     }
     /* shutdown the pmix server */
     pmix_server_finalize();
-
     (void) mca_base_framework_close(&opal_pmix_base_framework);
 
     if ( NULL != orte_propagate.finalize ) {

@@ -33,7 +33,7 @@ typedef struct {
     double hb_timeout;     /* the timeout before we start suspecting observed process as dead (delta) */
     double hb_period;      /* the time spacing between heartbeat emission (eta) */
     double hb_sstamp;      /* the date at which the last hb emission was done */
-    bool daemons_state[256];
+    bool *daemons_state;
 } orte_errmgr_detector_t;
 static orte_errmgr_detector_t orte_errmgr_world_detector;
 
@@ -52,7 +52,7 @@ int orte_errmgr_failure_propagate(orte_jobid_t *job, orte_process_name_t *daemon
 int orte_errmgr_failure_propagate_recv(opal_buffer_t* buffer);
 int orte_errmgr_init_failure_propagate(void);
 int orte_errmgr_finalize_failure_propagate(void);
-int errmgr_get_daemon_status(orte_process_name_t daemon);
+bool errmgr_get_daemon_status(orte_process_name_t daemon);
 void errmgr_set_daemon_status(orte_process_name_t daemon, bool state);
 extern int orte_errmgr_enable_detector(bool flag);
 END_C_DECLS

@@ -24,7 +24,7 @@
 
 #include <signal.h>
 #include <scif.h>
-#include <signal.h>
+
 static int btl_scif_component_register(void);
 static int btl_scif_component_open(void);
 static int btl_scif_component_close(void);
