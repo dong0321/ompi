@@ -272,13 +272,21 @@ int finalize(void) {
 bool errmgr_get_daemon_status(orte_process_name_t daemon)
 {
     orte_errmgr_detector_t* detector = &orte_errmgr_world_detector;
-    return *(detector->daemons_state + daemon.vpid);
+    int i;
+    for ( i=0; i<detector->failed_node_count; i++)
+    {
+        if( *(detector->daemons_state +i) == daemon.vpid)
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
-void errmgr_set_daemon_status(orte_process_name_t daemon, bool state)
+void errmgr_set_daemon_status(orte_process_name_t daemon)
 {
     orte_errmgr_detector_t* detector = &orte_errmgr_world_detector;
-    *(detector->daemons_state + daemon.vpid) = state;
+    *(detector->daemons_state + detector->failed_node_count) = daemon.vpid;
 }
 
 static double Wtime(void)
@@ -343,10 +351,10 @@ int orte_errmgr_enable_detector(bool enable_flag)
         /* give some slack for MPIInit */
         detector->hb_rstamp = Wtime()+(double)ndmns;
 
-        detector->daemons_state = malloc(orte_process_info.num_procs* sizeof(bool));
-        for(i=0; i<orte_process_info.num_procs; i++)
+        detector->daemons_state = malloc(8* sizeof(int));
+        for(i=0; i<8; i++)
         {
-            *(detector->daemons_state + i) = true;
+            *(detector->daemons_state + i) = -1;
         }
 
         OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
@@ -489,7 +497,14 @@ static void fd_event_cb(int fd, short flags, void* pdetector) {
                         "errmgr:detector %d observing %d",
                         orte_process_info.my_name.vpid, detector->hb_observing));
             orte_propagate.prp(&temp_proc_name.jobid, NULL, &temp_proc_name,OPAL_ERR_PROC_ABORTED );
-            errmgr_set_daemon_status(temp_proc_name, false);
+
+            /* with every 8 failed nodes realloc 8 more slots to store the vpid of failed nodes */
+            if( (detector->failed_node_count / 8) > 0 && (detector->failed_node_count % 8) == 0 )
+               detector->daemons_state = realloc( detector->daemons_state, detector->failed_node_count+8);
+
+            errmgr_set_daemon_status(temp_proc_name);
+            /* increase the number of failed nodes */
+            detector->failed_node_count++;
             fd_heartbeat_request(detector);
         }
     }

@@ -20,8 +20,6 @@
 
 static pmix_proc_t myproc;
 static bool completed;
-struct timeval start,end;
-double sec;
 
 static void notification_fn(size_t evhdlr_registration_id,
                             pmix_status_t status,
@@ -31,10 +29,13 @@ static void notification_fn(size_t evhdlr_registration_id,
                             pmix_event_notification_cbfunc_fn_t cbfunc,
                             void *cbdata)
 {
-    gettimeofday(&end,NULL);
-    fprintf(stderr, "Client %s:%d NOTIFIED with status %d and error proc %s:%d key %s \n",
-            myproc.nspace, myproc.rank, status,
-            info[0].value.data.proc->nspace, info[0].value.data.proc->rank,info[0].key);
+    int i;
+    for(i=0; i<ninfo; i++)
+    {
+        fprintf(stderr, "Client %s:%d NOTIFIED with status %d and error proc %s:%d key %s \n",
+                myproc.nspace, myproc.rank, status,
+                info[i].value.data.proc->nspace, info[i].value.data.proc->rank,info[i].key);
+    }
     completed = true;
     if (NULL != cbfunc) {
         cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
@@ -98,19 +99,41 @@ int main(int argc, char **argv)
     PMIX_PROC_CONSTRUCT(&proc);
     (void)strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
     proc.rank = PMIX_RANK_WILDCARD;
-    gethostname(name, 255);
-    sleep(3);
     if (PMIX_SUCCESS != (rc = PMIx_Fence(&proc, 1, NULL, 0))) {
         fprintf(stderr, "Client ns %s rank %d: PMIx_Fence failed: %d\n", myproc.nspace, myproc.rank, rc);
         goto done;
     }
-    gettimeofday(&start, NULL);
-    if (myproc.rank == 2)
+sleep(5);
+    gethostname(name, 255);
+    if ( myproc.rank == 2 )
     {
         fprintf(stderr, "\nClient ns %s:%d kill self \n", myproc.nspace, myproc.rank);
         completed = true;
-        pid = getpid();
-        kill(pid, 1);
+
+        FILE* procfile = fopen("/proc/self/status", "r");
+        long to_read = 8192;
+        char buffer[to_read];
+        if( !fread(buffer, sizeof(char), to_read, procfile) )
+        {
+            //printf("Read proc/self/status error");
+            //       //return -1;
+        }
+        fclose(procfile);
+        char* search_result;
+        /* Look through proc status contents line by line */
+        char delims[] = "\n";
+        char* line = strtok(buffer, delims);
+        while (line != NULL )
+        {
+            search_result = strstr(line, "PPid:");
+            if (search_result != NULL)
+            {
+                sscanf(line, "%*s %d", &pid);
+            }
+            line = strtok(NULL, delims);
+        }
+
+        kill(pid, 9);
     }
     while (!completed) {
         struct timespec ts;
@@ -120,8 +143,7 @@ int main(int argc, char **argv)
     }
 done:
     /* finalize us */
-    sec = end.tv_sec + (double)end.tv_usec/1000000.0 - start.tv_sec - (double)start.tv_usec/1000000.0;
-    fprintf(stderr, "Client ns %s rank %d takes %f: Finalizing\n", myproc.nspace, myproc.rank, sec);
+    fprintf(stderr, "Client ns %s rank %d: Finalizing\n", myproc.nspace, myproc.rank);
     PMIx_Deregister_event_handler(1, op_callbk, NULL);
 
     if (PMIX_SUCCESS != (rc = PMIx_Finalize(NULL, 0))) {

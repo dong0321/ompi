@@ -15,8 +15,8 @@
  *
  */
 
-#ifndef MCA_ERRMGR_detector_EXPORT_H
-#define MCA_ERRMGR_detector_EXPORT_H
+#ifndef MCA_ERRMGR_DETECTOR_EXPORT_H
+#define MCA_ERRMGR_DETECTOR_EXPORT_H
 
 #include "orte_config.h"
 
@@ -33,7 +33,8 @@ typedef struct {
     double hb_timeout;     /* the timeout before we start suspecting observed process as dead (delta) */
     double hb_period;      /* the time spacing between heartbeat emission (eta) */
     double hb_sstamp;      /* the date at which the last hb emission was done */
-    bool *daemons_state;
+    int failed_node_count; /* the number of failed nodes in the ring */
+    int *daemons_state;    /* a list of failed daemons' vpid */
 } orte_errmgr_detector_t;
 static orte_errmgr_detector_t orte_errmgr_world_detector;
 
@@ -53,8 +54,8 @@ int orte_errmgr_failure_propagate_recv(opal_buffer_t* buffer);
 int orte_errmgr_init_failure_propagate(void);
 int orte_errmgr_finalize_failure_propagate(void);
 bool errmgr_get_daemon_status(orte_process_name_t daemon);
-void errmgr_set_daemon_status(orte_process_name_t daemon, bool state);
+void errmgr_set_daemon_status(orte_process_name_t daemon);
 extern int orte_errmgr_enable_detector(bool flag);
 END_C_DECLS
 
-#endif /* MCA_ERRMGR_detector_EXPORT_H */
+#endif /* MCA_ERRMGR_DETECTOR_EXPORT_H */

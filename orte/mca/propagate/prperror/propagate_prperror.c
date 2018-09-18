@@ -70,7 +70,7 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
 int orte_propagate_prperror_recv(opal_buffer_t* buffer);
 
 /* flag use to register callback for grpcomm rbcast forward */
-int cbflag = 1;
+int enable_callback_register_flag = 1;
 
 orte_propagate_base_module_t orte_propagate_prperror_module ={
     init,
@@ -91,14 +91,14 @@ static int init(void)
 static int register_prp_callback(void)
 {
     int ret;
-    if(cbflag)
+    if(enable_callback_register_flag)
     {
         if(orte_grpcomm.register_cb!=NULL)
             ret= orte_grpcomm.register_cb((orte_grpcomm_rbcast_cb_t)orte_propagate_prperror_recv);
         if ( 0 <= ret ){
             orte_propagate_error_cb_type = ret;
         }
-        cbflag = 0;
+        enable_callback_register_flag = 0;
     }
     return ORTE_SUCCESS;
 }
@@ -158,14 +158,14 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
 
     /* register callback for rbcast for forwarding */
     int ret;
-    if(cbflag)
+    if(enable_callback_register_flag)
     {
         if(orte_grpcomm.register_cb!=NULL)
         ret= orte_grpcomm.register_cb((orte_grpcomm_rbcast_cb_t)orte_propagate_prperror_recv);
         if ( 0 <= ret ){
             orte_propagate_error_cb_type = ret;
         }
-        cbflag = 0;
+        enable_callback_register_flag = 0;
     }
 
     /* change the error daemon state*/
@@ -225,6 +225,9 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
         }
 
         orte_proc_t *pptr;
+        opal_buffer_t *alert;
+        orte_plm_cmd_flag_t cmd;
+
         int i;
         for (i=0; i < node->procs->size; i++) {
             if (NULL != (pptr = (orte_proc_t*)opal_pointer_array_get_item(node->procs, i))) {
@@ -241,8 +244,61 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
                 val->type = OPAL_NAME;
                 val->data.name.jobid = pptr->name.jobid;
                 val->data.name.vpid = pptr->name.vpid;
-
                 opal_list_append(info, &val->super);
+
+                alert = OBJ_NEW(opal_buffer_t);
+                /* pack update state command */
+                cmd = ORTE_PLM_UPDATE_PROC_STATE;
+                if (ORTE_SUCCESS != (rc = opal_dss.pack(alert, &cmd, 1, ORTE_PLM_CMD))) {
+                    ORTE_ERROR_LOG(rc);
+                    return rc;
+                }
+
+                /* pack jobid */
+                if (ORTE_SUCCESS != (rc = opal_dss.pack(alert, &(pptr->name.jobid), 1, ORTE_JOBID))) {
+                    ORTE_ERROR_LOG(rc);
+                    return rc;
+                }
+
+                /* proc state now is ORTE_PROC_STATE_ABORTED_BY_SIG, cause odls set state to this; code is 128+9 */
+                pptr->state = ORTE_PROC_STATE_ABORTED_BY_SIG;
+                /* pack the child's vpid */
+                if (ORTE_SUCCESS != (rc = opal_dss.pack(alert, &(pptr->name.vpid), 1, ORTE_VPID))) {
+                    ORTE_ERROR_LOG(rc);
+                    return rc;
+                }
+                /* pack the pid */
+                if (ORTE_SUCCESS != (rc = opal_dss.pack(alert, &pptr->pid, 1, OPAL_PID))) {
+                    ORTE_ERROR_LOG(rc);
+                    return rc;
+                }
+                /* pack its state */
+                if (ORTE_SUCCESS != (rc = opal_dss.pack(alert, &pptr->state, 1, ORTE_PROC_STATE))) {
+                    ORTE_ERROR_LOG(rc);
+                    return rc;
+                }
+                /* pack its exit code */
+                if (ORTE_SUCCESS != (rc = opal_dss.pack(alert, &pptr->exit_code, 1, ORTE_EXIT_CODE))) {
+                    ORTE_ERROR_LOG(rc);
+                    return rc;
+                }
+
+                /* send this process's info to hnp */
+                if (0 > (rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                                ORTE_PROC_MY_HNP, alert,
+                                ORTE_RML_TAG_PLM,
+                                orte_rml_send_callback, NULL))) {
+                    OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
+                                "%s errmgr:detector: send to hnp failed",
+                                ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
+                    ORTE_ERROR_LOG(rc);
+                    OBJ_RELEASE(alert);
+                }
+                if (ORTE_FLAG_TEST(pptr, ORTE_PROC_FLAG_IOF_COMPLETE) &&
+                        ORTE_FLAG_TEST(pptr, ORTE_PROC_FLAG_WAITPID) &&
+                        !ORTE_FLAG_TEST(pptr, ORTE_PROC_FLAG_RECORDED)) {
+                    ORTE_ACTIVATE_PROC_STATE(&(pptr->name), ORTE_PROC_STATE_TERMINATED);
+                }
             }
         }
     }
