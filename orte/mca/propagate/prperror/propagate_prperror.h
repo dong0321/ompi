@@ -15,8 +15,8 @@
  *
  */
 
-#ifndef MCA_PROPAGATE_prperror_EXPORT_H
-#define MCA_PROPAGATE_prperror_EXPORT_H
+#ifndef MCA_PROPAGATE_PRPERROR_EXPORT_H
+#define MCA_PROPAGATE_PRPERROR_EXPORT_H
 
 #include "orte_config.h"
 
@@ -36,4 +36,4 @@ ORTE_DECLSPEC extern opal_list_t orte_error_procs;
 
 END_C_DECLS
 
-#endif /* MCA_PROPAGATE_prperror_EXPORT_H */
+#endif /* MCA_PROPAGATE_PRPERROR_EXPORT_H */

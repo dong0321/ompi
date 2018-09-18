@@ -888,7 +888,7 @@ static void proc_errors(int fd, short args, void *cbdata)
          * hosed - so just exit out
          */
         if (ORTE_PROC_MY_NAME->jobid == proc->jobid) {
-            ORTE_ACTIVATE_JOB_STATE(NULL, ORTE_JOB_STATE_DAEMONS_TERMINATED);
+            //ORTE_ACTIVATE_JOB_STATE(NULL, ORTE_JOB_STATE_DAEMONS_TERMINATED);
             break;
         }
         if (!ORTE_FLAG_TEST(jdata, ORTE_JOB_FLAG_ABORTED)) {

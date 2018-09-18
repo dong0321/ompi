@@ -15,7 +15,7 @@ Building
 ```bash
 ./autogen.pl
 
-./configure --prefix=...  --enable-debug --enable-orterun-prefix-by-default --no-create --no-recursion
+./configure --prefix=...  --enable-debug --enable-orterun-prefix-by-default
 
 make [-j N] all install
 #    use an integer value of N for parallel builds
@@ -74,6 +74,11 @@ Step 2: psrvr -pmca pmix pmix3x -pmca grpcomm bmg  -debug-daemons
         using '-debug-daemons' give more info about your job.
         Also you can using '-pmca componentname_base_verbose value' to get out put from that component.
         eg: psrvr -pmca pmix pmix3x -pmca grpcomm bmg -pmca odls_base_verbose 10 -pmca errmgr_base_verbose 10 -pmca propagate_base_verbose 10  -debug-daemons
+
+        Also, the ring detector heartbeat sending frequency is not hard coded, you can change heartbeat_peroid and heartbeat_timeout by using mca params:
+        eg:
+        using '-pmca errmgr_detector_heartbeat_period 10' set the sending frequency to every 10 seconds(default is 5s)
+        using '-pmca errmgr_detector_heartbeat_timeout 20' set timeout to 20 seconds(default is 10s)
 
 Step 3: under example we have a test code error_notify.c
         compile: pcc -g error_notify.c -o error_notify
