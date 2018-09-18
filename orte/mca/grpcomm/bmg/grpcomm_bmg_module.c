@@ -180,8 +180,23 @@ static int rbcast(opal_buffer_t *buf)
     int i, d;
     orte_process_name_t daemon;
     vpid = orte_process_info.my_name.vpid;
-    for(i=1; i <= nprocs/2; i*=2) for(d=1; d >= -1; d-=2) {
-        int idx = (nprocs+vpid+d*i)%nprocs;
+
+    int log2no = (int)(log(nprocs));
+    int start_i, increase_val;
+
+    if(vpid%2==0)
+    {
+        start_i = 1;
+        increase_val = 1;
+    }
+    else
+    {
+        start_i = log2no;
+        increase_val = -1;
+    }
+    for(i=start_i; i <= log2no+1 && i >0; i=i+increase_val) for(d=1; d >= -1; d-=2) {
+    //for(i=1; i <= nprocs/2; i*=2) for(d=1; d >= -1; d-=2) {
+        int idx = (nprocs+vpid+d*((int)pow(2,i)-1))%nprocs;
 
         /* daemon.vpid cannot be 0, because daemond id ranges 1-nprocs, thus if idx==0, change it to NO.nprocs */
         /*if (idx ==0 ){
