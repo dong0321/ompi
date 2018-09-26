@@ -88,6 +88,7 @@ ORTE_DECLSPEC int orte_grpcomm_API_allgather(orte_grpcomm_signature_t *sig,
                                              opal_buffer_t *buf, int mode,
                                              orte_grpcomm_cbfunc_t cbfunc,
                                              void *cbdata);
+/* reliable broadcast API */
 ORTE_DECLSPEC int orte_grpcomm_API_rbcast(orte_grpcomm_signature_t *sig,
                                          orte_rml_tag_t tag,
                                          opal_buffer_t *buf);
