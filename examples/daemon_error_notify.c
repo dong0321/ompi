@@ -105,7 +105,7 @@ int main(int argc, char **argv)
     }
 sleep(5);
     gethostname(name, 255);
-    if ( myproc.rank == 2 )
+    if ( myproc.rank == 3 )
     {
         fprintf(stderr, "\nClient ns %s:%d kill self \n", myproc.nspace, myproc.rank);
         completed = true;
