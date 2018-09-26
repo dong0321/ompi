@@ -19,11 +19,15 @@
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
 #endif
+#include <pmix.h>
+#include <pmix_server.h>
 
 #include "opal/util/output.h"
 #include "opal/dss/dss.h"
-#include "opal/mca/pmix/pmix.h"
 
+#include "opal/pmix/pmix-internal.h"
+#include "orte/orted/pmix/pmix_server_internal.h"
+#include "orte/orted/pmix/pmix_server.h"
 #include "orte/mca/rml/rml.h"
 #include "orte/mca/odls/odls.h"
 #include "orte/mca/odls/base/base.h"
@@ -125,6 +129,8 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
     int rc = ORTE_SUCCESS;
     /* don't need to check jobid because this can be different: daemon and process has different jobids */
 
+    bool daemon_error_flag = false;
+
     /* namelist for tracking error procs */
     orte_namelist_t *nmcheck, *nm;
     nmcheck = OBJ_NEW(orte_namelist_t);
@@ -148,9 +154,6 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
      * | cb_type | status | sickproc | nprocs afftected | procs|
      * --------------------------------------------------------*/
     opal_buffer_t prperror_buffer;
-    opal_list_t *affected_list;
-    opal_list_t *info;
-    opal_value_t *val;
 
     /* set the status for pmix to use */
     orte_proc_state_t status;
@@ -161,7 +164,7 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
     if(enable_callback_register_flag)
     {
         if(orte_grpcomm.register_cb!=NULL)
-        ret= orte_grpcomm.register_cb((orte_grpcomm_rbcast_cb_t)orte_propagate_prperror_recv);
+            ret= orte_grpcomm.register_cb((orte_grpcomm_rbcast_cb_t)orte_propagate_prperror_recv);
         if ( 0 <= ret ){
             orte_propagate_error_cb_type = ret;
         }
@@ -170,11 +173,10 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
 
     /* change the error daemon state*/
     OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
-                        "propagate: prperror: daemon %s rbcast state %d of proc %s",
-                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),state, ORTE_NAME_PRINT(sickproc)));
+                "propagate: prperror: daemon %s rbcast state %d of proc %s",
+                ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),state, ORTE_NAME_PRINT(sickproc)));
 
     OBJ_CONSTRUCT(&prperror_buffer, opal_buffer_t);
-    info = OBJ_NEW(opal_list_t);
     /* pack the callback type */
     if (ORTE_SUCCESS != (rc = opal_dss.pack(&prperror_buffer, &orte_propagate_error_cb_type, 1, OPAL_INT))) {
         ORTE_ERROR_LOG(rc);
@@ -195,14 +197,7 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
         return rc;
     }
 
-    /* add the dead proc in info list for local prp */
-    val = OBJ_NEW(opal_value_t);
-    val->key = strdup(OPAL_PMIX_EVENT_AFFECTED_PROC);
-    val->type = OPAL_NAME;
-    val->data.name.jobid = sickproc->jobid;
-    val->data.name.vpid = sickproc->vpid;
-    opal_list_append(info, &(val->super));
-
+    orte_node_t *node;
     /* check this is a daemon or not, if vpid is same cannot ensure this is daemon also need check jobid*/
     if (sickproc->vpid == orte_get_proc_daemon_vpid(sickproc) && (sickproc->jobid == ORTE_PROC_MY_NAME->jobid) ){
         /* Given a node name, return an array of processes within the specified jobid
@@ -214,7 +209,6 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                     orte_get_proc_hostname(sickproc)));
 
-        orte_node_t *node;
         node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, sickproc->vpid);
 
         cnt=node->num_procs;
@@ -223,7 +217,16 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
             OBJ_DESTRUCT(&prperror_buffer);
             return rc;
         }
+        daemon_error_flag = true;
+    }
+    pmix_proc_t pname;
+    pmix_info_t *pinfo;
+    PMIX_INFO_CREATE(pinfo, 1+cnt);
 
+    OPAL_PMIX_CONVERT_NAME(&pname, sickproc);
+    PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC );
+
+    if(daemon_error_flag) {
         orte_proc_t *pptr;
         opal_buffer_t *alert;
         orte_plm_cmd_flag_t cmd;
@@ -239,12 +242,8 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
                     OBJ_DESTRUCT(&prperror_buffer);
                     return rc;
                 }
-                val = OBJ_NEW(opal_value_t);
-                val->key = strdup(OPAL_PMIX_EVENT_AFFECTED_PROC);
-                val->type = OPAL_NAME;
-                val->data.name.jobid = pptr->name.jobid;
-                val->data.name.vpid = pptr->name.vpid;
-                opal_list_append(info, &val->super);
+                OPAL_PMIX_CONVERT_NAME(&pname, &pptr->name);
+                PMIX_INFO_LOAD(&pinfo[i+1], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC );
 
                 alert = OBJ_NEW(opal_buffer_t);
                 /* pack update state command */
@@ -313,15 +312,13 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
         ORTE_ERROR_LOG(rc);
     }
     /* notify this error locally, only from rbcast dont have a source id */
-        if( source==NULL ) {
-            if (OPAL_SUCCESS != opal_pmix.notify_event(state, (opal_process_name_t*)ORTE_PROC_MY_NAME,
-                        OPAL_PMIX_RANGE_LOCAL,info,
-                        NULL,NULL ))
-            {
-                ORTE_ERROR_LOG(rc);
-                OBJ_RELEASE(info);
-            }
+    if( source==NULL ) {
+        if (OPAL_SUCCESS != PMIx_Notify_event(opal_pmix_convert_rc(state), NULL,
+                    PMIX_RANGE_LOCAL, pinfo, cnt+1,
+                    NULL,NULL )) {
+            OBJ_RELEASE(pinfo);
         }
+    }
     OBJ_DESTRUCT(&prperror_buffer);
     OBJ_RELEASE(sig);
     /* we're done! */
