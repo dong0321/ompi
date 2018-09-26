@@ -15,6 +15,7 @@
 
 #include "orte/mca/mca.h"
 #include "opal/runtime/opal_params.h"
+#include "opal/mca/base/mca_base_var.h"
 
 #include "orte/util/proc_info.h"
 

@@ -1725,24 +1725,24 @@ void orte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                              ORTE_NAME_PRINT(&proc->name) ));
 
         /* register an event handler for the OPAL_ERR_PROC_ABORTED event */
-        einfo = OBJ_NEW(opal_list_t);
-        kv = OBJ_NEW(opal_value_t);
-        kv->key = strdup(OPAL_PMIX_EVENT_AFFECTED_PROC);
-        kv->type = OPAL_NAME;
-        kv->data.name.jobid = proc->name.jobid;
-        kv->data.name.vpid = proc->name.vpid;
-        opal_list_append(einfo, &kv->super);
+        pmix_proc_t pname, psource;
+        pmix_status_t pcode = opal_pmix_convert_rc(OPAL_ERR_PROC_ABORTED);
+        OPAL_PMIX_CONVERT_NAME(&pname, &proc->name);
+        OPAL_PMIX_CONVERT_NAME(&psource, ORTE_PROC_MY_NAME);
+        pmix_info_t *pinfo;
+        PMIX_INFO_CREATE(pinfo, 1);
+        PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC );
 
-        if (OPAL_SUCCESS != opal_pmix.notify_event(OPAL_ERR_PROC_ABORTED, (opal_process_name_t*)ORTE_PROC_MY_NAME,
-                    OPAL_PMIX_RANGE_LOCAL,einfo,
+        if (OPAL_SUCCESS != PMIx_Notify_event(pcode, &psource,
+                    PMIX_RANGE_LOCAL, pinfo, 1,
                     NULL,NULL )) {
             OPAL_OUTPUT_VERBOSE((5, orte_odls_base_framework.framework_output,
-                        "%s odls:notify failed, release einfo",ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
-            OBJ_RELEASE(einfo);
+                        "%s odls:notify failed, release pinfo",ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
+            OBJ_RELEASE(pinfo);
         }
         OPAL_OUTPUT_VERBOSE((5, orte_odls_base_framework.framework_output,
                     "%s odls:event notify in odls proc %d:%d gone",
-                    ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), proc->name.jobid,proc->name.vpid));
+                    ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), proc->name.jobid, proc->name.vpid));
         /* regardless of our eventual code path, we need to
          * flag that this proc has had its waitpid fired */
         ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_WAITPID);
