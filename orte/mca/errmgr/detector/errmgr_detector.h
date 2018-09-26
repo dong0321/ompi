@@ -21,7 +21,6 @@
 #include "orte_config.h"
 
 #include "orte/mca/errmgr/errmgr.h"
-#include "opal/mca/pmix/pmix_types.h"
 
 BEGIN_C_DECLS
 

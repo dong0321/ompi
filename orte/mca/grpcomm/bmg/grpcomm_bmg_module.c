@@ -21,7 +21,6 @@
 
 #include "opal/dss/dss.h"
 #include "opal/class/opal_list.h"
-#include "opal/mca/pmix/pmix.h"
 
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/mca/regx/regx.h"

@@ -23,7 +23,6 @@
 #include "opal/class/opal_hash_table.h"
 #include "opal/dss/dss_types.h"
 #include "orte/mca/mca.h"
-#include "opal/mca/hwloc/hwloc-internal.h"
 
 #include "orte/mca/odls/odls_types.h"
 #include "orte/mca/rml/rml_types.h"
