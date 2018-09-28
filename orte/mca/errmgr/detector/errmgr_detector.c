@@ -343,7 +343,7 @@ int orte_errmgr_enable_detector(bool enable_flag)
         detector->hb_period = orte_errmgr_heartbeat_period;
         detector->hb_timeout = orte_errmgr_heartbeat_timeout;
         detector->hb_sstamp = 0.;
-        /* give some slack for MPIInit */
+        /* give some slack for MPI_Init */
         detector->hb_rstamp = Wtime()+(double)ndmns;
 
         detector->daemons_state = malloc(8* sizeof(int));

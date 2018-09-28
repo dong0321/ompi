@@ -137,7 +137,7 @@ struct orte_errmgr_base_module_2_3_0_t {
     orte_errmgr_base_module_abort_peers_fn_t                abort_peers;
 
     /* start error detector and propagator */
-    orte_errmgr_base_module_enable_detector_fn_t        enable_detector;
+    orte_errmgr_base_module_enable_detector_fn_t            enable_detector;
 };
 typedef struct orte_errmgr_base_module_2_3_0_t orte_errmgr_base_module_2_3_0_t;
 typedef orte_errmgr_base_module_2_3_0_t orte_errmgr_base_module_t;

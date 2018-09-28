@@ -45,7 +45,6 @@
 #include "orte/mca/errmgr/base/errmgr_private.h"
 
 #include "orte/mca/errmgr/base/static-components.h"
-#include "orte/mca/errmgr/detector/errmgr_detector.h"
 /*
  * Globals
  */

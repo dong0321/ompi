@@ -35,8 +35,6 @@
 #include "opal/dss/dss.h"
 #include "opal/pmix/pmix-internal.h"
 
-#include "orte/orted/pmix/pmix_server_internal.h"
-
 #include "orte/mca/iof/base/base.h"
 #include "orte/mca/rml/rml.h"
 #include "orte/mca/odls/odls.h"
@@ -49,7 +47,6 @@
 #include "orte/mca/grpcomm/grpcomm.h"
 #include "orte/mca/ess/ess.h"
 #include "orte/mca/state/state.h"
-#include "orte/orted/pmix/pmix_server.h"
 
 #include "orte/util/error_strings.h"
 #include "orte/util/name_fns.h"

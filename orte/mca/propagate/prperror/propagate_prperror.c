@@ -69,7 +69,7 @@ static int init(void);
 static int finalize(void);
 static int register_prp_callback(void);
 static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *source,
-        orte_process_name_t *sickproc, orte_proc_state_t state);
+        orte_process_name_t *errorproc, orte_proc_state_t state);
 
 int orte_propagate_prperror_recv(opal_buffer_t* buffer);
 
@@ -124,7 +124,7 @@ static int finalize(void)
  * uplevel call from the error handler to initiate a failure_propagator
  */
 static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *source,
-        orte_process_name_t *sickproc, orte_proc_state_t state) {
+        orte_process_name_t *errorproc, orte_proc_state_t state) {
 
     int rc = ORTE_SUCCESS;
     /* don't need to check jobid because this can be different: daemon and process has different jobids */
@@ -136,22 +136,22 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
     nmcheck = OBJ_NEW(orte_namelist_t);
 
     OPAL_LIST_FOREACH(nmcheck, &orte_error_procs, orte_namelist_t){
-        if ((nmcheck->name.jobid == sickproc->jobid) && (nmcheck->name.vpid == sickproc->vpid))
+        if ((nmcheck->name.jobid == errorproc->jobid) && (nmcheck->name.vpid == errorproc->vpid))
         {
             OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
-                        "propagate: prperror: already propagated this msg: error proc is %s", ORTE_NAME_PRINT(sickproc) ));
+                        "propagate: prperror: already propagated this msg: error proc is %s", ORTE_NAME_PRINT(errorproc) ));
             return rc;
         }
     }
     nm = OBJ_NEW(orte_namelist_t);
-    nm->name.jobid = sickproc->jobid;
-    nm->name.vpid = sickproc->vpid;
+    nm->name.jobid = errorproc->jobid;
+    nm->name.vpid = errorproc->vpid;
     opal_list_append(&orte_error_procs, &(nm->super));
 
     orte_grpcomm_signature_t *sig;
     int cnt=0;
     /* ---------------------------------------------------------
-     * | cb_type | status | sickproc | nprocs afftected | procs|
+     * | cb_type | status | errorproc | nprocs afftected | procs|
      * --------------------------------------------------------*/
     opal_buffer_t prperror_buffer;
 
@@ -174,7 +174,7 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
     /* change the error daemon state*/
     OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
                 "propagate: prperror: daemon %s rbcast state %d of proc %s",
-                ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),state, ORTE_NAME_PRINT(sickproc)));
+                ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),state, ORTE_NAME_PRINT(errorproc)));
 
     OBJ_CONSTRUCT(&prperror_buffer, opal_buffer_t);
     /* pack the callback type */
@@ -191,7 +191,7 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
         return rc;
     }
     /* pack dead proc first */
-    if (ORTE_SUCCESS != (rc = opal_dss.pack(&prperror_buffer, sickproc, 1, ORTE_NAME))) {
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(&prperror_buffer, errorproc, 1, ORTE_NAME))) {
         ORTE_ERROR_LOG(rc);
         OBJ_DESTRUCT(&prperror_buffer);
         return rc;
@@ -199,7 +199,7 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
 
     orte_node_t *node;
     /* check this is a daemon or not, if vpid is same cannot ensure this is daemon also need check jobid*/
-    if (sickproc->vpid == orte_get_proc_daemon_vpid(sickproc) && (sickproc->jobid == ORTE_PROC_MY_NAME->jobid) ){
+    if (errorproc->vpid == orte_get_proc_daemon_vpid(errorproc) && (errorproc->jobid == ORTE_PROC_MY_NAME->jobid) ){
         /* Given a node name, return an array of processes within the specified jobid
          * on that node. If the specified node does not currently host any processes,
          * then the returned list will be empty.
@@ -207,9 +207,9 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
         OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
                     "%s propagate:daemon prperror this is a daemon error on %s \n",
                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                    orte_get_proc_hostname(sickproc)));
+                    orte_get_proc_hostname(errorproc)));
 
-        node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, sickproc->vpid);
+        node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, errorproc->vpid);
 
         cnt=node->num_procs;
         if (ORTE_SUCCESS != (rc = opal_dss.pack(&prperror_buffer, &cnt, 1, OPAL_INT))) {
@@ -223,7 +223,7 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
     pmix_info_t *pinfo;
     PMIX_INFO_CREATE(pinfo, 1+cnt);
 
-    OPAL_PMIX_CONVERT_NAME(&pname, sickproc);
+    OPAL_PMIX_CONVERT_NAME(&pname, errorproc);
     PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC );
 
     if(daemon_error_flag) {
@@ -328,7 +328,7 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
 int orte_propagate_prperror_recv(opal_buffer_t* buffer)
 {
     int ret, cnt, state;
-    orte_process_name_t sickproc;
+    orte_process_name_t errorproc;
     int cbtype;
 
     /* get the cbtype */
@@ -342,17 +342,17 @@ int orte_propagate_prperror_recv(opal_buffer_t* buffer)
         ORTE_ERROR_LOG(ret);
         return false;
     }
-    /* for propagate, only one major sickproc is affected per call */
+    /* for propagate, only one major errorproc is affected per call */
     cnt = 1;
-    if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &sickproc, &cnt, OPAL_NAME))) {
+    if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &errorproc, &cnt, OPAL_NAME))) {
         ORTE_ERROR_LOG(ret);
         return false;
     }
 
     OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
                 "%s propagete: prperror: daemon received %s gone forwarding with status %d",
-                ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ORTE_NAME_PRINT(&sickproc), state));
+                ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ORTE_NAME_PRINT(&errorproc), state));
 
-    orte_propagate_prperror(&orte_process_info.my_name.jobid, NULL, &sickproc, state);
+    orte_propagate_prperror(&orte_process_info.my_name.jobid, NULL, &errorproc, state);
     return false;
 }

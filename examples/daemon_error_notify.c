@@ -86,7 +86,7 @@ int main(int argc, char **argv)
     }
     nprocs = val->data.uint32;
     PMIX_VALUE_RELEASE(val);
-    //fprintf(stderr, "Client %s:%d universe size %d\n", myproc.nspace, myproc.rank, nprocs);
+    fprintf(stderr, "Client %s:%d universe size %d\n", myproc.nspace, myproc.rank, nprocs);
     completed = false;
 
     pmix_status_t status;
@@ -103,31 +103,28 @@ int main(int argc, char **argv)
         fprintf(stderr, "Client ns %s rank %d: PMIx_Fence failed: %d\n", myproc.nspace, myproc.rank, rc);
         goto done;
     }
-sleep(5);
+    // make sure daemons are ready
+    sleep(5);
     gethostname(name, 255);
-    if ( myproc.rank == 3 )
-    {
+    if ( myproc.rank == 3 ) {
         fprintf(stderr, "\nClient ns %s:%d kill self \n", myproc.nspace, myproc.rank);
         completed = true;
 
         FILE* procfile = fopen("/proc/self/status", "r");
         long to_read = 8192;
         char buffer[to_read];
-        if( !fread(buffer, sizeof(char), to_read, procfile) )
-        {
-            //printf("Read proc/self/status error");
-            //       //return -1;
+        if( !fread(buffer, sizeof(char), to_read, procfile) ) {
+            printf("Read proc/self/status error");
+            return -1;
         }
         fclose(procfile);
         char* search_result;
         /* Look through proc status contents line by line */
         char delims[] = "\n";
         char* line = strtok(buffer, delims);
-        while (line != NULL )
-        {
+        while (line != NULL ) {
             search_result = strstr(line, "PPid:");
-            if (search_result != NULL)
-            {
+            if (search_result != NULL) {
                 sscanf(line, "%*s %d", &pid);
             }
             line = strtok(NULL, delims);
