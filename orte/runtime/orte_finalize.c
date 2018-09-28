@@ -34,7 +34,6 @@
 
 #include "orte/mca/ess/ess.h"
 #include "orte/mca/ess/base/base.h"
-#include "orte/mca/errmgr/errmgr.h"
 #include "orte/mca/schizo/base/base.h"
 #include "orte/runtime/orte_globals.h"
 #include "orte/runtime/runtime.h"
