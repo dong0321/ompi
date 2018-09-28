@@ -105,7 +105,7 @@ int main(int argc, char **argv)
         goto done;
     }
     gettimeofday(&start, NULL);
-    if (myproc.rank == 2 || myproc.rank == 4)
+    if (myproc.rank == 2)// || myproc.rank == 4)
     {
         fprintf(stderr, "\nClient ns %s:%d kill self \n", myproc.nspace, myproc.rank);
         completed = true;
