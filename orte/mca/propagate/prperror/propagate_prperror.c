@@ -99,10 +99,12 @@ static int register_prp_callback(void)
     {
         if(orte_grpcomm.register_cb!=NULL)
             ret= orte_grpcomm.register_cb((orte_grpcomm_rbcast_cb_t)orte_propagate_prperror_recv);
-        if ( 0 <= ret ){
+        //if ( 0 < ret ){
             orte_propagate_error_cb_type = ret;
-        }
-        enable_callback_register_flag = 0;
+        //}
+            OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
+                        "propagate: prperror: daemon register grpcomm callback %d at start",orte_propagate_error_cb_type));
+            enable_callback_register_flag = 0;
     }
     return ORTE_SUCCESS;
 }
@@ -165,10 +167,12 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
     {
         if(orte_grpcomm.register_cb!=NULL)
             ret= orte_grpcomm.register_cb((orte_grpcomm_rbcast_cb_t)orte_propagate_prperror_recv);
-        if ( 0 <= ret ){
+       // if ( 0 < ret ){
             orte_propagate_error_cb_type = ret;
-        }
-        enable_callback_register_flag = 0;
+        //}
+            OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
+                        "propagate: prperror: daemon register grpcomm callback %d",orte_propagate_error_cb_type));
+            enable_callback_register_flag = 0;
     }
 
     /* change the error daemon state*/

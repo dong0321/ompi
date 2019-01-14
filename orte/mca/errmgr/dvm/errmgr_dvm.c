@@ -60,6 +60,7 @@
 #include "orte/mca/errmgr/base/base.h"
 #include "orte/mca/errmgr/base/errmgr_private.h"
 
+#include "orte/mca/propagate/propagate.h"
 #include "errmgr_dvm.h"
 
 static int init(void);
@@ -225,6 +226,7 @@ static void job_errors(int fd, short args, void *cbdata)
 
 static void proc_errors(int fd, short args, void *cbdata)
 {
+    orte_propagate.register_cb();
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
     orte_job_t *jdata;
     orte_proc_t *pptr, *proct;
@@ -428,7 +430,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_ABORTED);
             jdata->exit_code = pptr->exit_code;
             /* kill the job */
-            _terminate_job(jdata->jobid);
+            //_terminate_job(jdata->jobid);
         }
         break;
 
