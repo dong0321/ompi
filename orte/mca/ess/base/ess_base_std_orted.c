@@ -613,7 +613,7 @@ int orte_ess_base_orted_finalize(void)
     if ( NULL != orte_errmgr.finalize ) {
         orte_errmgr.finalize();
     }
-    (void) mca_base_framework_close(&orte_errmgr_base_framework);
+    //(void) mca_base_framework_close(&orte_errmgr_base_framework);
     /* release the conduits */
     orte_rml.close_conduit(orte_mgmt_conduit);
     orte_rml.close_conduit(orte_coll_conduit);
@@ -624,7 +624,7 @@ int orte_ess_base_orted_finalize(void)
     (void) mca_base_framework_close(&orte_iof_base_framework);
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml and oob are offline */
-    orte_errmgr.finalize();
+    //orte_errmgr.finalize();
     //(void) mca_base_framework_close(&orte_errmgr_base_framework);
     (void) mca_base_framework_close(&orte_plm_base_framework);
     /* make sure our local procs are dead */
