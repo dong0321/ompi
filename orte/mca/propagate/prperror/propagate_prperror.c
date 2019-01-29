@@ -323,7 +323,7 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
             OBJ_RELEASE(pinfo);
         }
     }
-    OBJ_DESTRUCT(&prperror_buffer);
+    //OBJ_DESTRUCT(&prperror_buffer);
     OBJ_RELEASE(sig);
     /* we're done! */
     return ORTE_SUCCESS;
