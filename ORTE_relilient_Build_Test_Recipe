@@ -1,5 +1,5 @@
 This README documents the features and options specific to the
-**ORTE Level Failure Tolerant** PMIx reference server implementation.
+**ORTE Level Failure Tolerant** PMIx Reference RunTime Environment (PRRTE)
 
 [TOC]
 
@@ -15,7 +15,12 @@ Building
 ```bash
 ./autogen.pl
 
-./configure --prefix=...  --enable-debug --enable-orterun-prefix-by-default
+# before configure make sure you have external pmix and libevent installed,
+# if you want to run mpi application you can use mpicc to build you binary
+# and run with prun.  If you want to run mpi applications, you mpi and PRRTE
+# should have the same version of PMIx
+
+./configure --prefix=...  --with-pmix=/external-pmix-path --with-libevent= /external-libevent-path --enable-debug --enable-orterun-prefix-by-default
 
 make [-j N] all install
 #    use an integer value of N for parallel builds
@@ -24,20 +29,20 @@ There are many available configure options (see `./configure --help`
 for a full list); a summary of the more commonly used ones is included
 in the upstream Open MPI README file.
 
-
 Running
 =====================
 ## Building your application
 
-Compile your application as usual, using the provided `pcc`
+Compile your application as usual
+  1. using the provided `pcc` for pmix-based application
+  2. using your "mpicc" for mpi-based application
 
 ## Running your application
 
-You need to launch your daemons by `psrvr`
+You need to launch your daemons by `prte`
 
-You can launch your application with fault tolerance by simply using the
-provided `prun`. Beware that your distribution may already provide a
-version of MPI, make sure to set your `PATH` and `LD_LIBRARY_PATH` properly.
+You can launch your application with by simply using the provided `prun`.
+Make sure to set your `PATH` and `LD_LIBRARY_PATH` properly.
 
 ## Running under a batch scheduler
 
@@ -68,11 +73,11 @@ cases. You can change those default by '-pmca parameter value'
 Step 1: salloc -k -n x -w host1,host2...
         -k, --no-kill do not kill job on node failure
 
-Step 2: psrvr -pmca pmix pmix3x -debug-daemons
-        using '-pmca pmix pmix3x' choose pmix3x as dafault pmix module.
+Step 2: prte -pmca errmgr_detector_heartbeat_period 0.5 -pmca errmgr_detector_heartbeat_timeout 1  -pmca errmgr_detector_enable 1
+        using 'errmgr_detector_enable 1' choose enable the error detector.
         using '-debug-daemons' give more info about your job.
         Also you can using '-pmca componentname_base_verbose value' to get out put from that component.
-        eg: psrvr -pmca pmix pmix3x -pmca odls_base_verbose 10 -pmca errmgr_base_verbose 10 -pmca propagate_base_verbose 10  -debug-daemons
+        eg: ~/opt/git/resilient_pmix_reference/resilient_prrte_master/debug/bin/prte -pmca errmgr_detector_heartbeat_period 0.5 -pmca errmgr_detector_heartbeat_timeout 1  -pmca errmgr_detector_enable  1  -pmca odls_base_verbose 10 -pmca errmgr_base_verbose 10 -pmca propagate_base_verbose 10 bind-by node (this is exactly how i start the DVM)
 
         Also, the ring detector heartbeat sending frequency is not hard coded, you can change heartbeat_peroid and heartbeat_timeout by using mca params:
         eg:
@@ -93,7 +98,7 @@ Copyright
 =========
 
 ```
-Copyright (c) 2018      The University of Tennessee and The University
+Copyright (c) 2018-2019 The University of Tennessee and The University
                         of Tennessee Research Foundation.  All rights
                         reserved.
 
