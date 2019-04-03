@@ -83,7 +83,7 @@ orte_errmgr_base_module_t orte_errmgr_dvm_module = {
     NULL
 };
 
-
+bool prp_regflag = 1;
 /*
  * Local functions
  */
@@ -120,6 +120,7 @@ static int pack_state_for_proc(opal_buffer_t *alert, orte_proc_t *child)
 
 static void register_cbfunc(int status, size_t errhndler, void *cbdata)
 {
+    orte_propagate.register_cb();
     OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                 "errmgr:dvm:event register cbfunc with status %d ", status));
 }
@@ -372,7 +373,6 @@ static void job_errors(int fd, short args, void *cbdata)
 
 static void proc_errors(int fd, short args, void *cbdata)
 {
-    orte_propagate.register_cb();
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
     orte_job_t *jdata;
     orte_proc_t *pptr, *proct;

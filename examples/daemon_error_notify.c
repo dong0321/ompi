@@ -19,7 +19,9 @@
 #include <pmix.h>
 
 static pmix_proc_t myproc;
+struct timeval start,end;
 static bool completed;
+double sec;
 
 static void notification_fn(size_t evhdlr_registration_id,
                             pmix_status_t status,
@@ -29,11 +31,14 @@ static void notification_fn(size_t evhdlr_registration_id,
                             pmix_event_notification_cbfunc_fn_t cbfunc,
                             void *cbdata)
 {
+    gettimeofday(&end,NULL);
     int i;
+    char name[255];
+    gethostname(name, 255);
     for(i=0; i<ninfo; i++)
     {
-        fprintf(stderr, "Client %s:%d NOTIFIED with status %d and error proc %s:%d key %s \n",
-                myproc.nspace, myproc.rank, status,
+        fprintf(stderr, "%s Client %s:%d NOTIFIED with status %d and error proc %s:%d key %s \n",
+                name, myproc.nspace, myproc.rank, status,
                 info[i].value.data.proc->nspace, info[i].value.data.proc->rank,info[i].key);
     }
     completed = true;
@@ -86,7 +91,7 @@ int main(int argc, char **argv)
     }
     nprocs = val->data.uint32;
     PMIX_VALUE_RELEASE(val);
-    fprintf(stderr, "Client %s:%d universe size %d\n", myproc.nspace, myproc.rank, nprocs);
+    //fprintf(stderr, "Client %s:%d universe size %d\n", myproc.nspace, myproc.rank, nprocs);
     completed = false;
 
     pmix_status_t status;
@@ -103,11 +108,9 @@ int main(int argc, char **argv)
         fprintf(stderr, "Client ns %s rank %d: PMIx_Fence failed: %d\n", myproc.nspace, myproc.rank, rc);
         goto done;
     }
-    // make sure daemons are ready
-    sleep(5);
-    gethostname(name, 255);
+
     if ( myproc.rank == 3 ) {
-        fprintf(stderr, "\nClient ns %s:%d kill self \n", myproc.nspace, myproc.rank);
+        fprintf(stderr, "\nClient ns %s:%d kill its host \n", myproc.nspace, myproc.rank);
         completed = true;
 
         FILE* procfile = fopen("/proc/self/status", "r");
@@ -129,7 +132,13 @@ int main(int argc, char **argv)
             }
             line = strtok(NULL, delims);
         }
-
+    }
+    if (PMIX_SUCCESS != (rc = PMIx_Fence(&proc, 1, NULL, 0))) {
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Fence failed: %d\n", myproc.nspace, myproc.rank, rc);
+        goto done;
+    }
+    gettimeofday(&start, NULL);
+    if ( myproc.rank == 3 ) {
         kill(pid, 9);
     }
     while (!completed) {
@@ -139,10 +148,10 @@ int main(int argc, char **argv)
         nanosleep(&ts, NULL);
     }
 done:
+    sec = end.tv_sec + (double)end.tv_usec/1000000.0 - start.tv_sec - (double)start.tv_usec/1000000.0;
+    fprintf(stderr, "Client ns %s rank %d takes %f Finalizing\n", myproc.nspace, myproc.rank, sec);
     /* finalize us */
-    fprintf(stderr, "Client ns %s rank %d: Finalizing\n", myproc.nspace, myproc.rank);
     PMIx_Deregister_event_handler(1, op_callbk, NULL);
-
     if (PMIX_SUCCESS != (rc = PMIx_Finalize(NULL, 0))) {
         fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize failed: %d\n", myproc.nspace, myproc.rank, rc);
     } else {
