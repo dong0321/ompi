@@ -102,10 +102,15 @@
 #include "orte/mca/odls/base/odls_private.h"
 #include "orte/orted/pmix/pmix_server.h"
 
-static void notifycbfunc(int status, void *cbdata)
+double RTE_Wtime_test(void)
 {
-    OPAL_OUTPUT_VERBOSE((5, orte_odls_base_framework.framework_output,
-                "%s odls: notify call back",ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
+    double wtime;
+
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    wtime = tv.tv_sec;
+    wtime += (double)tv.tv_usec / 1000000.0;
+    return wtime;
 }
 
 typedef struct {
@@ -1709,9 +1714,6 @@ void orte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
     orte_job_t *jobdat;
     orte_proc_state_t state=ORTE_PROC_STATE_WAITPID_FIRED;
     orte_proc_t *cptr;
-    /* event codes for error propagating */
-    opal_list_t* einfo;
-    opal_value_t *kv;
 
     opal_output_verbose(5, orte_odls_base_framework.framework_output,
                         "%s odls:wait_local_proc child process %s pid %ld terminated",
@@ -1904,6 +1906,11 @@ void orte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                              "%s odls:waitpid_fired child process %s terminated with signal",
                              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                              ORTE_NAME_PRINT(&proc->name) ));
+       //for perf test
+        char host_name[255];
+        gethostname(host_name, 255);
+        OPAL_OUTPUT_VERBOSE((5, orte_odls_base_framework.framework_output,
+                            "odls: proc error on host %s at time %f", host_name, RTE_Wtime_test()));
 
         /* register an event handler for the OPAL_ERR_PROC_ABORTED event */
         pmix_proc_t pname, psource;

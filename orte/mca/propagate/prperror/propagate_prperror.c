@@ -83,12 +83,42 @@ orte_propagate_base_module_t orte_propagate_prperror_module ={
     register_prp_callback
 };
 
+double RTE_Wtime_test(void)
+{
+    double wtime;
+
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    wtime = tv.tv_sec;
+    wtime += (double)tv.tv_usec / 1000000.0;
+    return wtime;
+}
+
+static void flush_error_list(size_t evhdlr_registration_id,
+        pmix_status_t status,
+        const pmix_proc_t *psource,
+        pmix_info_t info[], size_t ninfo,
+        pmix_info_t *results, size_t nresults,
+        pmix_event_notification_cbfunc_fn_t cbfunc,
+        void *cbdata)
+{
+    OPAL_OUTPUT_VERBOSE((2, orte_propagate_base_framework.framework_output,
+                "Flush error process list"));
+    OBJ_DESTRUCT(&orte_error_procs);
+    OBJ_CONSTRUCT(&orte_error_procs, opal_list_t);
+    if (NULL != cbfunc) {
+        cbfunc(ORTE_SUCCESS, NULL, 0, NULL, NULL, cbdata);
+    }
+}
+
 /*
  *Local functions
  */
 static int init(void)
 {
     OBJ_CONSTRUCT(&orte_error_procs, opal_list_t);
+    pmix_status_t pcode1 = PMIX_ERR_JOB_TERMINATED;
+    PMIx_Register_event_handler(&pcode1, 1, NULL, 0, flush_error_list, NULL, NULL);
     return ORTE_SUCCESS;
 }
 
@@ -99,9 +129,7 @@ static int register_prp_callback(void)
     {
         if(orte_grpcomm.register_cb!=NULL)
             ret= orte_grpcomm.register_cb((orte_grpcomm_rbcast_cb_t)orte_propagate_prperror_recv);
-        //if ( 0 < ret ){
             orte_propagate_error_cb_type = ret;
-        //}
             OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
                         "propagate: prperror: daemon register grpcomm callback %d at start",orte_propagate_error_cb_type));
             enable_callback_register_flag = 0;
@@ -140,11 +168,12 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
     OPAL_LIST_FOREACH(nmcheck, &orte_error_procs, orte_namelist_t){
         if ((nmcheck->name.jobid == errorproc->jobid) && (nmcheck->name.vpid == errorproc->vpid))
         {
-            OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
+            OPAL_OUTPUT_VERBOSE((10, orte_propagate_base_framework.framework_output,
                         "propagate: prperror: already propagated this msg: error proc is %s", ORTE_NAME_PRINT(errorproc) ));
             return rc;
         }
     }
+
     nm = OBJ_NEW(orte_namelist_t);
     nm->name.jobid = errorproc->jobid;
     nm->name.vpid = errorproc->vpid;
@@ -167,9 +196,7 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
     {
         if(orte_grpcomm.register_cb!=NULL)
             ret= orte_grpcomm.register_cb((orte_grpcomm_rbcast_cb_t)orte_propagate_prperror_recv);
-       // if ( 0 < ret ){
             orte_propagate_error_cb_type = ret;
-        //}
             OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
                         "propagate: prperror: daemon register grpcomm callback %d",orte_propagate_error_cb_type));
             enable_callback_register_flag = 0;
@@ -187,7 +214,6 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
         OBJ_DESTRUCT(&prperror_buffer);
         return rc;
     }
-
     /* pack the status */
     if (ORTE_SUCCESS != (rc = opal_dss.pack(&prperror_buffer, &status, 1, OPAL_INT))) {
         ORTE_ERROR_LOG(rc);
@@ -200,7 +226,6 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
         OBJ_DESTRUCT(&prperror_buffer);
         return rc;
     }
-
     orte_node_t *node;
     /* check this is a daemon or not, if vpid is same cannot ensure this is daemon also need check jobid*/
     if (errorproc->vpid == orte_get_proc_daemon_vpid(errorproc) && (errorproc->jobid == ORTE_PROC_MY_NAME->jobid) ){
@@ -223,6 +248,15 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
         }
         daemon_error_flag = true;
     }
+    /* if process failure pack 0 affected for forwarding unpack*/
+    else {
+        if (ORTE_SUCCESS != (rc = opal_dss.pack(&prperror_buffer, &cnt, 1, OPAL_INT))) {
+            ORTE_ERROR_LOG(rc);
+            OBJ_DESTRUCT(&prperror_buffer);
+            return rc;
+        }
+    }
+
     pmix_proc_t pname;
     pmix_info_t *pinfo;
     PMIX_INFO_CREATE(pinfo, 1+cnt);
@@ -236,7 +270,7 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
         orte_plm_cmd_flag_t cmd;
 
         int i;
-        for (i=0; i < node->procs->size; i++) {
+        for (i=0; i < cnt; i++) {
             if (NULL != (pptr = (orte_proc_t*)opal_pointer_array_get_item(node->procs, i))) {
                 OPAL_OUTPUT_VERBOSE((5, orte_propagate_base_framework.framework_output,
                             " %d children are afftected  %s\n",cnt, ORTE_NAME_PRINT(&pptr->name)));
@@ -329,12 +363,88 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
     return ORTE_SUCCESS;
 }
 
+static int _orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *source,
+                orte_process_name_t *errorproc, orte_proc_state_t state, opal_buffer_t* buffer,opal_buffer_t* rly) {
+
+    int rc = ORTE_SUCCESS;
+    /* don't need to check jobid because this can be different: daemon and process has different jobids */
+
+    /* namelist for tracking error procs */
+    orte_namelist_t *nmcheck, *nm;
+    nmcheck = OBJ_NEW(orte_namelist_t);
+
+    OPAL_LIST_FOREACH(nmcheck, &orte_error_procs, orte_namelist_t){
+        if ((nmcheck->name.jobid == errorproc->jobid) && (nmcheck->name.vpid == errorproc->vpid))
+        {
+            OPAL_OUTPUT_VERBOSE((10, orte_propagate_base_framework.framework_output,
+                        "propagate: prperror: already propagated this msg: error proc is %s", ORTE_NAME_PRINT(errorproc) ));
+            return rc;
+        }
+    }
+    OPAL_OUTPUT_VERBOSE((10, orte_propagate_base_framework.framework_output,
+                "propagate: prperror: interal forward: error proc is %s", ORTE_NAME_PRINT(errorproc) ));
+
+    nm = OBJ_NEW(orte_namelist_t);
+    nm->name.jobid = errorproc->jobid;
+    nm->name.vpid = errorproc->vpid;
+    opal_list_append(&orte_error_procs, &(nm->super));
+    /* goes to all daemons */
+    orte_grpcomm_signature_t *sig;
+    sig = OBJ_NEW(orte_grpcomm_signature_t);
+    sig->signature = (orte_process_name_t*)malloc(sizeof(orte_process_name_t));
+    sig->signature[0].jobid = ORTE_PROC_MY_NAME->jobid;
+    /* all daemons hosting this jobid are participating */
+    sig->signature[0].vpid = ORTE_VPID_WILDCARD;
+    if (ORTE_SUCCESS != (rc = orte_grpcomm.rbcast(sig, ORTE_RML_TAG_PROPAGATE, rly))) {
+        ORTE_ERROR_LOG(rc);
+    }
+
+    pmix_proc_t pname;
+    pmix_info_t *pinfo;
+    int ret;
+    int cnt=1;
+    int num_affected = 0;
+    if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &num_affected, &cnt, OPAL_INT))) {
+        ORTE_ERROR_LOG(ret);
+        return false;
+    }
+    PMIX_INFO_CREATE(pinfo, 1+num_affected);
+
+    OPAL_PMIX_CONVERT_NAME(&pname, errorproc);
+    PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC );
+
+    orte_process_name_t ename;
+    int i=0;
+    for (i =0; i <num_affected; i++)
+    {
+        if (OPAL_SUCCESS != (rc = opal_dss.unpack(buffer, &ename, &cnt, OPAL_NAME))) {
+            ORTE_ERROR_LOG(rc);
+            return rc;
+        }
+        OPAL_PMIX_CONVERT_NAME(&pname, &ename);
+        PMIX_INFO_LOAD(&pinfo[i+1], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC );
+    }
+    /* notify this error locally, only from rbcast dont have a source id */
+    if( source==NULL ) {
+        if (OPAL_SUCCESS != PMIx_Notify_event(opal_pmix_convert_rc(state), NULL,
+                    PMIX_RANGE_LOCAL, pinfo, num_affected+1,
+                    NULL,NULL )) {
+            OBJ_RELEASE(pinfo);
+        }
+    }
+}
+
+
 int orte_propagate_prperror_recv(opal_buffer_t* buffer)
 {
     int ret, cnt, state;
     orte_process_name_t errorproc;
     int cbtype;
 
+    opal_buffer_t rly;
+    OBJ_CONSTRUCT(&rly, opal_buffer_t);
+
+    opal_dss.copy_payload(&rly, buffer);
     /* get the cbtype */
     cnt=1;
     if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &cbtype, &cnt,OPAL_INT ))) {
@@ -357,6 +467,6 @@ int orte_propagate_prperror_recv(opal_buffer_t* buffer)
                 "%s propagete: prperror: daemon received %s gone forwarding with status %d",
                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ORTE_NAME_PRINT(&errorproc), state));
 
-    orte_propagate_prperror(&orte_process_info.my_name.jobid, NULL, &errorproc, state);
+    _orte_propagate_prperror(&orte_process_info.my_name.jobid, NULL, &errorproc, state, buffer , &rly);
     return false;
 }
