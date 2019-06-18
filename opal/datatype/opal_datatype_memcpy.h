@@ -4,6 +4,7 @@
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
+ * Copyright (C) 2019      Arm Ltd.  ALL RIGHTS RESERVED.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -14,6 +15,7 @@
 #ifndef OPAL_DATATYPE_MEMCPY_H_HAS_BEEN_INCLUDED
 #define OPAL_DATATYPE_MEMCPY_H_HAS_BEEN_INCLUDED
 
+#include <stdio.h>
 /*
  * This macro is called whenever we are packing/unpacking a DDT that
  * that is built with basic datatypes.
