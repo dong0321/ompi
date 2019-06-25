@@ -7,6 +7,7 @@
  * Copyright (c) 2011      NVIDIA Corporation.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (C) 2019      Arm Ltd.  ALL RIGHTS RESERVED.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -102,7 +103,7 @@ unpack_predefined_data( opal_convertor_t* CONVERTOR,
 
     /* premptively update the number of COUNT we will return. */
     *(COUNT) -= cando_count;
-    
+
     if( 1 == _elem->blocklen ) {  /* Do as many full blocklen as possible */
         for(; cando_count > 0; cando_count--) {
             OPAL_DATATYPE_SAFEGUARD_POINTER( _memory, blocklen_bytes, (CONVERTOR)->pBaseBuf,
@@ -116,19 +117,92 @@ unpack_predefined_data( opal_convertor_t* CONVERTOR,
         goto update_and_return;
     }
 
+    /**
+     * Compute how many full blocklen we need to do and do them.
+     */
     if( (1 < _elem->count) && (_elem->blocklen <= cando_count) ) {
-        blocklen_bytes *= _elem->blocklen;
+        do_now_bytes = _elem->blocklen * opal_datatype_basicDatatypes[_elem->common.type]->size;
+        /* each block can full fill vector, we use 4x version, or just copy once */
+        if(svcntb() < do_now_bytes ) {
+            DO_DEBUG( opal_output( 5, "unpack block in bytes is larger than VL in bytes, use 4x version"); );
+            for(size_t _i = 0; _i < do_now; _i++ ) {
+                OPAL_DATATYPE_SAFEGUARD_POINTER( _memory, do_now_bytes, (CONVERTOR)->pBaseBuf,
+                        (CONVERTOR)->pDesc, (CONVERTOR)->count );
+                DO_DEBUG( opal_output( 0, "unpack 2. memcpy( %p, %p, %lu ) => space %lu\n",
+                            (void*)*(packed), (void*)_memory, (unsigned long)do_now_bytes, (unsigned long)*(SPACE) ); );
+                MEMCPY_CSUM( _memory, *(packed), do_now_bytes, (CONVERTOR) );
+                *(packed)   += do_now_bytes;
+                _memory     += _elem->extent;
+                *(SPACE)    -= do_now_bytes;
+                *(COUNT)    -= _elem->blocklen;
+                cando_count -= _elem->blocklen;
+            }
+        }
+        /* each vector can deal with multi blocks */
+        else {
+            OPAL_DATATYPE_SAFEGUARD_POINTER( _memory, do_now_bytes, (CONVERTOR)->pBaseBuf,
+                    (CONVERTOR)->pDesc, (CONVERTOR)->count );
 
-        do { /* Do as many full blocklen as possible */
-            OPAL_DATATYPE_SAFEGUARD_POINTER( _memory, blocklen_bytes, (CONVERTOR)->pBaseBuf,
-                                             (CONVERTOR)->pDesc, (CONVERTOR)->count );
-            DO_DEBUG( opal_output( 0, "unpack 2. memcpy( %p, %p, %lu ) => space %lu\n",
-                                   (void*)_memory, (void*)_packed, (unsigned long)blocklen_bytes, (unsigned long)(*(SPACE) - (_packed - *(packed))) ); );
-            MEMCPY_CSUM( _memory, _packed, blocklen_bytes, (CONVERTOR) );
-            _packed     += blocklen_bytes;
-            _memory     += _elem->extent;
-            cando_count -= _elem->blocklen;
-        } while (_elem->blocklen <= cando_count);
+            DO_DEBUG( opal_output( 0, "unpack: block in bytes is smaller than VL in bytes, use scatter_store version"); );
+            /* how many full blocks can be processed in each vector */
+            int blocks_in_VL = svcntb()/do_now_bytes/4;
+
+            if(blocks_in_VL>do_now) {
+                blocks_in_VL = do_now;
+            }
+            DO_DEBUG( opal_output( 0, "unpack blength %d extend %d block bytes %d blocks %d do_now %d",
+                        _elem->blocklen, _elem->extent, do_now_bytes, blocks_in_VL, do_now); );
+
+            uint32_t off_sets[256];
+            int start = 0;
+            for(int j=0; j<blocks_in_VL; j++){
+                for(size_t i =0; i<do_now_bytes; i++)
+                {
+                    /* offset in bytes offset=offset in block + extend(bytes)*j */
+                    off_sets[start] = (i+j*_elem->extent);
+                    start++;
+                }
+            }
+            svbool_t Pg = svwhilelt_b8_u32(0, do_now_bytes*blocks_in_VL*4);
+            svuint32_t xt = svld1(Pg, off_sets);
+            int num_of_copys = cando_count/ (_elem->blocklen*blocks_in_VL);
+            for(int i=0; i < num_of_copys; i++)
+            {
+                svuint32_t vsrc = svld1ub_u32(Pg,*(packed));
+                svst1b_scatter_offset(Pg, _memory, xt, vsrc);
+
+                /*
+                for(int i=0; i<_elem->extent*blocks_in_VL; i=i+4)
+                {
+                    DO_DEBUG( opal_output( 0, "un-- %p %d  %p %d ",*packed+i,*(*packed+i),_memory+i ,*(_memory+i)););
+                }
+                */
+                *(packed)   += do_now_bytes*blocks_in_VL;
+                _memory     += _elem->extent*blocks_in_VL;
+                *(SPACE)    -= do_now_bytes*blocks_in_VL;
+                *(COUNT)    -= _elem->blocklen*blocks_in_VL;
+                cando_count -= _elem->blocklen*blocks_in_VL;
+            }
+
+            /* remaining blocks */
+            blocks_in_VL = cando_count / _elem->blocklen;
+            if (blocks_in_VL != 0) {
+                svbool_t Pg = svwhilelt_b8_u32(0, do_now_bytes*blocks_in_VL*4);
+                svuint32_t vsrc = svld1ub_u32(Pg,*(packed));
+                svst1b_scatter_offset(Pg, _memory, xt, vsrc);
+                /*
+                for(int i=0; i<_elem->extent*blocks_in_VL; i=i+4)
+                {   
+                    DO_DEBUG( opal_output( 0, "remain un-- %p %d  %p %d ",*packed+i,*(*packed+i),_memory+i ,*(_memory+i)););
+                }
+                */
+                *(packed)   += do_now_bytes*blocks_in_VL;
+                _memory     += _elem->extent*blocks_in_VL;
+                *(SPACE)    -= do_now_bytes*blocks_in_VL;
+                *(COUNT)    -= _elem->blocklen*blocks_in_VL;
+                cando_count -= _elem->blocklen*blocks_in_VL;
+            }
+        }
     }
 
     /**
@@ -142,7 +216,6 @@ unpack_predefined_data( opal_convertor_t* CONVERTOR,
                                          (CONVERTOR)->pDesc, (CONVERTOR)->count );
         DO_DEBUG( opal_output( 0, "unpack 3. memcpy( %p, %p, %lu ) => space %lu [epilog]\n",
                                (void*)_memory, (void*)_packed, (unsigned long)do_now_bytes, (unsigned long)(*(SPACE) - (_packed - *(packed))) ); );
-        MEMCPY_CSUM( _memory, _packed, do_now_bytes, (CONVERTOR) );
         _memory   += do_now_bytes;
         _packed   += do_now_bytes;
     }
