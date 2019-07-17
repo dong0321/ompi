@@ -34,6 +34,10 @@
 #include "ompi/mca/op/base/base.h"
 #include "ompi/mca/op/arm_sve_op/op_sve.h"
 
+#ifdef __ARM_FEATURE_SVE
+#include <arm_sve.h>
+#endif /* __ARM_FEATURE_SVE */
+
 /**
  * Derive a struct from the base op module struct, allowing us to
  * cache some module-specific information for MAX.  Note that
@@ -121,34 +125,36 @@ static OBJ_CLASS_INSTANCE(module_sum_t,
 static void sum_float(void *in, void *out, int *count,
                       ompi_datatype_t **type, ompi_op_base_module_t *module)
 {
-    module_sum_t *m = (module_sum_t*) module;
 
     /* Be chatty to the output, just so that we can see that this
        function was called */
     opal_output(0, "In sve sum float function");
 
-    /* This is where you can decide at run-time whether to use the
-       hardware or the fallback function.  For sve, you could have
-       logic something like this:
+    uint64_t i;
+    svbool_t Pg = svptrue_b32();
 
-       extent = *count * size(int);
-       if (memory_accessible_on_hw(in, extent) &&
-           memory_accessible_on_hw(out, extent)) {
-          ...do the function on hardware...
-       } else if (extent >= large_enough) {
-          ...copy host memory -> hardware memory...
-          ...do the function on hardware...
-          ...copy hardware memory -> host memory...
-       } else {
-          m->fallback_float(in, out, count, type, m->fallback_int_module);
-       }
-     */
+    /* Count the number of 32-bit elements in a pattern */
+    uint64_t step = svcntw();
+    uint64_t round = *count;
+    uint64_t remain = *count % step;
+    printf("Round: %lu Remain %lu Step %lu \n", round, remain, step);
 
-    /* But for this sve, we'll just call the fallback function to
-       actually do the work */
-    m->fallback_float(in, out, count, type, m->fallback_float_module);
+    for(i=0; i< round; i=i+step)
+    {
+        svfloat32_t  vsrc = svld1(Pg, (float*)in+i);
+        svfloat32_t  vdst = svld1(Pg, (float*)out+i);
+        vdst=svadd_z(Pg,vdst,vsrc);
+        svst1(Pg, (float*)out+i,vdst);
+    }
+
+    if (remain !=0){
+        Pg = svwhilelt_b32_u64(0, remain);
+        svfloat32_t  vsrc = svld1(Pg, (float*)in+i);
+        svfloat32_t  vdst = svld1(Pg, (float*)out+i);
+        vdst=svadd_z(Pg,vdst,vsrc);
+        svst1(Pg, (float*)out+i,vdst);
+    }
 }
-
 /**
  * Max function for C double
  */

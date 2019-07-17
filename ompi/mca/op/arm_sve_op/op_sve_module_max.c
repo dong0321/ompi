@@ -34,6 +34,10 @@
 #include "ompi/mca/op/base/base.h"
 #include "ompi/mca/op/arm_sve_op/op_sve.h"
 
+#ifdef __ARM_FEATURE_SVE
+#include <arm_sve.h>
+#endif /* __ARM_FEATURE_SVE */
+
 /**
  * Derive a struct from the base op module struct, allowing us to
  * cache some module-specific information for MAX.  Note that
@@ -118,35 +122,42 @@ static OBJ_CLASS_INSTANCE(module_max_t,
 /**
  * Max function for C float
  */
-static void max_float(void *in, void *out, int *count,
+static void max_float(void *buf, void *out, int *count,
                       ompi_datatype_t **type, ompi_op_base_module_t *module)
 {
-    module_max_t *m = (module_max_t*) module;
-
     /* Be chatty to the output, just so that we can see that this
        function was called */
     opal_output(0, "In sve max float function");
 
-    /* This is where you can decide at run-time whether to use the
-       hardware or the fallback function.  For sve, you could have
-       logic something like this:
+    uint64_t i;
+    float float32_max;
+    svbool_t Pg = svptrue_b32();
 
-       extent = *count * size(int);
-       if (memory_accessible_on_hw(in, extent) &&
-           memory_accessible_on_hw(out, extent)) {
-          ...do the function on hardware...
-       } else if (extent >= large_enough) {
-          ...copy host memory -> hardware memory...
-          ...do the function on hardware...
-          ...copy hardware memory -> host memory...
-       } else {
-          m->fallback_float(in, out, count, type, m->fallback_int_module);
-       }
-     */
+    /* Count the number of 32-bit elements in a pattern */
+    uint64_t step = svcntw();
+    uint64_t round = *count / step;
+    uint64_t remain = *count % step;
+    printf("Round: %lu Remain %lu Step %lu \n", round, remain, step);
 
-    /* But for this sve, we'll just call the fallback function to
-       actually do the work */
-    m->fallback_float(in, out, count, type, m->fallback_float_module);
+    for(i=0; i< round; i++)
+    {
+        svfloat32_t  vsrc = svld1(Pg, (float*)buf+i*step);
+        float32_max = svmaxv(Pg, vsrc);
+        /* compare float32_max with next value in the (float*)buf */
+        if (i != round -1 ){
+            *((float*)buf+(i+1)*step) =  ( *((float*)buf+(i+1)*step) > float32_max ?  *((float*)buf+(i+1)*step) : float32_max);
+        }
+        printf("Local max: %f first in next %f\n",float32_max, *((float*)buf+(i+1)*step) );
+
+    }
+
+    if (remain !=0){
+        *((float*)buf+(i)*step) =  ( *((float*)buf+(i)*step) > float32_max ?  *((float*)buf+(i)*step) : float32_max);
+        Pg = svwhilelt_b32_u64(0, remain);
+        svfloat32_t  vsrc = svld1(Pg, (float*)buf+i*step);
+        float32_max = svmaxv(Pg, vsrc);
+    }
+    *(float*)out = float32_max;
 }
 
 /**
