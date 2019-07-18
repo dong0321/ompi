@@ -107,6 +107,9 @@ OMPI_DECLSPEC ompi_op_base_module_t *
 OMPI_DECLSPEC ompi_op_base_module_t *
     ompi_op_sve_setup_sum(ompi_op_t *op);
 
+    OMPI_DECLSPEC ompi_op_base_module_t *
+     ompi_op_sve_setup_prod2buf(ompi_op_t *op);
+
 
 END_C_DECLS
 

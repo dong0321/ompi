@@ -34,7 +34,8 @@ sources = \
     op_sve_module_bxor.c \
     op_sve_module_max.c \
 	op_sve_module_min.c \
-	op_sve_module_sum.c
+	op_sve_module_sum.c \
+	op_sve_module_prod2buf.c
 # Open MPI components can be compiled two ways:
 #
 # 1. As a standalone dynamic shared object (DSO), sometimes called a

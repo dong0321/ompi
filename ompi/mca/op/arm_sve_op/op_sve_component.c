@@ -300,17 +300,17 @@ static struct ompi_op_base_module_1_0_0_t *
     case OMPI_OP_BASE_FORTRAN_MIN:
         /* Corresponds to MPI_MAX */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick MIN");
-        //module = ompi_op_sve_setup_min(op);
+        module = ompi_op_sve_setup_min(op);
         break;
     case OMPI_OP_BASE_FORTRAN_SUM:
         /* Corresponds to MPI_MAX */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick SUM");
         module = ompi_op_sve_setup_sum(op);
         break;
-    case OMPI_OP_BASE_FORTRAN_MAXLOC:
+    case OMPI_OP_BASE_FORTRAN_PROD:
         /* Corresponds to MPI_MAX */
-        opal_output(ompi_op_base_framework.framework_output, "sve component op pick MAXLOC");
-        //module = ompi_op_sve_setup_sum(op);
+        opal_output(ompi_op_base_framework.framework_output, "sve component op pick PRO2BUF");
+        module = ompi_op_sve_setup_prod2buf(op);
         break;
     case OMPI_OP_BASE_FORTRAN_MINLOC:
         /* Corresponds to MPI_MAX */

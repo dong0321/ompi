@@ -19,7 +19,7 @@
 
 /** @file
  *
- * This is the min module source code.  It contains the "setup"
+ * This is the prod2buf module source code.  It contains the "setup"
  * functions that will create a module for the MPI_MAX MPI_Op.
  */
 
@@ -66,12 +66,12 @@ typedef struct {
     ompi_op_base_module_t *fallback_double_module;
     ompi_op_base_handler_fn_t fallback_double_precision;
     ompi_op_base_module_t *fallback_double_precision_module;
-} module_min_t;
+} module_prod2buf_t;
 
 /**
- * "Constructor" for the min module class
+ * "Constructor" for the prod2buf module class
  */
-static void module_min_constructor(module_min_t *m)
+static void module_prod2buf_constructor(module_prod2buf_t *m)
 {
     /* Use this function to initialize any data in the class that is
        specific to this class (i.e. do *not* initialize the parent
@@ -88,9 +88,9 @@ static void module_min_constructor(module_min_t *m)
 }
 
 /**
- * "Destructor" for the min module class
+ * "Destructor" for the prod2buf module class
  */
-static void module_min_destructor(module_min_t *m)
+static void module_prod2buf_destructor(module_prod2buf_t *m)
 {
     /* Use this function to clean up any data members that may be
        necessary.  This may include freeing resources and/or setting
@@ -108,66 +108,63 @@ static void module_min_destructor(module_min_t *m)
 }
 
 /**
- * Setup the class for the min module, listing:
+ * Setup the class for the prod2buf module, listing:
  * - the name of the class
  * - the "parent" of the class
  * - function pointer for the constructor (or NULL)
  * - function pointer for the destructor (or NULL)
  */
-static OBJ_CLASS_INSTANCE(module_min_t,
+static OBJ_CLASS_INSTANCE(module_prod2buf_t,
                           ompi_op_base_module_t,
-                          module_min_constructor,
-                          module_min_destructor);
+                          module_prod2buf_constructor,
+                          module_prod2buf_destructor);
 
 /**
  * Max function for C float
  */
-static void min_float(void *buf, void *out, int *count,
+static void prod2buf_float(void *in, void *out, int *count,
                       ompi_datatype_t **type, ompi_op_base_module_t *module)
 {
-    opal_output(0, "In sve min float function");
+
+    /* Be chatty to the output, just so that we can see that this
+       function was called */
+    opal_output(0, "In sve prod2buf float function");
+
     uint64_t i;
-    float float32_min;
     svbool_t Pg = svptrue_b32();
 
     /* Count the number of 32-bit elements in a pattern */
     uint64_t step = svcntw();
-    uint64_t round = *count / step;
+    uint64_t round = *count;
     uint64_t remain = *count % step;
     printf("Round: %lu Remain %lu Step %lu \n", round, remain, step);
 
-    for(i=0; i< round; i++)
-    {   
-        svfloat32_t  vsrc = svld1(Pg, (float*)buf+i*step);
-        float32_min = svminv(Pg, vsrc);
-        /* compare float32_max with next value in the (float*)buf */
-        if (i != round -1 ){
-            *((float*)buf+(i+1)*step) =  ( *((float*)buf+(i+1)*step) < float32_min ?  *((float*)buf+(i+1)*step) : float32_min);
-        }
-        printf("Local min: %f first in next %f\n",float32_min, *((float*)buf+(i+1)*step) );
-
-    }   
+    for(i=0; i< round; i=i+step)
+    {
+        svfloat32_t  vsrc = svld1(Pg, (float*)in+i);
+        svfloat32_t  vdst = svld1(Pg, (float*)out+i);
+        vdst=svmul_f32_z(Pg,vdst,vsrc);
+        svst1(Pg, (float*)out+i,vdst);
+    }
 
     if (remain !=0){
-        *((float*)buf+(i)*step) =  ( *((float*)buf+(i)*step) < float32_min ?  *((float*)buf+(i)*step) : float32_min);
         Pg = svwhilelt_b32_u64(0, remain);
-        svfloat32_t  vsrc = svld1(Pg, (float*)buf+i*step);
-        float32_min = svminv(Pg, vsrc);
-    }   
-    *(float*)out = float32_min;
-
+        svfloat32_t  vsrc = svld1(Pg, (float*)in+i);
+        svfloat32_t  vdst = svld1(Pg, (float*)out+i);
+        vdst=svmul_f32_z(Pg,vdst,vsrc);
+        svst1(Pg, (float*)out+i,vdst);
+    }
 }
-
 /**
  * Max function for C double
  */
-static void min_double(void *in, void *out, int *count,
+static void prod2buf_double(void *in, void *out, int *count,
                        ompi_datatype_t **type, ompi_op_base_module_t *module)
 {
-    module_min_t *m = (module_min_t*) module;
-    opal_output(0, "In sve min double function");
+    module_prod2buf_t *m = (module_prod2buf_t*) module;
+    opal_output(0, "In sve prod2buf double function");
 
-    /* Just another sve function -- similar to min_int() */
+    /* Just another sve function -- similar to prod2buf_int() */
 
     m->fallback_double(in, out, count, type, m->fallback_double_module);
 }
@@ -175,13 +172,13 @@ static void min_double(void *in, void *out, int *count,
 /**
  * Max function for Fortran REAL
  */
-static void min_real(void *in, void *out, int *count,
+static void prod2buf_real(void *in, void *out, int *count,
                      ompi_datatype_t **type, ompi_op_base_module_t *module)
 {
-    module_min_t *m = (module_min_t*) module;
-    opal_output(0, "In sve min real function");
+    module_prod2buf_t *m = (module_prod2buf_t*) module;
+    opal_output(0, "In sve prod2buf real function");
 
-    /* Just another sve function -- similar to min_int() */
+    /* Just another sve function -- similar to prod2buf_int() */
 
     m->fallback_real(in, out, count, type, m->fallback_real_module);
 }
@@ -189,29 +186,29 @@ static void min_real(void *in, void *out, int *count,
 /**
  * Max function for Fortran DOUBLE PRECISION
  */
-static void min_double_precision(void *in, void *out, int *count,
+static void prod2buf_double_precision(void *in, void *out, int *count,
                                  ompi_datatype_t **type,
                                  ompi_op_base_module_t *module)
 {
-    module_min_t *m = (module_min_t*) module;
-    opal_output(0, "In sve min double precision function");
+    module_prod2buf_t *m = (module_prod2buf_t*) module;
+    opal_output(0, "In sve prod2buf double precision function");
 
-    /* Just another sve function -- similar to min_int() */
+    /* Just another sve function -- similar to prod2buf_int() */
 
     m->fallback_double_precision(in, out, count, type,
                                  m->fallback_double_precision_module);
 }
 
 /**
- * Setup function for MPI_MAX.  If we get here, we can assume that a)
+ * Setup function for MPI_MAX.  If we get here, we can asprod2bufe that a)
  * the hardware is present, b) the MPI thread scenario is what we
  * want, and c) the MAX operation is supported.  So this function's
  * job is to create a module and fill in function pointers for the
  * functions that this hardware supports.
  */
-ompi_op_base_module_t *ompi_op_sve_setup_min(ompi_op_t *op)
+ompi_op_base_module_t *ompi_op_sve_setup_prod2buf(ompi_op_t *op)
 {
-    module_min_t *module = OBJ_NEW(module_min_t);
+    module_prod2buf_t *module = OBJ_NEW(module_prod2buf_t);
 
     /* We defintely support the single precision floating point types */
 
@@ -222,7 +219,7 @@ ompi_op_base_module_t *ompi_op_sve_setup_min(ompi_op_t *op)
        (i.e., they're already assigned on the op). */
 
     /* C float */
-    module->super.opm_fns[OMPI_OP_BASE_TYPE_FLOAT] = min_float;
+    module->super.opm_fns[OMPI_OP_BASE_TYPE_FLOAT] = prod2buf_float;
     module->fallback_float = op->o_func.intrinsic.fns[OMPI_OP_BASE_TYPE_FLOAT];
     module->fallback_float_module =
         op->o_func.intrinsic.modules[OMPI_OP_BASE_TYPE_FLOAT];
@@ -232,7 +229,7 @@ ompi_op_base_module_t *ompi_op_sve_setup_min(ompi_op_t *op)
     OBJ_RETAIN(module->fallback_float_module);
 
     /* Fortran REAL */
-    module->super.opm_fns[OMPI_OP_BASE_TYPE_REAL] = min_real;
+    module->super.opm_fns[OMPI_OP_BASE_TYPE_REAL] = prod2buf_real;
     module->fallback_real =
         op->o_func.intrinsic.fns[OMPI_OP_BASE_TYPE_REAL];
     module->fallback_real_module =
@@ -243,7 +240,7 @@ ompi_op_base_module_t *ompi_op_sve_setup_min(ompi_op_t *op)
 
     if (mca_op_sve_component.double_supported) {
         /* C double */
-        module->super.opm_fns[OMPI_OP_BASE_TYPE_DOUBLE] = min_double;
+        module->super.opm_fns[OMPI_OP_BASE_TYPE_DOUBLE] = prod2buf_double;
         module->fallback_double =
             op->o_func.intrinsic.fns[OMPI_OP_BASE_TYPE_DOUBLE];
         module->fallback_double_module =
@@ -252,7 +249,7 @@ ompi_op_base_module_t *ompi_op_sve_setup_min(ompi_op_t *op)
 
         /* Fortran DOUBLE PRECISION */
         module->super.opm_fns[OMPI_OP_BASE_TYPE_DOUBLE_PRECISION] =
-            min_double_precision;
+            prod2buf_double_precision;
         module->fallback_double_precision =
             op->o_func.intrinsic.fns[OMPI_OP_BASE_TYPE_DOUBLE_PRECISION];
         module->fallback_double_precision_module =
