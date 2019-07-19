@@ -59,8 +59,8 @@ typedef struct {
        several integer types. */
     ompi_op_base_handler_fn_t fallback_float;
     ompi_op_base_module_t *fallback_float_module;
-    ompi_op_base_handler_fn_t fallback_real;
-    ompi_op_base_module_t *fallback_real_module;
+    ompi_op_base_handler_fn_t fallback_uint8;
+    ompi_op_base_module_t *fallback_uint8_module;
 
     ompi_op_base_handler_fn_t fallback_double;
     ompi_op_base_module_t *fallback_double_module;
@@ -78,8 +78,8 @@ static void module_max_constructor(module_max_t *m)
        data members!). */
     m->fallback_float = NULL;
     m->fallback_float_module = NULL;
-    m->fallback_real = NULL;
-    m->fallback_real_module = NULL;
+    m->fallback_uint8 = NULL;
+    m->fallback_uint8_module = NULL;
 
     m->fallback_double = NULL;
     m->fallback_double_module = NULL;
@@ -98,8 +98,8 @@ static void module_max_destructor(module_max_t *m)
        destructed. */
     m->fallback_float = (ompi_op_base_handler_fn_t) 0xdeadbeef;
     m->fallback_float_module = (ompi_op_base_module_t*) 0xdeadbeef;
-    m->fallback_real = (ompi_op_base_handler_fn_t) 0xdeadbeef;
-    m->fallback_real_module = (ompi_op_base_module_t*) 0xdeadbeef;
+    m->fallback_uint8 = (ompi_op_base_handler_fn_t) 0xdeadbeef;
+    m->fallback_uint8_module = (ompi_op_base_module_t*) 0xdeadbeef;
 
     m->fallback_double = (ompi_op_base_handler_fn_t) 0xdeadbeef;
     m->fallback_double_module = (ompi_op_base_module_t*) 0xdeadbeef;
@@ -122,42 +122,37 @@ static OBJ_CLASS_INSTANCE(module_max_t,
 /**
  * Max function for C float
  */
-static void max_float(void *buf, void *out, int *count,
+static void max_float(void *in, void *out, int *count,
                       ompi_datatype_t **type, ompi_op_base_module_t *module)
 {
     /* Be chatty to the output, just so that we can see that this
        function was called */
     opal_output(0, "In sve max float function");
-
     uint64_t i;
-    float float32_max;
     svbool_t Pg = svptrue_b32();
 
     /* Count the number of 32-bit elements in a pattern */
     uint64_t step = svcntw();
-    uint64_t round = *count / step;
+    uint64_t round = *count;
     uint64_t remain = *count % step;
     printf("Round: %lu Remain %lu Step %lu \n", round, remain, step);
 
-    for(i=0; i< round; i++)
+    for(i=0; i< round; i=i+step)
     {
-        svfloat32_t  vsrc = svld1(Pg, (float*)buf+i*step);
-        float32_max = svmaxv(Pg, vsrc);
-        /* compare float32_max with next value in the (float*)buf */
-        if (i != round -1 ){
-            *((float*)buf+(i+1)*step) =  ( *((float*)buf+(i+1)*step) > float32_max ?  *((float*)buf+(i+1)*step) : float32_max);
-        }
-        printf("Local max: %f first in next %f\n",float32_max, *((float*)buf+(i+1)*step) );
-
+        svfloat32_t  vsrc = svld1(Pg, (float*)in+i);
+        svfloat32_t  vdst = svld1(Pg, (float*)out+i);
+        vdst=svmax_z(Pg,vdst,vsrc);
+        svst1(Pg, (float*)out+i,vdst);
     }
 
     if (remain !=0){
-        *((float*)buf+(i)*step) =  ( *((float*)buf+(i)*step) > float32_max ?  *((float*)buf+(i)*step) : float32_max);
         Pg = svwhilelt_b32_u64(0, remain);
-        svfloat32_t  vsrc = svld1(Pg, (float*)buf+i*step);
-        float32_max = svmaxv(Pg, vsrc);
+        svfloat32_t  vsrc = svld1(Pg, (float*)in+i);
+        svfloat32_t  vdst = svld1(Pg, (float*)out+i);
+        vdst=svmax_z(Pg,vdst,vsrc);
+        svst1(Pg, (float*)out+i,vdst);
     }
-    *(float*)out = float32_max;
+
 }
 
 /**
@@ -175,17 +170,38 @@ static void max_double(void *in, void *out, int *count,
 }
 
 /**
- * Max function for Fortran REAL
+ * Max function for Fortran UINT8_T
  */
-static void max_real(void *in, void *out, int *count,
+static void max_uint8(void *in, void *out, int *count,
                      ompi_datatype_t **type, ompi_op_base_module_t *module)
 {
-    module_max_t *m = (module_max_t*) module;
-    opal_output(0, "In sve max real function");
+    opal_output(0, "In sve max uint8 function");
+    uint64_t i;
+    svbool_t Pg = svptrue_b8();
 
-    /* Just another sve function -- similar to max_int() */
+    /* Count the number of 8-bit elements in a pattern */
+    uint64_t step = svcntb();
+    uint64_t round = *count;
+    uint64_t remain = *count % step;
+    printf("Round: %lu Remain %lu Step %lu \n", round, remain, step);
 
-    m->fallback_real(in, out, count, type, m->fallback_real_module);
+    for(i=0; i< round; i=i+step)
+    {
+        svuint8_t  vsrc = svld1(Pg, (uint8_t*)in+i);
+        svuint8_t  vdst = svld1(Pg, (uint8_t*)out+i);
+        vdst=svmax_z(Pg,vdst,vsrc);
+        svst1(Pg, (uint8_t*)out+i,vdst);
+    }
+
+    if (remain !=0){
+        Pg = svwhilelt_b8_u64(0, remain);
+        svuint8_t  vsrc = svld1(Pg, (uint8_t*)in+i);
+        svuint8_t  vdst = svld1(Pg, (uint8_t*)out+i);
+        vdst=svmax_z(Pg,vdst,vsrc);
+        svst1(Pg, (uint8_t*)out+i,vdst);
+    }
+
+
 }
 
 /**
@@ -233,13 +249,13 @@ ompi_op_base_module_t *ompi_op_sve_setup_max(ompi_op_t *op)
        it is being used and won't be freed/destructed. */
     OBJ_RETAIN(module->fallback_float_module);
 
-    /* Fortran REAL */
-    module->super.opm_fns[OMPI_OP_BASE_TYPE_REAL] = max_real;
-    module->fallback_real =
-        op->o_func.intrinsic.fns[OMPI_OP_BASE_TYPE_REAL];
-    module->fallback_real_module =
-        op->o_func.intrinsic.modules[OMPI_OP_BASE_TYPE_REAL];
-    OBJ_RETAIN(module->fallback_real_module);
+    /* Fortran UINT8_T */
+    module->super.opm_fns[OMPI_OP_BASE_TYPE_UINT8_T] = max_uint8;
+    module->fallback_uint8 =
+        op->o_func.intrinsic.fns[OMPI_OP_BASE_TYPE_UINT8_T];
+    module->fallback_uint8_module =
+        op->o_func.intrinsic.modules[OMPI_OP_BASE_TYPE_UINT8_T];
+    OBJ_RETAIN(module->fallback_uint8_module);
 
     /* Does our hardware support double precision? */
 
