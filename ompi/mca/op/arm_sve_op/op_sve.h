@@ -68,7 +68,7 @@ typedef struct {
        component/module.  Keep in mind that there will be one distinct
        module for each MPI_Op; you may want to have different data
        cached on the module, depending on the MPI_Op that it is
-       supporting.  */
+       supporting.*/
     double some_bxor_data;
 } ompi_op_sve_module_bxor_t;
 
@@ -100,15 +100,17 @@ OMPI_DECLSPEC ompi_op_base_module_t *
 OMPI_DECLSPEC ompi_op_base_module_t *
     ompi_op_sve_setup_bxor(ompi_op_t *op);
 
-
 OMPI_DECLSPEC ompi_op_base_module_t *
     ompi_op_sve_setup_min(ompi_op_t *op);
 
 OMPI_DECLSPEC ompi_op_base_module_t *
     ompi_op_sve_setup_sum(ompi_op_t *op);
 
-    OMPI_DECLSPEC ompi_op_base_module_t *
-     ompi_op_sve_setup_prod2buf(ompi_op_t *op);
+OMPI_DECLSPEC ompi_op_base_module_t *
+    ompi_op_sve_setup_prod2buf(ompi_op_t *op);
+
+//OMPI_DECLSPEC ompi_op_base_module_t *
+  //  ompi_op_sve_setup_prod2buf(ompi_op_t *op);
 
 
 END_C_DECLS

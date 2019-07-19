@@ -59,8 +59,8 @@ typedef struct {
        several integer types. */
     ompi_op_base_handler_fn_t fallback_float;
     ompi_op_base_module_t *fallback_float_module;
-    ompi_op_base_handler_fn_t fallback_real;
-    ompi_op_base_module_t *fallback_real_module;
+    ompi_op_base_handler_fn_t fallback_uint8;
+    ompi_op_base_module_t *fallback_uint8_module;
 
     ompi_op_base_handler_fn_t fallback_double;
     ompi_op_base_module_t *fallback_double_module;
@@ -78,8 +78,8 @@ static void module_prod2buf_constructor(module_prod2buf_t *m)
        data members!). */
     m->fallback_float = NULL;
     m->fallback_float_module = NULL;
-    m->fallback_real = NULL;
-    m->fallback_real_module = NULL;
+    m->fallback_uint8 = NULL;
+    m->fallback_uint8_module = NULL;
 
     m->fallback_double = NULL;
     m->fallback_double_module = NULL;
@@ -98,8 +98,8 @@ static void module_prod2buf_destructor(module_prod2buf_t *m)
        destructed. */
     m->fallback_float = (ompi_op_base_handler_fn_t) 0xdeadbeef;
     m->fallback_float_module = (ompi_op_base_module_t*) 0xdeadbeef;
-    m->fallback_real = (ompi_op_base_handler_fn_t) 0xdeadbeef;
-    m->fallback_real_module = (ompi_op_base_module_t*) 0xdeadbeef;
+    m->fallback_uint8 = (ompi_op_base_handler_fn_t) 0xdeadbeef;
+    m->fallback_uint8_module = (ompi_op_base_module_t*) 0xdeadbeef;
 
     m->fallback_double = (ompi_op_base_handler_fn_t) 0xdeadbeef;
     m->fallback_double_module = (ompi_op_base_module_t*) 0xdeadbeef;
@@ -120,7 +120,7 @@ static OBJ_CLASS_INSTANCE(module_prod2buf_t,
                           module_prod2buf_destructor);
 
 /**
- * Max function for C float
+ * Prod2buf function for C float
  */
 static void prod2buf_float(void *in, void *out, int *count,
                       ompi_datatype_t **type, ompi_op_base_module_t *module)
@@ -156,7 +156,7 @@ static void prod2buf_float(void *in, void *out, int *count,
     }
 }
 /**
- * Max function for C double
+ * prod2buf function for C double
  */
 static void prod2buf_double(void *in, void *out, int *count,
                        ompi_datatype_t **type, ompi_op_base_module_t *module)
@@ -170,25 +170,44 @@ static void prod2buf_double(void *in, void *out, int *count,
 }
 
 /**
- * Max function for Fortran REAL
+ * Prod2buf function for Fortran UINT8_T
  */
-static void prod2buf_real(void *in, void *out, int *count,
+static void prod2buf_uint8(void *in, void *out, int *count,
                      ompi_datatype_t **type, ompi_op_base_module_t *module)
 {
-    module_prod2buf_t *m = (module_prod2buf_t*) module;
-    opal_output(0, "In sve prod2buf real function");
+    opal_output(0, "In sve prod2buf uint8 function");
+    uint64_t i;
+    svbool_t Pg = svptrue_b8();
 
-    /* Just another sve function -- similar to prod2buf_int() */
+    /* Count the number of 8-bit elements in a pattern */
+    uint64_t step = svcntb();
+    uint64_t round = *count;
+    uint64_t remain = *count % step;
+    printf("Round: %lu Remain %lu Step %lu \n", round, remain, step);
 
-    m->fallback_real(in, out, count, type, m->fallback_real_module);
+    for(i=0; i< round; i=i+step)
+    {
+        svuint8_t  vsrc = svld1(Pg, (uint8_t*)in+i);
+        svuint8_t  vdst = svld1(Pg, (uint8_t*)out+i);
+        vdst=svmul_z(Pg,vdst,vsrc);
+        svst1(Pg, (uint8_t*)out+i,vdst);
+    }
+
+    if (remain !=0){
+        Pg = svwhilelt_b8_u64(0, remain);
+        svuint8_t  vsrc = svld1(Pg, (uint8_t*)in+i);
+        svuint8_t  vdst = svld1(Pg, (uint8_t*)out+i);
+        vdst=svmul_z(Pg,vdst,vsrc);
+        svst1(Pg, (uint8_t*)out+i,vdst);
+    }
 }
 
 /**
- * Max function for Fortran DOUBLE PRECISION
+ * Prod2buf function for Fortran DOUBLE PRECISION
  */
 static void prod2buf_double_precision(void *in, void *out, int *count,
-                                 ompi_datatype_t **type,
-                                 ompi_op_base_module_t *module)
+        ompi_datatype_t **type,
+        ompi_op_base_module_t *module)
 {
     module_prod2buf_t *m = (module_prod2buf_t*) module;
     opal_output(0, "In sve prod2buf double precision function");
@@ -228,13 +247,13 @@ ompi_op_base_module_t *ompi_op_sve_setup_prod2buf(ompi_op_t *op)
        it is being used and won't be freed/destructed. */
     OBJ_RETAIN(module->fallback_float_module);
 
-    /* Fortran REAL */
-    module->super.opm_fns[OMPI_OP_BASE_TYPE_REAL] = prod2buf_real;
-    module->fallback_real =
-        op->o_func.intrinsic.fns[OMPI_OP_BASE_TYPE_REAL];
-    module->fallback_real_module =
-        op->o_func.intrinsic.modules[OMPI_OP_BASE_TYPE_REAL];
-    OBJ_RETAIN(module->fallback_real_module);
+    /* Fortran UINT8_T */
+    module->super.opm_fns[OMPI_OP_BASE_TYPE_UINT8_T] = prod2buf_uint8;
+    module->fallback_uint8 =
+        op->o_func.intrinsic.fns[OMPI_OP_BASE_TYPE_UINT8_T];
+    module->fallback_uint8_module =
+        op->o_func.intrinsic.modules[OMPI_OP_BASE_TYPE_UINT8_T];
+    OBJ_RETAIN(module->fallback_uint8_module);
 
     /* Does our hardware support double precision? */
 

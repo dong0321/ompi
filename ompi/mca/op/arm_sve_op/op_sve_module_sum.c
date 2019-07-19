@@ -59,8 +59,8 @@ typedef struct {
        several integer types. */
     ompi_op_base_handler_fn_t fallback_float;
     ompi_op_base_module_t *fallback_float_module;
-    ompi_op_base_handler_fn_t fallback_real;
-    ompi_op_base_module_t *fallback_real_module;
+    ompi_op_base_handler_fn_t fallback_uint8;
+    ompi_op_base_module_t *fallback_uint8_module;
 
     ompi_op_base_handler_fn_t fallback_double;
     ompi_op_base_module_t *fallback_double_module;
@@ -78,8 +78,8 @@ static void module_sum_constructor(module_sum_t *m)
        data members!). */
     m->fallback_float = NULL;
     m->fallback_float_module = NULL;
-    m->fallback_real = NULL;
-    m->fallback_real_module = NULL;
+    m->fallback_uint8 = NULL;
+    m->fallback_uint8_module = NULL;
 
     m->fallback_double = NULL;
     m->fallback_double_module = NULL;
@@ -98,8 +98,8 @@ static void module_sum_destructor(module_sum_t *m)
        destructed. */
     m->fallback_float = (ompi_op_base_handler_fn_t) 0xdeadbeef;
     m->fallback_float_module = (ompi_op_base_module_t*) 0xdeadbeef;
-    m->fallback_real = (ompi_op_base_handler_fn_t) 0xdeadbeef;
-    m->fallback_real_module = (ompi_op_base_module_t*) 0xdeadbeef;
+    m->fallback_uint8 = (ompi_op_base_handler_fn_t) 0xdeadbeef;
+    m->fallback_uint8_module = (ompi_op_base_module_t*) 0xdeadbeef;
 
     m->fallback_double = (ompi_op_base_handler_fn_t) 0xdeadbeef;
     m->fallback_double_module = (ompi_op_base_module_t*) 0xdeadbeef;
@@ -120,7 +120,7 @@ static OBJ_CLASS_INSTANCE(module_sum_t,
                           module_sum_destructor);
 
 /**
- * Max function for C float
+ * Sum function for C float
  */
 static void sum_float(void *in, void *out, int *count,
                       ompi_datatype_t **type, ompi_op_base_module_t *module)
@@ -156,7 +156,7 @@ static void sum_float(void *in, void *out, int *count,
     }
 }
 /**
- * Max function for C double
+ * Sum function for C double
  */
 static void sum_double(void *in, void *out, int *count,
                        ompi_datatype_t **type, ompi_op_base_module_t *module)
@@ -170,21 +170,41 @@ static void sum_double(void *in, void *out, int *count,
 }
 
 /**
- * Max function for Fortran REAL
+ * Sum function for Fortran UINT8_T
  */
-static void sum_real(void *in, void *out, int *count,
+static void sum_uint8(void *in, void *out, int *count,
                      ompi_datatype_t **type, ompi_op_base_module_t *module)
 {
-    module_sum_t *m = (module_sum_t*) module;
-    opal_output(0, "In sve sum real function");
+    opal_output(0, "In sve sum uint8 function");
+    uint64_t i;
+    svbool_t Pg = svptrue_b8();
 
-    /* Just another sve function -- similar to sum_int() */
+    /* Count the number of 8-bit elements in a pattern */
+    uint64_t step = svcntb();
+    uint64_t round = *count;
+    uint64_t remain = *count % step;
+    printf("Round: %lu Remain %lu Step %lu \n", round, remain, step);
 
-    m->fallback_real(in, out, count, type, m->fallback_real_module);
+    for(i=0; i< round; i=i+step)
+    {
+        svuint8_t  vsrc = svld1(Pg, (uint8_t*)in+i);
+        svuint8_t  vdst = svld1(Pg, (uint8_t*)out+i);
+        vdst=svadd_z(Pg,vdst,vsrc);
+        svst1(Pg, (uint8_t*)out+i,vdst);
+    }
+
+    if (remain !=0){
+        Pg = svwhilelt_b8_u64(0, remain);
+        svuint8_t  vsrc = svld1(Pg, (uint8_t*)in+i);
+        svuint8_t  vdst = svld1(Pg, (uint8_t*)out+i);
+        vdst=svadd_z(Pg,vdst,vsrc);
+        svst1(Pg, (uint8_t*)out+i,vdst);
+    }
+
 }
 
 /**
- * Max function for Fortran DOUBLE PRECISION
+ * Sum function for Fortran DOUBLE PRECISION
  */
 static void sum_double_precision(void *in, void *out, int *count,
                                  ompi_datatype_t **type,
@@ -228,13 +248,13 @@ ompi_op_base_module_t *ompi_op_sve_setup_sum(ompi_op_t *op)
        it is being used and won't be freed/destructed. */
     OBJ_RETAIN(module->fallback_float_module);
 
-    /* Fortran REAL */
-    module->super.opm_fns[OMPI_OP_BASE_TYPE_REAL] = sum_real;
-    module->fallback_real =
-        op->o_func.intrinsic.fns[OMPI_OP_BASE_TYPE_REAL];
-    module->fallback_real_module =
-        op->o_func.intrinsic.modules[OMPI_OP_BASE_TYPE_REAL];
-    OBJ_RETAIN(module->fallback_real_module);
+    /* Fortran UINT8_T */
+    module->super.opm_fns[OMPI_OP_BASE_TYPE_UINT8_T] = sum_uint8;
+    module->fallback_uint8 =
+        op->o_func.intrinsic.fns[OMPI_OP_BASE_TYPE_UINT8_T];
+    module->fallback_uint8_module =
+        op->o_func.intrinsic.modules[OMPI_OP_BASE_TYPE_UINT8_T];
+    OBJ_RETAIN(module->fallback_uint8_module);
 
     /* Does our hardware support double precision? */
 

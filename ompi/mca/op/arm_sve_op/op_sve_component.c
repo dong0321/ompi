@@ -291,12 +291,6 @@ static struct ompi_op_base_module_1_0_0_t *
         module = ompi_op_sve_setup_max(op);
         break;
 
-    case OMPI_OP_BASE_FORTRAN_BXOR:
-        /* Corresponds to MPI_BXOR */
-        opal_output(ompi_op_base_framework.framework_output, "sve component op pick BXOR");
-        //module = ompi_op_sve_setup_sum(op);//ompi_op_sve_setup_bxor(op);
-        break;
-
     case OMPI_OP_BASE_FORTRAN_MIN:
         /* Corresponds to MPI_MAX */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick MIN");
@@ -312,12 +306,17 @@ static struct ompi_op_base_module_1_0_0_t *
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick PRO2BUF");
         module = ompi_op_sve_setup_prod2buf(op);
         break;
-    case OMPI_OP_BASE_FORTRAN_MINLOC:
-        /* Corresponds to MPI_MAX */
-        opal_output(ompi_op_base_framework.framework_output, "sve component op pick MINLOC");
-        //module = ompi_op_sve_setup_sum(op);
+    case OMPI_OP_BASE_FORTRAN_BXOR:
+        /* Corresponds to MPI_BXOR */
+        opal_output(ompi_op_base_framework.framework_output, "sve component op pick BXOR");
+        //module = ompi_op_sve_setup_bxor(op);
         break;
-
+    case OMPI_OP_BASE_FORTRAN_MAXLOC:
+        module = NULL;
+        break;
+    case OMPI_OP_BASE_FORTRAN_MINLOC:
+        module= NULL;
+        break;
     }
 
     /* If we got a module from above, we'll return it.  Otherwise,
