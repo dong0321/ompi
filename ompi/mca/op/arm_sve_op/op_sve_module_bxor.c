@@ -34,6 +34,10 @@
 #include "ompi/mca/op/base/base.h"
 #include "ompi/mca/op/arm_sve_op/op_sve.h"
 
+#ifdef __ARM_FEATURE_SVE
+#include <arm_sve.h>
+#endif /* __ARM_FEATURE_SVE */
+
 /**
  * Derive a struct from the base op module struct, allowing us to
  * cache some module-specific information for BXOR.  Note that
@@ -55,8 +59,8 @@ typedef struct {
        several integer types. */
     ompi_op_base_handler_fn_t fallback_int;
     ompi_op_base_module_t *fallback_int_module;
-    ompi_op_base_handler_fn_t fallback_long;
-    ompi_op_base_module_t *fallback_long_module;
+    ompi_op_base_handler_fn_t fallback_uint8;
+    ompi_op_base_module_t *fallback_uint8_module;
     ompi_op_base_handler_fn_t fallback_integer;
     ompi_op_base_module_t *fallback_integer_module;
 } module_bxor_t;
@@ -71,8 +75,8 @@ static void module_bxor_constructor(module_bxor_t *m)
        data members!). */
     m->fallback_int = NULL;
     m->fallback_int_module = NULL;
-    m->fallback_long = NULL;
-    m->fallback_long_module = NULL;
+    m->fallback_uint8 = NULL;
+    m->fallback_uint8_module = NULL;
     m->fallback_integer = NULL;
     m->fallback_integer_module = NULL;
 }
@@ -88,8 +92,8 @@ static void module_bxor_destructor(module_bxor_t *m)
        destructed. */
     m->fallback_int = (ompi_op_base_handler_fn_t) 0xdeadbeef;
     m->fallback_int_module = (ompi_op_base_module_t*) 0xdeadbeef;
-    m->fallback_long = (ompi_op_base_handler_fn_t) 0xdeadbeef;
-    m->fallback_long_module = (ompi_op_base_module_t*) 0xdeadbeef;
+    m->fallback_uint8 = (ompi_op_base_handler_fn_t) 0xdeadbeef;
+    m->fallback_uint8_module = (ompi_op_base_module_t*) 0xdeadbeef;
     m->fallback_integer = (ompi_op_base_handler_fn_t) 0xdeadbeef;
     m->fallback_integer_module = (ompi_op_base_module_t*) 0xdeadbeef;
 }
@@ -137,21 +141,39 @@ static void bxor_int(void *in, void *out, int *count,
 
     /* But for this sve, we'll just call the fallback function to
        actually do the work */
-    m->fallback_int(in, out, count, type, m->fallback_int_module);
 }
 
 /**
- * Bxor function for C long
+ * Bxor function for C uint8
  */
-static void bxor_long(void *in, void *out, int *count,
+static void bxor_uint8(void *in, void *out, int *count,
                      ompi_datatype_t **type, ompi_op_base_module_t *module)
 {
-    module_bxor_t *m = (module_bxor_t*) module;
-    opal_output(0, "In sve bxor long function");
+    opal_output(0, "In sve bxor uint8 function");
+    uint64_t i;
+    svbool_t Pg = svptrue_b8();
 
-    /* Just another sve function -- similar to bxor_int() */
+    /* Count the number of 8-bit elements in a pattern */
+    uint64_t step = svcntb();
+    uint64_t round = *count;
+    uint64_t remain = *count % step;
+    printf("Round: %lu Remain %lu Step %lu \n", round, remain, step);
 
-    m->fallback_long(in, out, count, type, m->fallback_long_module);
+    for(i=0; i< round; i=i+step)
+    {
+        svuint8_t  vsrc = svld1(Pg, (uint8_t*)in+i);
+        svuint8_t  vdst = svld1(Pg, (uint8_t*)out+i);
+        vdst=sveor_z(Pg,vdst,vsrc);
+        svst1(Pg, (uint8_t*)out+i,vdst);
+    }
+
+    if (remain !=0){
+        Pg = svwhilelt_b8_u64(0, remain);
+        svuint8_t  vsrc = svld1(Pg, (uint8_t*)in+i);
+        svuint8_t  vdst = svld1(Pg, (uint8_t*)out+i);
+        vdst=sveor_z(Pg,vdst,vsrc);
+        svst1(Pg, (uint8_t*)out+i,vdst);
+    }
 }
 
 /**
@@ -165,7 +187,6 @@ static void bxor_integer(void *in, void *out, int *count,
 
     /* Just another sve function -- similar to bxor_int() */
 
-    m->fallback_integer(in, out, count, type, m->fallback_integer_module);
 }
 
 /**
@@ -183,7 +204,6 @@ static void bxor_integer(void *in, void *out, int *count,
 ompi_op_base_module_t *ompi_op_sve_setup_bxor(ompi_op_t *op)
 {
     module_bxor_t *module = OBJ_NEW(module_bxor_t);
-
     /* Remember that we created an *sve* module (vs. a *base*
        module), so we can cache extra information on there that is
        specific for the BXOR operation.  Let's cache the original
@@ -199,14 +219,13 @@ ompi_op_base_module_t *ompi_op_sve_setup_bxor(ompi_op_t *op)
        increase the refcount) its module so that the module knows that
        it is being used and won't be freed/destructed. */
     OBJ_RETAIN(module->fallback_int_module);
-
-    /* C long */
-    module->super.opm_fns[OMPI_OP_BASE_TYPE_LONG_INT] = bxor_long;
-    module->fallback_long = op->o_func.intrinsic.fns[OMPI_OP_BASE_TYPE_LONG_INT];
-    module->fallback_long_module =
-        op->o_func.intrinsic.modules[OMPI_OP_BASE_TYPE_LONG_INT];
-    OBJ_RETAIN(module->fallback_long_module);
-
+    /* C uint8 */
+    module->super.opm_fns[OMPI_OP_BASE_TYPE_UINT8_T] = bxor_uint8;
+    module->fallback_uint8 =
+        op->o_func.intrinsic.fns[OMPI_OP_BASE_TYPE_UINT8_T];
+    module->fallback_uint8_module =
+        op->o_func.intrinsic.modules[OMPI_OP_BASE_TYPE_UINT8_T];
+    OBJ_RETAIN(module->fallback_uint8_module);
     /* Fortran INTEGER */
     module->super.opm_fns[OMPI_OP_BASE_TYPE_INTEGER] = bxor_integer;
     module->fallback_integer =
@@ -214,9 +233,6 @@ ompi_op_base_module_t *ompi_op_sve_setup_bxor(ompi_op_t *op)
     module->fallback_integer_module =
         op->o_func.intrinsic.modules[OMPI_OP_BASE_TYPE_INTEGER];
     OBJ_RETAIN(module->fallback_integer_module);
-
-    /* ...not listing the rest of the integer-typed functions in this
-       sve... */
 
     return (ompi_op_base_module_t*) module;
 }

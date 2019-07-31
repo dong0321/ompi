@@ -60,10 +60,12 @@ int main(int argc, char **argv) {
         MPI_Reduce_local(b,c,count, MPI_FLOAT, MPI_MIN);
         tend = MPI_Wtime();
     }
+    /*
         for (int i=0; i<count; i++)
         {
             printf("Psum%d %f \n",i, c[i] );
         }
+        */
 
         return 0;
     }
