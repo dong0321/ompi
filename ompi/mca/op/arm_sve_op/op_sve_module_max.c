@@ -1,15 +1,7 @@
 /*
- * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
- *                         University Research and Technology
- *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2007 The University of Tennessee and The University
+ * Copyright (c) 2019      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
- * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
- *                         University of Stuttgart.  All rights reserved.
- * Copyright (c) 2004-2005 The Regents of the University of California.
- *                         All rights reserved.
- * Copyright (c) 2008-2009 Cisco Systems, Inc.  All rights reserved.
  * Copyright (C) 2019      Arm Ltd.  ALL RIGHTS RESERVED.
  * $COPYRIGHT$
  *
@@ -20,7 +12,7 @@
 
 /** @file
  *
- * This is the max module source code.  It contains the "setup"
+ * This is the max module source code.  It contains
  * functions that will create a module for the MPI_MAX MPI_Op.
  */
 
@@ -48,16 +40,6 @@
 typedef struct {
     ompi_op_base_module_1_0_0_t super;
 
-    /* Just like the ompi_op_sve_component_t, this struct is meant to
-       cache information on a per-module basis.  What follows are
-       sves; replace them with whatever is relevant for your
-       component/module.  Keep in mind that there will be one distinct
-       module for each MPI_Op; you may want to have different data
-       cached on the module, depending on the MPI_Op that it is
-       supporting.
-
-       In this sve, we'll keep the fallback function pointers for
-       several integer types. */
     ompi_op_base_handler_fn_t fallback_float;
     ompi_op_base_module_t *fallback_float_module;
     ompi_op_base_handler_fn_t fallback_uint8;
@@ -215,8 +197,6 @@ static void max_double_precision(void *in, void *out, int *count,
     module_max_t *m = (module_max_t*) module;
     opal_output(0, "In sve max double precision function");
 
-    /* Just another sve function -- similar to max_int() */
-
     m->fallback_double_precision(in, out, count, type,
                                  m->fallback_double_precision_module);
 }
@@ -228,11 +208,9 @@ static void max_double_precision(void *in, void *out, int *count,
  * job is to create a module and fill in function pointers for the
  * functions that this hardware supports.
  */
-ompi_op_base_module_t *ompi_op_sve_setup_max(ompi_op_t *op)
+ompi_op_base_module_t *ompi_op_sve_max(ompi_op_t *op)
 {
     module_max_t *module = OBJ_NEW(module_max_t);
-
-    /* We defintely support the single precision floating point types */
 
     /* Remember that we created an *sve* module (vs. a *base*
        module), so we can cache extra information on there that is
@@ -278,9 +256,6 @@ ompi_op_base_module_t *ompi_op_sve_setup_max(ompi_op_t *op)
             op->o_func.intrinsic.modules[OMPI_OP_BASE_TYPE_DOUBLE_PRECISION];
         OBJ_RETAIN(module->fallback_double_precision_module);
     }
-
-    /* ...not listing the rest of the floating point-typed functions
-       in this sve... */
 
     return (ompi_op_base_module_t*) module;
 }

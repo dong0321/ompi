@@ -1,19 +1,7 @@
-/* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
- *                         University Research and Technology
- *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2011 The University of Tennessee and The University
+ * Copyright (c) 2019      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
- * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
- *                         University of Stuttgart.  All rights reserved.
- * Copyright (c) 2004-2005 The Regents of the University of California.
- *                         All rights reserved.
- * Copyright (c) 2008-2009 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
- *                         reserved.
- * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (C) 2019      Arm Ltd.  ALL RIGHTS RESERVED.
  * $COPYRIGHT$
  *
@@ -70,11 +58,6 @@ ompi_op_sve_component_t mca_op_sve_component = {
         .opc_init_query = sve_component_init_query,
         .opc_op_query = sve_component_op_query,
     },
-
-    /* Now comes the sve-component-specific data.  In this case,
-       we'll just leave it blank, defaulting all the values to
-       0/false/whatever.  We'll fill them in with meaningful values
-       during _component_init_query(). */
 };
 
 /*
@@ -124,33 +107,8 @@ static char *sve_component_version;
 static int sve_component_register(void)
 {
     int val;
-    char *str;
 
     opal_output(ompi_op_base_framework.framework_output, "sve component register");
-
-    /* Register any relevant MCA params.  At a minimum, perhaps some
-       information MCA params that return version and capability
-       information.  */
-
-    /* For sve, let's make a string MCA information parameter
-       containing the major.minor.release version number from the
-       libfoo support library (see configure.m4 for how we got these C
-       macros). */
-    opal_asprintf(&str, "%s.%s.%s",
-             OP_SVE_LIBFOO_VERSION_MAJOR,
-             OP_SVE_LIBFOO_VERSION_MINOR,
-             OP_SVE_LIBFOO_VERSION_RELEASE);
-    sve_component_version = str;
-    (void) mca_base_component_var_register(&mca_op_sve_component.super.opc_version,
-                                           "libfoo_version",
-                                           "Version of the libfoo support library that this component was built against.",
-                                           MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                           MCA_BASE_VAR_FLAG_DEFAULT_ONLY,
-                                           OPAL_INFO_LVL_9,
-                                           MCA_BASE_VAR_SCOPE_CONSTANT,
-                                           &sve_component_version);
-    /* The variable system duplicated the string. */
-    free(str);
 
     /* Additionally, since this component is simulating hardware,
        let's make MCA params that determine whethere a) the hardware
@@ -289,28 +247,28 @@ static struct ompi_op_base_module_1_0_0_t *
     case OMPI_OP_BASE_FORTRAN_MAX:
         /* Corresponds to MPI_MAX */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick MAX");
-        module = ompi_op_sve_setup_max(op);
+        module = ompi_op_sve_max(op);
         break;
 
     case OMPI_OP_BASE_FORTRAN_MIN:
         /* Corresponds to MPI_MAX */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick MIN");
-        module = ompi_op_sve_setup_min(op);
+        module = ompi_op_sve_min(op);
         break;
     case OMPI_OP_BASE_FORTRAN_SUM:
         /* Corresponds to MPI_MAX */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick SUM");
-        module = ompi_op_sve_setup_sum(op);
+        module = ompi_op_sve_sum(op);
         break;
     case OMPI_OP_BASE_FORTRAN_PROD:
         /* Corresponds to MPI_MAX */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick PRO2BUF");
-        module = ompi_op_sve_setup_prod2buf(op);
+        module = ompi_op_sve_prod2buf(op);
         break;
     case OMPI_OP_BASE_FORTRAN_BXOR:
         /* Corresponds to MPI_BXOR */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick BXOR");
-        //module = ompi_op_sve_setup_bxor(op);
+        //module = ompi_op_sve_bxor(op);
         break;
     case OMPI_OP_BASE_FORTRAN_MAXLOC:
         module = NULL;
@@ -323,7 +281,7 @@ static struct ompi_op_base_module_1_0_0_t *
     /* If we got a module from above, we'll return it.  Otherwise,
        we'll return NULL, indicating that this component does not want
        to be considered for selection for this MPI_Op.  Note that the
-       "setup" functions each returned a *sve* component pointer
+       functions each returned a *sve* component pointer
        (vs. a *base* component pointer -- where an *sve* component
        is a base component plus some other module-specific cached
        information), so we have to cast it to the right pointer type

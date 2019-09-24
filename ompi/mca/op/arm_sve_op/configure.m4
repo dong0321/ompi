@@ -1,16 +1,7 @@
-# -*- shell-script -*-
 #
-# Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
-#                         University Research and Technology
-#                         Corporation.  All rights reserved.
-# Copyright (c) 2004-2005 The University of Tennessee and The University
+# Copyright (c) 2019      The University of Tennessee and The University
 #                         of Tennessee Research Foundation.  All rights
 #                         reserved.
-# Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
-#                         University of Stuttgart.  All rights reserved.
-# Copyright (c) 2004-2005 The Regents of the University of California.
-#                         All rights reserved.
-# Copyright (c) 2008-2014 Cisco Systems, Inc.  All rights reserved.
 # Copyright (C) 2019      Arm Ltd.  ALL RIGHTS RESERVED.
 # $COPYRIGHT$
 #
@@ -19,7 +10,7 @@
 # $HEADER$
 #
 
-# Example op component configure.m4 file.  This file is slurped in by
+# SVE op component configure.m4 file.  This file is slurped in by
 # Open MPI's autogen.pl to be part of the top-level configure script.
 # This script must define (via AC_DEFUN) an m4 macro named
 # MCA_<framework>_<component>_CONFIG that executes either $1 if the

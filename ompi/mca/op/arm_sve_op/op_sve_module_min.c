@@ -1,15 +1,9 @@
 /*
- * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
- *                         University Research and Technology
- *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2007 The University of Tennessee and The University
+ * Copyright (c) 2019      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
- * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
- *                         University of Stuttgart.  All rights reserved.
- * Copyright (c) 2004-2005 The Regents of the University of California.
- *                         All rights reserved.
- * Copyright (c) 2008-2009 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (C) 2019      Arm Ltd.  ALL RIGHTS RESERVED.
+ *
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -19,8 +13,8 @@
 
 /** @file
  *
- * This is the min module source code.  It contains the "setup"
- * functions that will create a module for the MPI_MAX MPI_Op.
+ * This is the min module source code.  It contains
+ * functions that will create a module for the MPI_MIN MPI_Op.
  */
 
 #include "ompi_config.h"
@@ -47,16 +41,6 @@
 typedef struct {
     ompi_op_base_module_1_0_0_t super;
 
-    /* Just like the ompi_op_sve_component_t, this struct is meant to
-       cache information on a per-module basis.  What follows are
-       sves; replace them with whatever is relevant for your
-       component/module.  Keep in mind that there will be one distinct
-       module for each MPI_Op; you may want to have different data
-       cached on the module, depending on the MPI_Op that it is
-       supporting.
-
-       In this sve, we'll keep the fallback function pointers for
-       several integer types. */
     ompi_op_base_handler_fn_t fallback_float;
     ompi_op_base_module_t *fallback_float_module;
     ompi_op_base_handler_fn_t fallback_uint8;
@@ -120,7 +104,7 @@ static OBJ_CLASS_INSTANCE(module_min_t,
                           module_min_destructor);
 
 /**
- * Max function for C float
+ * Min function for C float
  */
 static void min_float(void *in, void *out, int *count,
                       ompi_datatype_t **type, ompi_op_base_module_t *module)
@@ -153,7 +137,7 @@ static void min_float(void *in, void *out, int *count,
 }
 
 /**
- * Max function for C double
+ * Min function for C double
  */
 static void min_double(void *in, void *out, int *count,
                        ompi_datatype_t **type, ompi_op_base_module_t *module)
@@ -161,13 +145,11 @@ static void min_double(void *in, void *out, int *count,
     module_min_t *m = (module_min_t*) module;
     opal_output(0, "In sve min double function");
 
-    /* Just another sve function -- similar to min_int() */
-
     m->fallback_double(in, out, count, type, m->fallback_double_module);
 }
 
 /**
- * Max function for Fortran UINT8_T
+ * Min function for Fortran UINT8_T
  */
 static void min_uint8(void *in, void *out, int *count,
                      ompi_datatype_t **type, ompi_op_base_module_t *module)
@@ -200,7 +182,7 @@ static void min_uint8(void *in, void *out, int *count,
 }
 
 /**
- * Max function for Fortran DOUBLE PRECISION
+ * Min function for Fortran DOUBLE PRECISION
  */
 static void min_double_precision(void *in, void *out, int *count,
                                  ompi_datatype_t **type,
@@ -209,28 +191,17 @@ static void min_double_precision(void *in, void *out, int *count,
     module_min_t *m = (module_min_t*) module;
     opal_output(0, "In sve min double precision function");
 
-    /* Just another sve function -- similar to min_int() */
-
     m->fallback_double_precision(in, out, count, type,
                                  m->fallback_double_precision_module);
 }
 
-/**
- * Setup function for MPI_MAX.  If we get here, we can assume that a)
- * the hardware is present, b) the MPI thread scenario is what we
- * want, and c) the MAX operation is supported.  So this function's
- * job is to create a module and fill in function pointers for the
- * functions that this hardware supports.
- */
-ompi_op_base_module_t *ompi_op_sve_setup_min(ompi_op_t *op)
+ompi_op_base_module_t *ompi_op_sve_min(ompi_op_t *op)
 {
     module_min_t *module = OBJ_NEW(module_min_t);
 
-    /* We defintely support the single precision floating point types */
-
     /* Remember that we created an *sve* module (vs. a *base*
        module), so we can cache extra information on there that is
-       specific for the MAX operation.  Let's cache the original
+       specific for the MIN operation.  Let's cache the original
        fallback function pointers, that were passed to us in this call
        (i.e., they're already assigned on the op). */
 

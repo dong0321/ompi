@@ -20,7 +20,7 @@
 
 /** @file
  *
- * This is the bxor module source code.  It contains the "setup"
+ * This is the bxor module source code.  It contains
  * functions that will create a module for the MPI_BXOR MPI_Op.
  */
 
@@ -202,7 +202,7 @@ static void bxor_integer(void *in, void *out, int *count,
  * will analyze what was returned in the module and re-set values on
  * the op if necessary.
  */
-ompi_op_base_module_t *ompi_op_sve_setup_bxor(ompi_op_t *op)
+ompi_op_base_module_t *ompi_op_sve_bxor(ompi_op_t *op)
 {
     module_bxor_t *module = OBJ_NEW(module_bxor_t);
     /* Remember that we created an *sve* module (vs. a *base*

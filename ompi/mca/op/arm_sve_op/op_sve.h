@@ -1,15 +1,7 @@
 /*
- * Copyright (c) 2004-2008 The Trustees of Indiana University and Indiana
- *                         University Research and Technology
- *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2005 The University of Tennessee and The University
+ * Copyright (c) 2019      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
- * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
- *                         University of Stuttgart.  All rights reserved.
- * Copyright (c) 2004-2005 The Regents of the University of California.
- *                         All rights reserved.
- * Copyright (c) 2008-2009 Cisco Systems, Inc.  All rights reserved.
  * Copyright (C) 2019      Arm Ltd.  ALL RIGHTS RESERVED.
  * $COPYRIGHT$
  *
@@ -63,13 +55,6 @@ typedef struct {
 typedef struct {
     ompi_op_base_module_1_0_0_t super;
 
-    /* Just like the ompi_op_sve_component_t, this struct is meant to
-       cache information on a per-module basis.  What follows are
-       sves; replace them with whatever is relevant for your
-       component/module.  Keep in mind that there will be one distinct
-       module for each MPI_Op; you may want to have different data
-       cached on the module, depending on the MPI_Op that it is
-       supporting.*/
     double some_bxor_data;
 } ompi_op_sve_module_bxor_t;
 
@@ -93,26 +78,22 @@ OMPI_DECLSPEC extern ompi_op_sve_component_t
  * Setup for MPI_MAX and return a module.
  */
 OMPI_DECLSPEC ompi_op_base_module_t *
-    ompi_op_sve_setup_max(ompi_op_t *op);
+    ompi_op_sve_max(ompi_op_t *op);
 
 /**
  * Setup for MPI_BXOR and return a module.
  */
 OMPI_DECLSPEC ompi_op_base_module_t *
-    ompi_op_sve_setup_bxor(ompi_op_t *op);
+    ompi_op_sve_bxor(ompi_op_t *op);
 
 OMPI_DECLSPEC ompi_op_base_module_t *
-    ompi_op_sve_setup_min(ompi_op_t *op);
+    ompi_op_sve_min(ompi_op_t *op);
 
 OMPI_DECLSPEC ompi_op_base_module_t *
-    ompi_op_sve_setup_sum(ompi_op_t *op);
+    ompi_op_sve_sum(ompi_op_t *op);
 
 OMPI_DECLSPEC ompi_op_base_module_t *
-    ompi_op_sve_setup_prod2buf(ompi_op_t *op);
-
-//OMPI_DECLSPEC ompi_op_base_module_t *
-  //  ompi_op_sve_setup_prod2buf(ompi_op_t *op);
-
+    ompi_op_sve_prod2buf(ompi_op_t *op);
 
 END_C_DECLS
 
