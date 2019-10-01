@@ -243,27 +243,30 @@ static struct ompi_op_base_module_1_0_0_t *
        OMPI_OP_BASE_FORTRAN_* enums.
 
        In this sve component, we support MAX and BXOR. */
+
+    //module->opm_fns = ompi_op_sve_functions;
+    //module->opm_3buff_fns =ompi_op_sve_3buff_functions;
     switch (op->o_f_to_c_index) {
     case OMPI_OP_BASE_FORTRAN_MAX:
         /* Corresponds to MPI_MAX */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick MAX");
-        module = ompi_op_sve_max(op);
+//        module = ompi_op_sve_max(op);
         break;
 
     case OMPI_OP_BASE_FORTRAN_MIN:
         /* Corresponds to MPI_MAX */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick MIN");
-        module = ompi_op_sve_min(op);
+  //      module = ompi_op_sve_min(op);
         break;
     case OMPI_OP_BASE_FORTRAN_SUM:
         /* Corresponds to MPI_MAX */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick SUM");
-        module = ompi_op_sve_sum(op);
+    //    module = ompi_op_sve_sum(op);
         break;
     case OMPI_OP_BASE_FORTRAN_PROD:
         /* Corresponds to MPI_MAX */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick PRO2BUF");
-        module = ompi_op_sve_prod2buf(op);
+      //  module = ompi_op_sve_prod2buf(op);
         break;
     case OMPI_OP_BASE_FORTRAN_BXOR:
         /* Corresponds to MPI_BXOR */

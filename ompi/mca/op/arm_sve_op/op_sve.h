@@ -94,7 +94,12 @@ OMPI_DECLSPEC ompi_op_base_module_t *
 
 OMPI_DECLSPEC ompi_op_base_module_t *
     ompi_op_sve_prod2buf(ompi_op_t *op);
-
+/*
+OMPI_DECLSPEC extern ompi_op_base_handler_fn_t
+ompi_op_sve_functions[OMPI_OP_BASE_FORTRAN_OP_MAX][OMPI_OP_BASE_TYPE_MAX];
+OMPI_DECLSPEC extern ompi_op_base_3buff_handler_fn_t
+ompi_op_sve_3buff_functions[OMPI_OP_BASE_FORTRAN_OP_MAX][OMPI_OP_BASE_TYPE_MAX];
+*/
 END_C_DECLS
 
 #endif /* MCA_OP_SVE_EXPORT_H */
