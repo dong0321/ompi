@@ -27,6 +27,7 @@
 #include "ompi/mca/op/op.h"
 #include "ompi/mca/op/base/base.h"
 #include "ompi/mca/op/arm_sve_op/op_sve.h"
+#include "ompi/mca/op/arm_sve_op/op_sve_functions.h"
 
 static int sve_component_open(void);
 static int sve_component_close(void);
@@ -106,7 +107,6 @@ static char *sve_component_version;
  */
 static int sve_component_register(void)
 {
-    int val;
 
     opal_output(ompi_op_base_framework.framework_output, "sve component register");
 
@@ -136,7 +136,6 @@ static int sve_component_register(void)
 
     return OMPI_SUCCESS;
 }
-
 
 /*
  * Query whether this component wants to be used in this process.
@@ -210,7 +209,7 @@ static int sve_component_init_query(bool enable_progress_threads,
 static struct ompi_op_base_module_1_0_0_t *
     sve_component_op_query(struct ompi_op_t *op, int *priority)
 {
-    ompi_op_base_module_t *module = NULL;
+    ompi_op_base_module_t *module = OBJ_NEW(ompi_op_base_module_t);
 
     opal_output(ompi_op_base_framework.framework_output, "sve component op query");
 
@@ -221,7 +220,6 @@ static struct ompi_op_base_module_1_0_0_t *
         opal_output(0, "sve component op query: not an intrinsic MPI_Op -- skipping");
         return NULL;
     }
-
     /* What follows is an sve of how to determine whether your
        component supports the queried MPI_Op.  You can do this lots of
        different ways; this is but one sve. */
@@ -241,37 +239,52 @@ static struct ompi_op_base_module_1_0_0_t *
        "op->o_f_to_c_index" value against the OMPI_OP_BASE_FORTRAN_*
        enums.  See ompi/mca/op/op.h for a full list of the
        OMPI_OP_BASE_FORTRAN_* enums.
+     */
 
-       In this sve component, we support MAX and BXOR. */
-
-    //module->opm_fns = ompi_op_sve_functions;
-    //module->opm_3buff_fns =ompi_op_sve_3buff_functions;
+    int i=0;
     switch (op->o_f_to_c_index) {
     case OMPI_OP_BASE_FORTRAN_MAX:
         /* Corresponds to MPI_MAX */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick MAX");
-//        module = ompi_op_sve_max(op);
+        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
+            module->opm_fns[i] = ompi_op_sve_functions[OMPI_OP_BASE_FORTRAN_MAX][i];
+        }
         break;
-
     case OMPI_OP_BASE_FORTRAN_MIN:
-        /* Corresponds to MPI_MAX */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick MIN");
-  //      module = ompi_op_sve_min(op);
+        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
+            module->opm_fns[i] = ompi_op_sve_functions[OMPI_OP_BASE_FORTRAN_MIN][i];
+        }
         break;
     case OMPI_OP_BASE_FORTRAN_SUM:
-        /* Corresponds to MPI_MAX */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick SUM");
-    //    module = ompi_op_sve_sum(op);
+        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
+            module->opm_fns[i] = ompi_op_sve_functions[OMPI_OP_BASE_FORTRAN_SUM][i];
+        }
         break;
     case OMPI_OP_BASE_FORTRAN_PROD:
-        /* Corresponds to MPI_MAX */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick PRO2BUF");
-      //  module = ompi_op_sve_prod2buf(op);
+        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
+            module->opm_fns[i] = ompi_op_sve_functions[OMPI_OP_BASE_FORTRAN_PROD][i];
+        }
+        break;
+    case OMPI_OP_BASE_FORTRAN_BOR:
+        opal_output(ompi_op_base_framework.framework_output, "sve component op pick BOR");
+        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
+            module->opm_fns[i] = ompi_op_sve_functions[OMPI_OP_BASE_FORTRAN_BOR][i];
+        }
+        break;
+    case OMPI_OP_BASE_FORTRAN_BAND:
+        opal_output(ompi_op_base_framework.framework_output, "sve component op pick BAND");
+        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
+            module->opm_fns[i] = ompi_op_sve_functions[OMPI_OP_BASE_FORTRAN_BAND][i];
+        }
         break;
     case OMPI_OP_BASE_FORTRAN_BXOR:
-        /* Corresponds to MPI_BXOR */
         opal_output(ompi_op_base_framework.framework_output, "sve component op pick BXOR");
-        //module = ompi_op_sve_bxor(op);
+        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
+            module->opm_fns[i] = ompi_op_sve_functions[OMPI_OP_BASE_FORTRAN_BXOR][i];
+        }
         break;
     case OMPI_OP_BASE_FORTRAN_MAXLOC:
         module = NULL;

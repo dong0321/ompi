@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/time.h>
 #include <stdbool.h>
+#include <stdint.h>
 #ifdef __ARM_FEATURE_SVE
 #include <arm_sve.h>
 #endif /* __ARM_FEATURE_SVE */
@@ -14,7 +15,7 @@
 float in_float[ARRAYSIZE];
 float inout_float[ARRAYSIZE];
 
-uint8_t in_unit8[ARRAYSIZE];
+uint8_t in_uint8[ARRAYSIZE];
 uint8_t inout_uint8[ARRAYSIZE];
 
 int main(int argc, char **argv) {
@@ -23,8 +24,8 @@ int main(int argc, char **argv) {
     int count = atoi(num_elem);
     char *sve_yes = argv[2];
     printf("#Sum %d elems, option %c \n",count, *sve_yes);
-
-    for (int i=0; i<count; i++)
+    int i;
+    for (i=0; i<count; i++)
     {
         in_float[i] = 1.0+1;
         inout_float[i] = 1.0+2;
@@ -71,6 +72,15 @@ int main(int argc, char **argv) {
         tend = MPI_Wtime();
     }
 
+    if(*sve_yes=='b') {
+        printf("#Local Reduce Logical: %d \n", count);
+        tstart = MPI_Wtime();
+        MPI_Reduce_local(in_uint8,inout_uint8,count, MPI_UINT8_T, MPI_BXOR);
+        MPI_Reduce_local(in_uint8,inout_uint8,count, MPI_UINT8_T, MPI_BAND);
+        MPI_Reduce_local(in_uint8,inout_uint8,count, MPI_UINT8_T, MPI_BOR);
+        tend = MPI_Wtime();
+    }
+    MPI_Finalize();
     return 0;
 }
 
