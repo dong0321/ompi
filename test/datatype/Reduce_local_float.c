@@ -40,7 +40,6 @@ int main(int argc, char **argv) {
     int elem_size1  = atoi(elem_size);
     char *op = argv[4];
 
-    printf("%s  %d elems, option %c \n",*op, count, *type);
     int i;
 
     for (i=0; i<count; i++)
@@ -244,7 +243,7 @@ int main(int argc, char **argv) {
         if((i+1)%16==0)
             printf("\n");
     }
-*/
+
     printf("\n ================\n");
     for (i=0; i<count; i++)
     {
@@ -252,7 +251,7 @@ int main(int argc, char **argv) {
         if((i+1)%64==0)
             printf("\n");
     }
-/*
+
     printf("\n ================\n");
     for (i=0; i<count; i++)
     {
