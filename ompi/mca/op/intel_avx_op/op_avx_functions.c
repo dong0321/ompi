@@ -40,20 +40,7 @@
             struct ompi_datatype_t **dtype, \
             struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
-    int step;                                                          \
-    switch(type_size) {                                                \
-        case 8:  \
-                 step = 64; \
-        break; \
-        case 16: \
-                 step = 32; \
-        break; \
-        case 32: \
-                 step = 16; \
-        break; \
-        case 64: \
-                 step = 8;  \
-    }\
+    int step = 512 / type_size;                                        \
     int size = *count/step; \
     int i; \
     int round = size*64; \
@@ -85,20 +72,7 @@
             struct ompi_datatype_t **dtype, \
             struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
-    int step;                                                          \
-    switch(type_size) {                                                \
-        case 8:  \
-                 step = 64; \
-        break; \
-        case 16: \
-                 step = 32; \
-        break; \
-        case 32: \
-                 step = 16; \
-        break; \
-        case 64: \
-                 step = 8;  \
-    }\
+    int step = 512 / type_size; \
     int size = *count/step; \
     int i; \
     int round = size*64; \
@@ -289,20 +263,7 @@
                 struct ompi_datatype_t **dtype, \
                 struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
-    int step;                                                          \
-    switch(type_size) {                                                \
-        case 8:  \
-                 step = 64; \
-        break; \
-        case 16: \
-                 step = 32; \
-        break; \
-        case 32: \
-                 step = 16; \
-        break; \
-        case 64: \
-                 step = 8;  \
-    }\
+    int step = 512 / type_size; \
     int size = *count/step; \
     int i; \
     int round = size*64; \
@@ -328,20 +289,7 @@
                 struct ompi_datatype_t **dtype, \
                 struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
-    int step;                                                          \
-    switch(type_size) {                                                \
-        case 8:  \
-                 step = 64; \
-        break; \
-        case 16: \
-                 step = 32; \
-        break; \
-        case 32: \
-                 step = 16; \
-        break; \
-        case 64: \
-                 step = 8;  \
-    }\
+    int step = 512 / type_size; \
     int size = *count/step; \
     int i; \
     int round = size*64; \

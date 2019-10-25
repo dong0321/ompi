@@ -63,7 +63,6 @@ ompi_op_avx_component_t mca_op_avx_component = {
  */
 static int avx_component_open(void)
 {
-    opal_output(ompi_op_base_framework.framework_output, "avx component open");
 
     /* A first level check to see if avx is even available in this
        process.  E.g., you may want to do a first-order check to see
@@ -84,7 +83,6 @@ static int avx_component_open(void)
  */
 static int avx_component_close(void)
 {
-    opal_output(ompi_op_base_framework.framework_output, "avx component close");
 
     /* If avx was opened successfully, close it (i.e., release any
        resources that may have been allocated on this component).
@@ -96,15 +94,11 @@ static int avx_component_close(void)
     return OMPI_SUCCESS;
 }
 
-static char *avx_component_version;
-
 /*
  * Register MCA params.
  */
 static int avx_component_register(void)
 {
-
-    opal_output(ompi_op_base_framework.framework_output, "avx component register");
 
     /* Additionally, since this component is simulating hardware,
        let's make MCA params that determine whethere a) the hardware
@@ -112,7 +106,7 @@ static int avx_component_register(void)
        types are supported.  This allows you to change the behavior of
        this component at run-time (by setting these MCA params at
        run-time), simulating different kinds of hardware. */
-    mca_op_avx_component.hardware_available = true;
+    mca_op_avx_component.hardware_available = false;
     (void) mca_base_component_var_register(&mca_op_avx_component.super.opc_version,
                                            "hardware_available",
                                            "Whether the hardware is available or not",
@@ -139,8 +133,6 @@ static int avx_component_register(void)
 static int avx_component_init_query(bool enable_progress_threads,
                                         bool enable_mpi_thread_multiple)
 {
-    opal_output(ompi_op_base_framework.framework_output, "avx component init query");
-
     if (mca_op_avx_component.hardware_available && !enable_mpi_thread_multiple) {
         return OMPI_SUCCESS;
     }
@@ -155,14 +147,11 @@ static struct ompi_op_base_module_1_0_0_t *
     avx_component_op_query(struct ompi_op_t *op, int *priority)
 {
     ompi_op_base_module_t *module = OBJ_NEW(ompi_op_base_module_t);
-
-    opal_output(ompi_op_base_framework.framework_output, "avx component op query");
-
+    printf("\n %p", module);
     /* Sanity check -- although the framework should never invoke the
        _component_op_query() on non-intrinsic MPI_Op's, we'll put a
        check here just to be sure. */
     if (0 == (OMPI_OP_FLAGS_INTRINSIC & op->o_flags)) {
-        opal_output(0, "avx component op query: not an intrinsic MPI_Op -- skipping");
         return NULL;
     }
 
@@ -170,52 +159,59 @@ static struct ompi_op_base_module_1_0_0_t *
     switch (op->o_f_to_c_index) {
     case OMPI_OP_BASE_FORTRAN_MAX:
         /* Corresponds to MPI_MAX */
-        opal_output(ompi_op_base_framework.framework_output, "avx component op pick MAX");
         for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
             module->opm_fns[i] = ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_MAX][i];
+            OBJ_RETAIN(module);
             module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_MAX][i];
+            OBJ_RETAIN(module);
         }
         break;
     case OMPI_OP_BASE_FORTRAN_MIN:
-        opal_output(ompi_op_base_framework.framework_output, "avx component op pick MIN");
         for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
             module->opm_fns[i] = ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_MIN][i];
+            OBJ_RETAIN(module);
             module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_MIN][i];
+            OBJ_RETAIN(module);
         }
         break;
     case OMPI_OP_BASE_FORTRAN_SUM:
-        opal_output(ompi_op_base_framework.framework_output, "avx component op pick SUM");
         for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
             module->opm_fns[i] = ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_SUM][i];
-             module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_SUM][i];
+            OBJ_RETAIN(module);
+            module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_SUM][i];
+            OBJ_RETAIN(module);
         }
         break;
     case OMPI_OP_BASE_FORTRAN_PROD:
-        opal_output(ompi_op_base_framework.framework_output, "avx component op pick PRO2BUF");
         for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
             module->opm_fns[i] = ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_PROD][i];
+            OBJ_RETAIN(module);
             module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_PROD][i];
+            OBJ_RETAIN(module);
         }
         break;
     case OMPI_OP_BASE_FORTRAN_BOR:
-        opal_output(ompi_op_base_framework.framework_output, "avx component op pick BOR");
         for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
             module->opm_fns[i] = ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_BOR][i];
-             module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_BOR][i];
+            OBJ_RETAIN(module);
+            module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_BOR][i];
+            OBJ_RETAIN(module);
         }
         break;
     case OMPI_OP_BASE_FORTRAN_BAND:
-        opal_output(ompi_op_base_framework.framework_output, "avx component op pick BAND");
         for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
             module->opm_fns[i] = ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_BAND][i];
-             module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_BAND][i];
+            OBJ_RETAIN(module);
+            module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_BAND][i];
+            OBJ_RETAIN(module);
         }
         break;
     case OMPI_OP_BASE_FORTRAN_BXOR:
-        opal_output(ompi_op_base_framework.framework_output, "avx component op pick BXOR");
         for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
             module->opm_fns[i] = ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_BXOR][i];
+            OBJ_RETAIN(module);
             module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_BXOR][i];
+            OBJ_RETAIN(module);
         }
         break;
     case OMPI_OP_BASE_FORTRAN_LAND:
@@ -233,8 +229,9 @@ static struct ompi_op_base_module_1_0_0_t *
     case OMPI_OP_BASE_FORTRAN_MINLOC:
         module= NULL;
         break;
+    default:
+        module= NULL;
     }
-
     /* If we got a module from above, we'll return it.  Otherwise,
        we'll return NULL, indicating that this component does not want
        to be considered for selection for this MPI_Op.  Note that the

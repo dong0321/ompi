@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
     int elem_size1  = atoi(elem_size);
     char *op = argv[4];
 
-    printf("Sum %d elems, option %c \n",count, *type);
+    printf("%s  %d elems, option %c \n",*op, count, *type);
     int i;
 
     for (i=0; i<count; i++)
@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
         in_double[i] = 10.0+1;
         inout_double[i] = 1.0+2;
 
-        in_uint8[i] = 2;
+        in_uint8[i] = 4;
         inout_uint8[i] = 3;
 
         in_uint16[i] = 2;
@@ -113,11 +113,11 @@ int main(int argc, char **argv) {
             tend = MPI_Wtime();
         }
 
-        if(strcmp(op, "band") == 0) {
+        if(strcmp(op, "land") == 0) {
             printf("#Local Reduce Logical: %d \n", count);
             tstart = MPI_Wtime();
             if (elem_size1 == 8)
-                MPI_Reduce_local(in_uint8,inout_uint8,count, MPI_INT8_T, MPI_BAND);
+                MPI_Reduce_local(in_uint8,inout_uint8,count, MPI_INT8_T, MPI_LAND);
             if (elem_size1 == 16)
                 MPI_Reduce_local(in_uint16,inout_uint16,count, MPI_INT16_T, MPI_BAND);
             if (elem_size1 == 32)
@@ -169,8 +169,21 @@ int main(int argc, char **argv) {
                 MPI_Reduce_local(in_uint64,inout_uint64,count, MPI_UINT64_T, MPI_PROD);
             tend = MPI_Wtime();
         }
-    }
 
+        if(strcmp(op, "band") == 0) {
+            printf("#Local Reduce Logical: %d \n", count);
+            tstart = MPI_Wtime();
+            if (elem_size1 == 8)
+                MPI_Reduce_local(in_uint8,inout_uint8,count, MPI_INT8_T, MPI_BAND);
+            if (elem_size1 == 16)
+                MPI_Reduce_local(in_uint16,inout_uint16,count, MPI_INT16_T, MPI_PROD);
+            if (elem_size1 == 32)
+                MPI_Reduce_local(in_uint32,inout_uint32,count, MPI_UINT32_T, MPI_PROD);
+            if (elem_size1 == 64)
+                MPI_Reduce_local(in_uint64,inout_uint64,count, MPI_UINT64_T, MPI_PROD);
+            tend = MPI_Wtime();
+        }
+    }
 
     if(*type=='f') {
         if(strcmp(op, "sum") == 0){
@@ -231,7 +244,7 @@ int main(int argc, char **argv) {
         if((i+1)%16==0)
             printf("\n");
     }
-
+*/
     printf("\n ================\n");
     for (i=0; i<count; i++)
     {
@@ -239,6 +252,7 @@ int main(int argc, char **argv) {
         if((i+1)%64==0)
             printf("\n");
     }
+/*
     printf("\n ================\n");
     for (i=0; i<count; i++)
     {
