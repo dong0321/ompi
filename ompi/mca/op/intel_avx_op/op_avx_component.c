@@ -147,7 +147,6 @@ static struct ompi_op_base_module_1_0_0_t *
     avx_component_op_query(struct ompi_op_t *op, int *priority)
 {
     ompi_op_base_module_t *module = OBJ_NEW(ompi_op_base_module_t);
-    printf("\n %p", module);
     /* Sanity check -- although the framework should never invoke the
        _component_op_query() on non-intrinsic MPI_Op's, we'll put a
        check here just to be sure. */
