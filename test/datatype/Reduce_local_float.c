@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
         in_double[i] = 10.0+1;
         inout_double[i] = 1.0+2;
 
-        in_uint8[i] = 4;
+        in_uint8[i] = 5;
         inout_uint8[i] = 3;
 
         in_uint16[i] = 2;

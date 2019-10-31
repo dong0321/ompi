@@ -2,6 +2,9 @@
  * Copyright (c) 2019      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
+ *
+ * Copyright (c) 2019      ARM Ltd.  All rights reserved.
+ *
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
