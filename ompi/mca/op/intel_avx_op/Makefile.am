@@ -9,9 +9,8 @@
 # $HEADER$
 #
 
-# This is an avx op component.  This Makefile.am is a typical
-# avx of how to integrate into Open MPI's Automake-based build
-# system.
+# This component provide support for the Advanced Vector Extensions (AVX)
+# available in recent versions of x86 processors.
 #
 # See https://github.com/open-mpi/ompi/wiki/devel-CreateComponent
 # for more details on how to make Open MPI components.
@@ -19,10 +18,8 @@
 # First, list all .h and .c sources.  It is necessary to list all .h
 # files so that they will be picked up in the distribution tarball.
 
-sources = \
-    op_avx.h \
-    op_avx_component.c \
-	op_avx_functions.c
+sources = op_avx_component.c op_avx_functions.c \
+	op_avx_functions.h op_avx.h
 
 # Open MPI components can be compiled two ways:
 #
@@ -60,6 +57,7 @@ endif
 mcacomponentdir = $(ompilibdir)
 mcacomponent_LTLIBRARIES = $(component)
 mca_op_avx_la_SOURCES = $(component_sources)
+mca_op_avx_la_CFLAGS = -mavx -march=skylake-avx512
 mca_op_avx_la_LDFLAGS = -module -avoid-version
 mca_op_avx_la_LIBADD = $(top_builddir)/ompi/lib@OMPI_LIBMPI_NAME@.la
 
@@ -70,4 +68,5 @@ mca_op_avx_la_LIBADD = $(top_builddir)/ompi/lib@OMPI_LIBMPI_NAME@.la
 
 noinst_LTLIBRARIES = $(lib)
 libmca_op_avx_la_SOURCES = $(lib_sources)
+libmca_op_avx_la_CFLAGS = -mavx -march=skylake-avx512
 libmca_op_avx_la_LDFLAGS = -module -avoid-version

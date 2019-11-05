@@ -22,8 +22,9 @@
 #include "ompi/mca/op/intel_avx_op/op_avx.h"
 #include "ompi/mca/op/intel_avx_op/op_avx_functions.h"
 
+#include <xmmintrin.h>  /* SIMD v2 */
+#include <pmmintrin.h>  /* SIMD v3 */
 #include <immintrin.h>
-
 /*
  * Since all the functions in this file are essentially identical, we
  * use a macro to substitute in names and types.  The core operation
@@ -36,7 +37,7 @@
  *
  */
 #define OP_AVX_FUNC(name, type_sign, type_size, type, op) \
-    static void ompi_op_avx_2buff_##name##_##type(void *in, void *out, int *count, \
+    static void ompi_op_avx_2buff_##name##_##type(void *_in, void *_out, int *count, \
             struct ompi_datatype_t **dtype, \
             struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
@@ -44,6 +45,8 @@
     int size = *count/step; \
     int i; \
     int round = size*64; \
+    type* in = (type*)_in; \
+    type* out = (type*)_out; \
     for (i = 0; i < round; i+=64) { \
         __m512i vecA =  _mm512_loadu_si512((in+i));\
         __m512i vecB =  _mm512_loadu_si512((out+i));\
@@ -68,7 +71,7 @@
  *
  */
 #define OP_AVX_BIT_FUNC(name, type_size, type, op) \
-    static void ompi_op_avx_2buff_##name##_##type(void *in, void *out, int *count, \
+    static void ompi_op_avx_2buff_##name##_##type(void *_in, void *_out, int *count, \
             struct ompi_datatype_t **dtype, \
             struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
@@ -76,6 +79,8 @@
     int size = *count/step; \
     int i; \
     int round = size*64; \
+    type* in = (type*)_in; \
+    type* out = (type*)_out; \
     for (i = 0; i < round; i+=64) { \
         __m512i vecA =  _mm512_loadu_si512((in+i));\
         __m512i vecB =  _mm512_loadu_si512((out+i));\
@@ -93,34 +98,79 @@
     }\
 }
 
-#define OP_AVX_FLOAT_FUNC(op) \
-    static void ompi_op_avx_2buff_##op##_float(void *in, void *out, int *count, \
-            struct ompi_datatype_t **dtype, \
-            struct ompi_op_base_module_1_0_0_t *module) \
-{                                                                      \
-    int step = 16;                                                          \
-    int size = *count/step; \
-    int i; \
-    int round = size*64; \
-    for (i = 0; i < round; i+=64) { \
-        __m512 vecA =  _mm512_load_ps((in+i));\
-        __m512 vecB =  _mm512_load_ps((out+i));\
-        __m512 res = _mm512_##op##_ps(vecA, vecB); \
-        _mm512_store_ps((out+i), res); \
-    }\
-    uint64_t left_over = *count - (size*step); \
-    if(left_over!=0){ \
-        uint64_t left_over64 = 0xFFFFFFFFFFFFFFFF; \
-        left_over = left_over64 >>(64-left_over); \
-        __m512 vecA = _mm512_maskz_load_ps(left_over, (in+round)); \
-        __m512 vecB = _mm512_maskz_load_ps(left_over, (out+round)); \
-        __m512 res = _mm512_##op##_ps(vecA, vecB); \
-        _mm512_mask_store_ps((out+round), left_over, res); \
-    }\
+#if 0
+#define OP_AVX_FLOAT_FUNC(op)						\
+  static void ompi_op_avx_2buff_##op##_float(void *in, void *out, int *count, \
+					     struct ompi_datatype_t **dtype, \
+					     struct ompi_op_base_module_1_0_0_t *module) \
+  {									\
+    int step = 16;							\
+    int size = *count/step;						\
+    int i;								\
+    int round = size*64;						\
+    for (i = 0; i < round; i+=64) {					\
+      __m512 vecA =  _mm512_load_ps((in+i));				\
+      __m512 vecB =  _mm512_load_ps((out+i));				\
+      __m512 res = _mm512_##op##_ps(vecA, vecB);			\
+	_mm512_store_ps((out+i), res);					\
+    }									\
+    uint64_t left_over = *count - (size*step);				\
+    if(left_over!=0) {							\
+      uint64_t left_over64 = 0xFFFFFFFFFFFFFFFF;			\
+      left_over = left_over64 >>(64-left_over);				\
+      __m512 vecA = _mm512_maskz_load_ps(left_over, (in+round));	\
+      __m512 vecB = _mm512_maskz_load_ps(left_over, (out+round));	\
+      __m512 res = _mm512_##op##_ps(vecA, vecB);			\
+	_mm512_mask_store_ps((out+round), left_over, res);		\
+    }									\
+  }
+
+#else
+#define OP_AVX_FLOAT_FUNC(op)				\
+static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
+					   struct ompi_datatype_t **dtype, \
+					   struct ompi_op_base_module_1_0_0_t *module) \
+{									\
+  int types_per_step = 512 / (8 * sizeof(float));			\
+  int left_over = *count;						\
+  float* in = (float*)_in;						\
+  float* out = (float*)_out;						\
+  for (; left_over >= types_per_step; left_over -= types_per_step) {	\
+    __m512 vecA =  _mm512_load_ps(in);					\
+    __m512 vecB =  _mm512_load_ps(out);					\
+    in += types_per_step;						\
+    __m512 res = _mm512_##op##_ps(vecA, vecB);				\
+      _mm512_store_ps(out, res);					\
+      out += types_per_step;						\
+  }									\
+  if( 0 != left_over ) {						\
+    types_per_step >>= 1;  /* 256 / (8 * sizeof(float));	*/	\
+    if( left_over >= types_per_step ) {					\
+      __m256 vecA =  _mm256_load_ps(in);				\
+      __m256 vecB =  _mm256_load_ps(out);				\
+      __m256 res = _mm256_##op##_ps(vecA, vecB);			\
+	_mm256_store_ps(out, res);					\
+	in += types_per_step;						\
+	out += types_per_step;						\
+	left_over -= types_per_step;					\
+    }									\
+  }									\
+  if( 0 != left_over ) {						\
+    switch(left_over) {							\
+    case 7: out[6] += in[6];						\
+    case 6: out[5] += in[5];						\
+    case 5: out[4] += in[4];						\
+    case 4: out[3] += in[3];						\
+    case 3: out[2] += in[2];						\
+    case 2: out[1] += in[1];						\
+    case 1: out[0] += in[0];						\
+    }									\
+  }									\
 }
+#endif
 
 #define OP_AVX_DOUBLE_FUNC(op) \
-    static void ompi_op_avx_2buff_##op##_double(void *in, void *out, int *count, \
+    static void ompi_op_avx_2buff_##op##_double(void *_in, void *_out, int *count, \
             struct ompi_datatype_t **dtype, \
             struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
@@ -128,6 +178,8 @@
     int size = *count/step; \
     int i; \
     int round = size*64; \
+    double* in = (double*)_in; \
+    double* out = (double*)_out; \
     for (i = 0; i < round; i+=64) { \
         __m512d vecA =  _mm512_load_pd((in+i));\
         __m512d vecB =  _mm512_load_pd((out+i));\
@@ -192,6 +244,48 @@
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC(add)
+#if 0
+static void ompi_op_avx_2buff_add_float(void *_in, void *_out, int *count,
+					struct ompi_datatype_t **dtype,
+					struct ompi_op_base_module_1_0_0_t *module) 
+{
+  int types_per_step = 512 / (8 * sizeof(float));
+  int left_over = *count;
+  float* in = (float*)_in;
+  float* out = (float*)_out;
+  for (; left_over >= types_per_step; left_over -= types_per_step) {
+    __m512 vecA =  _mm512_load_ps(in);
+    __m512 vecB =  _mm512_load_ps(out);
+    in += types_per_step;
+    __m512 res = _mm512_add_ps(vecA, vecB);
+      _mm512_store_ps(out, res);
+      out += types_per_step;
+  }
+  if( 0 != left_over ) {
+    types_per_step >>= 1;  /* 256 / (8 * sizeof(float)); */
+    if( left_over >= types_per_step ) {
+      __m256 vecA =  _mm256_load_ps(in);
+      __m256 vecB =  _mm256_load_ps(out);
+      __m256 res = _mm256_add_ps(vecA, vecB);
+	_mm256_store_ps(out, res);
+	in += types_per_step;
+	out += types_per_step;
+	left_over -= types_per_step;
+    }
+    if( 0 != left_over ) {
+      switch(left_over) {
+      case 7: out[6] += in[6];
+      case 6: out[5] += in[5];
+      case 5: out[4] += in[4];
+      case 4: out[3] += in[3];
+      case 3: out[2] += in[2];
+      case 2: out[1] += in[1];
+      case 1: out[0] += in[0];
+      }
+    }
+  }
+}
+#endif
     OP_AVX_DOUBLE_FUNC(add)
 
 /*************************************************************************
@@ -220,8 +314,8 @@
     OP_AVX_BIT_FUNC(band, 64,  int64_t, and)
     OP_AVX_BIT_FUNC(band, 64, uint64_t, and)
 
-    OP_AVX_FLOAT_FUNC(and)
-    OP_AVX_DOUBLE_FUNC(and)
+    // not defined - OP_AVX_FLOAT_FUNC(and)
+    // not defined - OP_AVX_DOUBLE_FUNC(and)
 
 /*************************************************************************
  * Bitwise OR
@@ -235,8 +329,8 @@
     OP_AVX_BIT_FUNC(bor, 64,  int64_t, or)
     OP_AVX_BIT_FUNC(bor, 64, uint64_t, or)
 
-    OP_AVX_FLOAT_FUNC(or)
-    OP_AVX_DOUBLE_FUNC(or)
+    // not defined - OP_AVX_FLOAT_FUNC(or)
+    // not defined - OP_AVX_DOUBLE_FUNC(or)
 
 /*************************************************************************
  * Bitwise XOR
@@ -250,16 +344,16 @@
     OP_AVX_BIT_FUNC(bxor, 64,  int64_t, xor)
     OP_AVX_BIT_FUNC(bxor, 64, uint64_t, xor)
 
-    OP_AVX_FLOAT_FUNC(xor)
-    OP_AVX_DOUBLE_FUNC(xor)
+    // not defined - OP_AVX_FLOAT_FUNC(xor)
+    // not defined - OP_AVX_DOUBLE_FUNC(xor)
 
 /*
  *  This is a three buffer (2 input and 1 output) version of the reduction
  *  routines, needed for some optimizations.
  */
 #define OP_AVX_FUNC_3BUFF(name, type_sign, type_size, type, op)\
-        static void ompi_op_avx_3buff_##name##_##type(void * restrict in1,   \
-                void * restrict in2, void * restrict out, int *count, \
+        static void ompi_op_avx_3buff_##name##_##type(void * restrict _in1,   \
+                void * restrict _in2, void * restrict _out, int *count, \
                 struct ompi_datatype_t **dtype, \
                 struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
@@ -267,6 +361,9 @@
     int size = *count/step; \
     int i; \
     int round = size*64; \
+    type* in1 = (type*)_in1; \
+    type* in2 = (type*)_in2; \
+    type* out = (type*)_out; \
     for (i = 0; i < round; i+=64) { \
         __m512i vecA =  _mm512_loadu_si512((in1+i));\
         __m512i vecB =  _mm512_loadu_si512((in2+i));\
@@ -285,7 +382,7 @@
 }
 
 #define OP_AVX_BIT_FUNC_3BUFF(name, type_size, type, op) \
-        static void ompi_op_avx_3buff_##op##_##type(void *in1, void *in2, void *out, int *count, \
+        static void ompi_op_avx_3buff_##op##_##type(void *_in1, void *_in2, void *_out, int *count, \
                 struct ompi_datatype_t **dtype, \
                 struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
@@ -293,6 +390,9 @@
     int size = *count/step; \
     int i; \
     int round = size*64; \
+    type* in1 = (type*)_in1; \
+    type* in2 = (type*)_in2; \
+    type* out = (type*)_out; \
     for (i = 0; i < round; i+=64) { \
         __m512i vecA =  _mm512_loadu_si512((in1+i));\
         __m512i vecB =  _mm512_loadu_si512((in2+i));\
@@ -311,7 +411,7 @@
 }
 
 #define OP_AVX_FLOAT_FUNC_3BUFF(op) \
-        static void ompi_op_avx_3buff_##op##_float(void *in1, void *in2, void *out, int *count, \
+        static void ompi_op_avx_3buff_##op##_float(void *_in1, void *_in2, void *_out, int *count, \
                 struct ompi_datatype_t **dtype, \
                 struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
@@ -319,6 +419,9 @@
     int size = *count/step; \
     int i; \
     int round = size*64; \
+    float* in1 = (float*)_in1; \
+    float* in2 = (float*)_in2; \
+    float* out = (float*)_out; \
     for (i = 0; i < round; i+=64) { \
         __m512 vecA =  _mm512_load_ps((in1+i));\
         __m512 vecB =  _mm512_load_ps((in2+i));\
@@ -337,7 +440,7 @@
 }
 
 #define OP_AVX_DOUBLE_FUNC_3BUFF(op) \
-        static void ompi_op_avx_3buff_##op##_double(void *in1, void *in2, void *out, int *count, \
+        static void ompi_op_avx_3buff_##op##_double(void *_in1, void *_in2, void *_out, int *count, \
                 struct ompi_datatype_t **dtype, \
                 struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
@@ -345,6 +448,9 @@
     int size = *count/step; \
     int i; \
     int round = size*64; \
+    double* in1 = (double*)_in1; \
+    double* in2 = (double*)_in2; \
+    double* out = (double*)_out; \
     for (i = 0; i < round; i+=64) { \
         __m512d vecA =  _mm512_load_pd((in1+i));\
         __m512d vecB =  _mm512_load_pd((in2+i));\
@@ -436,8 +542,8 @@
     OP_AVX_BIT_FUNC_3BUFF(band, 64,  int64_t, and)
     OP_AVX_BIT_FUNC_3BUFF(band, 64, uint64_t, and)
 
-    OP_AVX_FLOAT_FUNC_3BUFF(and)
-    OP_AVX_DOUBLE_FUNC_3BUFF(and)
+    // not defined - OP_AVX_FLOAT_FUNC_3BUFF(and)
+    // not defined - OP_AVX_DOUBLE_FUNC_3BUFF(and)
 
 /*************************************************************************
  * Bitwise OR
@@ -451,8 +557,8 @@
     OP_AVX_BIT_FUNC_3BUFF(bor, 64,  int64_t, or)
     OP_AVX_BIT_FUNC_3BUFF(bor, 64, uint64_t, or)
 
-    OP_AVX_FLOAT_FUNC_3BUFF(or)
-    OP_AVX_DOUBLE_FUNC_3BUFF(or)
+    // not defined - OP_AVX_FLOAT_FUNC_3BUFF(or)
+    // not defined - OP_AVX_DOUBLE_FUNC_3BUFF(or)
 
 /*************************************************************************
  * Bitwise XOR
@@ -466,8 +572,8 @@
     OP_AVX_BIT_FUNC_3BUFF(bxor, 64,  int64_t, xor)
     OP_AVX_BIT_FUNC_3BUFF(bxor, 64, uint64_t, xor)
 
-    OP_AVX_FLOAT_FUNC_3BUFF(xor)
-    OP_AVX_DOUBLE_FUNC_3BUFF(xor)
+    // not defined - OP_AVX_FLOAT_FUNC_3BUFF(xor)
+    // not defined - OP_AVX_DOUBLE_FUNC_3BUFF(xor)
 
 
 /** C integer ***********************************************************/

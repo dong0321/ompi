@@ -35,8 +35,6 @@ static struct ompi_op_base_module_1_0_0_t *
 static int avx_component_register(void);
 
 ompi_op_avx_component_t mca_op_avx_component = {
-    /* First, the mca_base_component_t struct containing meta
-       information about the component itself */
     {
         .opc_version = {
             OMPI_OP_BASE_VERSION_1_0_0,
@@ -133,7 +131,7 @@ static int avx_component_register(void)
 static int avx_component_init_query(bool enable_progress_threads,
                                         bool enable_mpi_thread_multiple)
 {
-    if (mca_op_avx_component.hardware_available && !enable_mpi_thread_multiple) {
+    if (mca_op_avx_component.hardware_available) {
         return OMPI_SUCCESS;
     }
     return OMPI_ERR_NOT_SUPPORTED;
