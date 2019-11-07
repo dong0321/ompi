@@ -18,6 +18,8 @@
 # First, list all .h and .c sources.  It is necessary to list all .h
 # files so that they will be picked up in the distribution tarball.
 
+AM_CPPFLAGS=$(op_avx_CPPFLAGS)
+
 sources = op_avx_component.c op_avx_functions.c \
 	op_avx_functions.h op_avx.h
 
@@ -37,7 +39,7 @@ sources = op_avx_component.c op_avx_functions.c \
 # MCA_BUILD_ompi_<framework>_<component>_DSO AM_CONDITIONAL to indicate
 # which way this component should be built.
 
-if MCA_BUILD_ompi_op_intel_avx_op_DSO
+if MCA_BUILD_ompi_op_avx_DSO
 lib =
 lib_sources =
 component = mca_op_avx.la
@@ -57,7 +59,7 @@ endif
 mcacomponentdir = $(ompilibdir)
 mcacomponent_LTLIBRARIES = $(component)
 mca_op_avx_la_SOURCES = $(component_sources)
-mca_op_avx_la_CFLAGS = -mavx -march=skylake-avx512
+mca_op_avx_la_CFLAGS = $(op_avx_CPPFLAGS)
 mca_op_avx_la_LDFLAGS = -module -avoid-version
 mca_op_avx_la_LIBADD = $(top_builddir)/ompi/lib@OMPI_LIBMPI_NAME@.la
 
@@ -68,5 +70,5 @@ mca_op_avx_la_LIBADD = $(top_builddir)/ompi/lib@OMPI_LIBMPI_NAME@.la
 
 noinst_LTLIBRARIES = $(lib)
 libmca_op_avx_la_SOURCES = $(lib_sources)
-libmca_op_avx_la_CFLAGS = -mavx -march=skylake-avx512
+libmca_op_avx_la_CFLAGS = $(op_avx_CPPFLAGS)
 libmca_op_avx_la_LDFLAGS = -module -avoid-version

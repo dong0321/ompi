@@ -23,8 +23,8 @@
 #include "ompi/op/op.h"
 #include "ompi/mca/op/op.h"
 #include "ompi/mca/op/base/base.h"
-#include "ompi/mca/op/intel_avx_op/op_avx.h"
-#include "ompi/mca/op/intel_avx_op/op_avx_functions.h"
+#include "ompi/mca/op/avx/op_avx.h"
+#include "ompi/mca/op/avx/op_avx_functions.h"
 
 static int avx_component_open(void);
 static int avx_component_close(void);
@@ -33,6 +33,61 @@ static int avx_component_init_query(bool enable_progress_threads,
 static struct ompi_op_base_module_1_0_0_t *
     avx_component_op_query(struct ompi_op_t *op, int *priority);
 static int avx_component_register(void);
+
+/**
+ * A slightly modified code from
+ * https://software.intel.com/en-us/articles/how-to-detect-new-instruction-support-in-the-4th-generation-intel-core-processor-family
+ */
+#if defined(__INTEL_COMPILER) && (__INTEL_COMPILER >= 1300)
+
+#include <immintrin.h>
+
+int has_intel_AVX512_features(void)
+{
+    const unsigned long avx512_features = _FEATURE_AVX2;
+
+    return _may_i_use_cpu_feature( avx512_features );
+}
+#else /* non-Intel compiler */
+#include <stdint.h>
+
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
+
+void run_cpuid(uint32_t eax, uint32_t ecx, uint32_t* abcd)
+{
+#if defined(_MSC_VER)
+    __cpuidex(abcd, eax, ecx);
+#else
+    uint32_t ebx, edx;
+#if defined( __i386__ ) && defined ( __PIC__ )
+    /* in case of PIC under 32-bit EBX cannot be clobbered */
+    __asm__ ( "movl %%ebx, %%edi \n\t cpuid \n\t xchgl %%ebx, %%edi" : "=D" (ebx),
+	      "+a" (eax), "=c" (ecx), "=d" (edx) );
+#else
+    __asm__ ( "cpuid" : "=b" (ebx),
+	      "+a" (eax), "=c" (ecx), "=d" (edx) );
+#endif  /* defined( __i386__ ) && defined ( __PIC__ ) */
+    abcd[0] = eax; abcd[1] = ebx; abcd[2] = ecx; abcd[3] = edx;
+#endif
+}
+
+int has_intel_AVX512_features(void)
+{
+  uint32_t abcd[4];
+  uint32_t osxsave_mask = (1 << 27);  // OSX.
+  uint32_t avx2_mask = (1 << 5);  // AVX2
+
+  run_cpuid( 1, 0, abcd );
+  // OS supports extended processor state management ?
+  if ( (abcd[2] & osxsave_mask) != osxsave_mask )
+    return 0;
+
+  run_cpuid( 7, 0, abcd );
+  return !!((abcd[1] & avx2_mask) != avx2_mask);
+}
+#endif /* non-Intel compiler */
 
 ompi_op_avx_component_t mca_op_avx_component = {
     {
@@ -72,8 +127,7 @@ static int avx_component_open(void)
        component won't even be shown in ompi_info output (which is
        probably not what you want).
     */
-
-    return OMPI_SUCCESS;
+  return OMPI_SUCCESS;
 }
 
 /*
@@ -95,24 +149,9 @@ static int avx_component_close(void)
 /*
  * Register MCA params.
  */
-static int avx_component_register(void)
+static int
+avx_component_register(void)
 {
-
-    /* Additionally, since this component is simulating hardware,
-       let's make MCA params that determine whethere a) the hardware
-       is available, and b) whether double precision floating point
-       types are supported.  This allows you to change the behavior of
-       this component at run-time (by setting these MCA params at
-       run-time), simulating different kinds of hardware. */
-    mca_op_avx_component.hardware_available = false;
-    (void) mca_base_component_var_register(&mca_op_avx_component.super.opc_version,
-                                           "hardware_available",
-                                           "Whether the hardware is available or not",
-                                           MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                           OPAL_INFO_LVL_9,
-                                           MCA_BASE_VAR_SCOPE_READONLY,
-                                           &mca_op_avx_component.hardware_available);
-
     mca_op_avx_component.double_supported = true;
     (void) mca_base_component_var_register(&mca_op_avx_component.super.opc_version,
                                            "double_supported",
@@ -128,21 +167,21 @@ static int avx_component_register(void)
 /*
  * Query whether this component wants to be used in this process.
  */
-static int avx_component_init_query(bool enable_progress_threads,
-                                        bool enable_mpi_thread_multiple)
+static int
+avx_component_init_query(bool enable_progress_threads,
+			 bool enable_mpi_thread_multiple)
 {
-    if (mca_op_avx_component.hardware_available) {
-        return OMPI_SUCCESS;
-    }
-    return OMPI_ERR_NOT_SUPPORTED;
+    if( !has_intel_AVX512_features() )
+        return OMPI_ERR_NOT_SUPPORTED;
+    return OMPI_SUCCESS;
 }
 
 
 /*
  * Query whether this component can be used for a specific op
  */
-static struct ompi_op_base_module_1_0_0_t *
-    avx_component_op_query(struct ompi_op_t *op, int *priority)
+static struct ompi_op_base_module_1_0_0_t*
+avx_component_op_query(struct ompi_op_t *op, int *priority)
 {
     ompi_op_base_module_t *module = OBJ_NEW(ompi_op_base_module_t);
     /* Sanity check -- although the framework should never invoke the
@@ -152,7 +191,7 @@ static struct ompi_op_base_module_1_0_0_t *
         return NULL;
     }
 
-    int i=0;
+    int i = 0;
     switch (op->o_f_to_c_index) {
     case OMPI_OP_BASE_FORTRAN_MAX:
         /* Corresponds to MPI_MAX */

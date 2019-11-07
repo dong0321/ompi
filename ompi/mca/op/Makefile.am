@@ -17,6 +17,8 @@
 # $HEADER$
 #
 
+AM_CPPFLAGS = $(LTDLINCL)
+
 # main library setup
 noinst_LTLIBRARIES = libmca_op.la
 libmca_op_la_SOURCES =

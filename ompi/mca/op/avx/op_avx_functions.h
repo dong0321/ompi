@@ -16,7 +16,7 @@
 #endif
 
 #include "ompi/mca/op/op.h"
-#include "ompi/mca/op/intel_avx_op/op_avx.h"
+#include "ompi/mca/op/avx/op_avx.h"
 
 BEGIN_C_DECLS
 

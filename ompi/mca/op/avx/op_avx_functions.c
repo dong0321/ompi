@@ -19,11 +19,9 @@
 #include "ompi/op/op.h"
 #include "ompi/mca/op/op.h"
 #include "ompi/mca/op/base/base.h"
-#include "ompi/mca/op/intel_avx_op/op_avx.h"
-#include "ompi/mca/op/intel_avx_op/op_avx_functions.h"
+#include "ompi/mca/op/avx/op_avx.h"
+#include "ompi/mca/op/avx/op_avx_functions.h"
 
-#include <xmmintrin.h>  /* SIMD v2 */
-#include <pmmintrin.h>  /* SIMD v3 */
 #include <immintrin.h>
 /*
  * Since all the functions in this file are essentially identical, we
