@@ -37,9 +37,6 @@ typedef struct {
        avxs; replace them with whatever is relevant for your
        component. */
 
-    /** A simple boolean indicating that the hardware is available. */
-    bool hardware_available;
-
     /** A simple boolean indicating whether double precision is
         supported. */
     bool double_supported;

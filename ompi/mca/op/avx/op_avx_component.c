@@ -183,7 +183,7 @@ avx_component_init_query(bool enable_progress_threads,
 static struct ompi_op_base_module_1_0_0_t*
 avx_component_op_query(struct ompi_op_t *op, int *priority)
 {
-    ompi_op_base_module_t *module = OBJ_NEW(ompi_op_base_module_t);
+    ompi_op_base_module_t *module = NULL;
     /* Sanity check -- although the framework should never invoke the
        _component_op_query() on non-intrinsic MPI_Op's, we'll put a
        check here just to be sure. */
@@ -191,82 +191,30 @@ avx_component_op_query(struct ompi_op_t *op, int *priority)
         return NULL;
     }
 
-    int i = 0;
     switch (op->o_f_to_c_index) {
     case OMPI_OP_BASE_FORTRAN_MAX:
-        /* Corresponds to MPI_MAX */
-        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
-            module->opm_fns[i] = ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_MAX][i];
-            OBJ_RETAIN(module);
-            module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_MAX][i];
-            OBJ_RETAIN(module);
-        }
-        break;
     case OMPI_OP_BASE_FORTRAN_MIN:
-        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
-            module->opm_fns[i] = ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_MIN][i];
-            OBJ_RETAIN(module);
-            module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_MIN][i];
-            OBJ_RETAIN(module);
-        }
-        break;
     case OMPI_OP_BASE_FORTRAN_SUM:
-        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
-            module->opm_fns[i] = ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_SUM][i];
-            OBJ_RETAIN(module);
-            module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_SUM][i];
-            OBJ_RETAIN(module);
-        }
-        break;
     case OMPI_OP_BASE_FORTRAN_PROD:
-        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
-            module->opm_fns[i] = ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_PROD][i];
-            OBJ_RETAIN(module);
-            module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_PROD][i];
-            OBJ_RETAIN(module);
-        }
-        break;
     case OMPI_OP_BASE_FORTRAN_BOR:
-        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
-            module->opm_fns[i] = ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_BOR][i];
-            OBJ_RETAIN(module);
-            module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_BOR][i];
-            OBJ_RETAIN(module);
-        }
-        break;
     case OMPI_OP_BASE_FORTRAN_BAND:
-        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
-            module->opm_fns[i] = ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_BAND][i];
-            OBJ_RETAIN(module);
-            module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_BAND][i];
-            OBJ_RETAIN(module);
-        }
-        break;
     case OMPI_OP_BASE_FORTRAN_BXOR:
-        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
-            module->opm_fns[i] = ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_BXOR][i];
-            OBJ_RETAIN(module);
-            module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_BXOR][i];
-            OBJ_RETAIN(module);
+        module = OBJ_NEW(ompi_op_base_module_t);
+        for (int i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
+	    module->opm_fns[i] = ompi_op_avx_functions[op->o_f_to_c_index][i];
+	    OBJ_RETAIN(module);
+            module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[op->o_f_to_c_index][i];
+	    OBJ_RETAIN(module);
         }
         break;
     case OMPI_OP_BASE_FORTRAN_LAND:
-        module = NULL;
-        break;
     case OMPI_OP_BASE_FORTRAN_LOR:
-        module = NULL;
-        break;
     case OMPI_OP_BASE_FORTRAN_LXOR:
-        module = NULL;
-        break;
     case OMPI_OP_BASE_FORTRAN_MAXLOC:
-        module = NULL;
-        break;
     case OMPI_OP_BASE_FORTRAN_MINLOC:
-        module= NULL;
-        break;
+    case OMPI_OP_BASE_FORTRAN_REPLACE:
     default:
-        module= NULL;
+        break;
     }
     /* If we got a module from above, we'll return it.  Otherwise,
        we'll return NULL, indicating that this component does not want

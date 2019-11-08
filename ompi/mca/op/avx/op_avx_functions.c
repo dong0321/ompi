@@ -242,48 +242,6 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC(add)
-#if 0
-static void ompi_op_avx_2buff_add_float(void *_in, void *_out, int *count,
-					struct ompi_datatype_t **dtype,
-					struct ompi_op_base_module_1_0_0_t *module) 
-{
-  int types_per_step = 512 / (8 * sizeof(float));
-  int left_over = *count;
-  float* in = (float*)_in;
-  float* out = (float*)_out;
-  for (; left_over >= types_per_step; left_over -= types_per_step) {
-    __m512 vecA =  _mm512_load_ps(in);
-    __m512 vecB =  _mm512_load_ps(out);
-    in += types_per_step;
-    __m512 res = _mm512_add_ps(vecA, vecB);
-      _mm512_store_ps(out, res);
-      out += types_per_step;
-  }
-  if( 0 != left_over ) {
-    types_per_step >>= 1;  /* 256 / (8 * sizeof(float)); */
-    if( left_over >= types_per_step ) {
-      __m256 vecA =  _mm256_load_ps(in);
-      __m256 vecB =  _mm256_load_ps(out);
-      __m256 res = _mm256_add_ps(vecA, vecB);
-	_mm256_store_ps(out, res);
-	in += types_per_step;
-	out += types_per_step;
-	left_over -= types_per_step;
-    }
-    if( 0 != left_over ) {
-      switch(left_over) {
-      case 7: out[6] += in[6];
-      case 6: out[5] += in[5];
-      case 5: out[4] += in[4];
-      case 4: out[3] += in[3];
-      case 3: out[2] += in[2];
-      case 2: out[1] += in[1];
-      case 1: out[0] += in[0];
-      }
-    }
-  }
-}
-#endif
     OP_AVX_DOUBLE_FUNC(add)
 
 /*************************************************************************
@@ -669,7 +627,7 @@ ompi_op_base_handler_fn_t ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_OP_MAX][OMP
     [OMPI_OP_BASE_FORTRAN_REPLACE] = {
         /* (MPI_ACCUMULATE is handled differently than the other
            reductions, so just zero out its function
-           impementations here to ensure that users don't invoke
+           implementations here to ensure that users don't invoke
            MPI_REPLACE with any reduction operations other than
            ACCUMULATE) */
         NULL,
@@ -732,7 +690,7 @@ ompi_op_base_3buff_handler_fn_t ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN
     [OMPI_OP_BASE_FORTRAN_REPLACE] = {
         /* MPI_ACCUMULATE is handled differently than the other
            reductions, so just zero out its function
-           impementations here to ensure that users don't invoke
+           implementations here to ensure that users don't invoke
            MPI_REPLACE with any reduction operations other than
            ACCUMULATE */
         NULL,
