@@ -40,15 +40,11 @@ sources = op_avx_component.c op_avx_functions.c \
 # which way this component should be built.
 
 if MCA_BUILD_ompi_op_avx_DSO
-lib =
-lib_sources =
-component = mca_op_avx.la
-component_sources = $(sources)
+component_noinst =
+component_install = mca_op_avx.la
 else
-lib = libmca_op_avx.la
-lib_sources = $(sources)
-component =
-component_sources =
+component_install =
+component_noinst = libmca_op_avx.la
 endif
 
 # Specific information for DSO builds.
@@ -57,18 +53,17 @@ endif
 # $prefix/lib/openmpi).
 
 mcacomponentdir = $(ompilibdir)
-mcacomponent_LTLIBRARIES = $(component)
-mca_op_avx_la_SOURCES = $(component_sources)
+mcacomponent_LTLIBRARIES = $(component_install)
+mca_op_avx_la_SOURCES = $(sources)
 mca_op_avx_la_CFLAGS = $(op_avx_CPPFLAGS)
 mca_op_avx_la_LDFLAGS = -module -avoid-version
-mca_op_avx_la_LIBADD = $(top_builddir)/ompi/lib@OMPI_LIBMPI_NAME@.la
 
 # Specific information for static builds.
 #
 # Note that we *must* "noinst"; the upper-layer Makefile.am's will
 # slurp in the resulting .la library into libmpi.
 
-noinst_LTLIBRARIES = $(lib)
-libmca_op_avx_la_SOURCES = $(lib_sources)
+noinst_LTLIBRARIES = $(component_noinst)
+libmca_op_avx_la_SOURCES = $(sources)
 libmca_op_avx_la_CFLAGS = $(op_avx_CPPFLAGS)
 libmca_op_avx_la_LDFLAGS = -module -avoid-version
