@@ -43,22 +43,20 @@
     int size = *count/step; \
     int i; \
     int round = size*64; \
-    type* in = (type*)_in; \
-    type* out = (type*)_out; \
-    for (i = 0; i < round; i+=64) { \
-        __m512i vecA =  _mm512_loadu_si512((in+i));\
-        __m512i vecB =  _mm512_loadu_si512((out+i));\
+    for (i = 0; i < round; i+= 64) { \
+        __m512i vecA =  _mm512_loadu_si512((_in+i));\
+        __m512i vecB =  _mm512_loadu_si512((_out+i));\
         __m512i res = _mm512_##op##_ep##type_sign##type_size(vecA, vecB); \
-        _mm512_storeu_si512((out+i), res); \
+        _mm512_storeu_si512((_out+i), res); \
     }\
     uint64_t left_over = *count - (size*step); \
     if(left_over!=0){ \
         uint64_t left_over64 = 0xFFFFFFFFFFFFFFFF; \
         left_over = left_over64 >>(64-left_over); \
-        __m512i vecA = _mm512_maskz_loadu_epi##type_size(left_over, (in+round)); \
-        __m512i vecB = _mm512_maskz_loadu_epi##type_size(left_over, (out+round)); \
+        __m512i vecA = _mm512_maskz_loadu_epi##type_size(left_over, (_in+round)); \
+        __m512i vecB = _mm512_maskz_loadu_epi##type_size(left_over, (_out+round)); \
         __m512i res = _mm512_##op##_ep##type_sign##type_size(vecA, vecB); \
-        _mm512_mask_storeu_epi##type_size((out+round), left_over, res); \
+        _mm512_mask_storeu_epi##type_size((_out+round), left_over, res); \
     }\
 }
 
@@ -77,22 +75,20 @@
     int size = *count/step; \
     int i; \
     int round = size*64; \
-    type* in = (type*)_in; \
-    type* out = (type*)_out; \
     for (i = 0; i < round; i+=64) { \
-        __m512i vecA =  _mm512_loadu_si512((in+i));\
-        __m512i vecB =  _mm512_loadu_si512((out+i));\
+        __m512i vecA =  _mm512_loadu_si512((_in+i));\
+        __m512i vecB =  _mm512_loadu_si512((_out+i));\
         __m512i res = _mm512_##op##_si512(vecA, vecB); \
-        _mm512_storeu_si512((out+i), res); \
+        _mm512_storeu_si512((_out+i), res); \
     }\
     uint64_t left_over = *count - (size*step); \
     if(left_over!=0){ \
         uint64_t left_over64 = 0xFFFFFFFFFFFFFFFF; \
         left_over = left_over64 >>(64-left_over); \
-        __m512i vecA = _mm512_maskz_loadu_epi##type_size(left_over, (in+round)); \
-        __m512i vecB = _mm512_maskz_loadu_epi##type_size(left_over, (out+round)); \
+        __m512i vecA = _mm512_maskz_loadu_epi##type_size(left_over, (_in+round)); \
+        __m512i vecB = _mm512_maskz_loadu_epi##type_size(left_over, (_out+round)); \
         __m512i res =  _mm512_##op##_si512(vecA, vecB); \
-        _mm512_mask_storeu_epi##type_size((out+round), left_over, res); \
+        _mm512_mask_storeu_epi##type_size((_out+round), left_over, res); \
     }\
 }
 
@@ -178,7 +174,7 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
     int round = size*64; \
     double* in = (double*)_in; \
     double* out = (double*)_out; \
-    for (i = 0; i < round; i+=64) { \
+    for (i = 0; i < round; i+=8) { \
         __m512d vecA =  _mm512_load_pd((in+i));\
         __m512d vecB =  _mm512_load_pd((out+i));\
         __m512d res = _mm512_##op##_pd(vecA, vecB); \
