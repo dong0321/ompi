@@ -89,9 +89,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 8 SUM check success!");
+                    printf("Integer Size 8 SUM check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 8 SUM check fail!");
+                    printf("Integer Size 8 SUM check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 16)
             {
@@ -102,9 +102,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 16 SUM check success!");
+                    printf("Integer Size 16 SUM check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 16 SUM check fail!");
+                    printf("Integer Size 16 SUM check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 32)
             {
@@ -115,9 +115,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 32 SUM check success!");
+                    printf("Integer Size 32 SUM check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 32 SUM check fail!");
+                    printf("Integer Size 32 SUM check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 64)
             {
@@ -128,9 +128,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 64 SUM check success!");
+                    printf("Integer Size 64 SUM check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 64 SUM check fail!");
+                    printf("Integer Size 64 SUM check \033[1;31m fail\033[0m!");
             }
             tend = MPI_Wtime();
         }
@@ -147,9 +147,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 8 MAX check success!");
+                    printf("Integer Size 8 MAX check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 8 MAX check fail!");
+                    printf("Integer Size 8 MAX check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 16)
             {
@@ -160,9 +160,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 16 MAX check success!");
+                    printf("Integer Size 16 MAX check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 16 MAX check fail!");
+                    printf("Integer Size 16 MAX check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 32)
             {
@@ -173,9 +173,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 32 MAX check success!");
+                    printf("Integer Size 32 MAX check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 32 MAX check fail!");
+                    printf("Integer Size 32 MAX check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 64)
             {
@@ -186,9 +186,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 64 MAX check success!");
+                    printf("Integer Size 64 MAX check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 64 MAX check fail!");
+                    printf("Integer Size 64 MAX check \033[1;31m fail\033[0m!");
             }
             tend = MPI_Wtime();
         }
@@ -205,9 +205,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 8 MIN check success!");
+                    printf("Integer Size 8 MIN check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 8 MIN check fail!");
+                    printf("Integer Size 8 MIN check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 16)
             {
@@ -218,9 +218,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 16 MIN check success!");
+                    printf("Integer Size 16 MIN check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 16 MIN check fail!");
+                    printf("Integer Size 16 MIN check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 32)
             {
@@ -231,9 +231,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 32 MIN check success!");
+                    printf("Integer Size 32 MIN check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 32 MIN check fail!");
+                    printf("Integer Size 32 MIN check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 64)
             {
@@ -244,9 +244,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 64 MIN check success!");
+                    printf("Integer Size 64 MIN check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 64 MIN check fail!");
+                    printf("Integer Size 64 MIN check \033[1;31m fail\033[0m!");
             }
             tend = MPI_Wtime();
         }
@@ -263,9 +263,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 8 BOR check success!");
+                    printf("Integer Size 8 BOR check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 8 BOR check fail!");
+                    printf("Integer Size 8 BOR check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 16)
             {
@@ -276,9 +276,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 16 BOR check success!");
+                    printf("Integer Size 16 BOR check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 16 BOR check fail!");
+                    printf("Integer Size 16 BOR check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 32)
             {
@@ -289,9 +289,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 32 BOR check success!");
+                    printf("Integer Size 32 BOR check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 32 BOR check fail!");
+                    printf("Integer Size 32 BOR check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 64)
             {
@@ -302,9 +302,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 64 BOR check success!");
+                    printf("Integer Size 64 BOR check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 64 BOR check fail!");
+                    printf("Integer Size 64 BOR check \033[1;31m fail\033[0m!");
             }
             tend = MPI_Wtime();
         }
@@ -321,9 +321,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 8 BXOR check success!");
+                    printf("Integer Size 8 BXOR check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 8 BXOR check fail!");
+                    printf("Integer Size 8 BXOR check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 16)
             {
@@ -334,9 +334,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 16 BXOR check success!");
+                    printf("Integer Size 16 BXOR check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 16 BXOR check fail!");
+                    printf("Integer Size 16 BXOR check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 32)
             {
@@ -347,9 +347,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 32 BXOR check success!");
+                    printf("Integer Size 32 BXOR check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 32 BXOR check fail!");
+                    printf("Integer Size 32 BXOR check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 64)
             {
@@ -360,9 +360,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 64 BXOR check success!");
+                    printf("Integer Size 64 BXOR check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 64 BXOR check fail!");
+                    printf("Integer Size 64 BXOR check \033[1;31m fail\033[0m!");
             }
             tend = MPI_Wtime();
         }
@@ -380,9 +380,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 8 PROD check success!");
+                    printf("Integer Size 8 PROD check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 8 PROD check fail!");
+                    printf("Integer Size 8 PROD check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 16)
             {
@@ -393,9 +393,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 16 PROD check success!");
+                    printf("Integer Size 16 PROD check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 16 PROD check fail!");
+                    printf("Integer Size 16 PROD check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 32)
             {
@@ -406,9 +406,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 32 PROD check success!");
+                    printf("Integer Size 32 PROD check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 32 PROD check fail!");
+                    printf("Integer Size 32 PROD check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 64)
             {
@@ -419,9 +419,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 64 PROD check success!");
+                    printf("Integer Size 64 PROD check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 64 PROD check fail!");
+                    printf("Integer Size 64 PROD check \033[1;31m fail\033[0m!");
             }
             tend = MPI_Wtime();
         }
@@ -438,9 +438,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 8 BAND check success!");
+                    printf("Integer Size 8 BAND check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 8 BAND check fail!");
+                    printf("Integer Size 8 BAND check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 16)
             {
@@ -451,9 +451,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 16 BAND check success!");
+                    printf("Integer Size 16 BAND check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 16 BAND check fail!");
+                    printf("Integer Size 16 BAND check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 32)
             {
@@ -464,9 +464,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 32 BAND check success!");
+                    printf("Integer Size 32 BAND check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 32 BAND check fail!");
+                    printf("Integer Size 32 BAND check \033[1;31m fail\033[0m!");
             }
             if (elem_size1 == 64)
             {
@@ -477,9 +477,9 @@ int main(int argc, char **argv) {
                         correctness = 0;
                 }
                 if(correctness)
-                    printf("Integer Size 64 BAND check success!");
+                    printf("Integer Size 64 BAND check \033[1;32m success!\033[0m");
                 else
-                    printf("Integer Size 64 BAND check fail!");
+                    printf("Integer Size 64 BAND check \033[1;31m fail\033[0m!");
             }
             tend = MPI_Wtime();
         }
@@ -495,9 +495,9 @@ int main(int argc, char **argv) {
                     correctness = 0;
             }
             if(correctness)
-                printf("Float Sum check success!");
+                printf("Float Sum check \033[1;32m success!\033[0m");
             else
-                printf("Float Sum check fail!");
+                printf("Float Sum check \033[1;31m fail\033[0m!");
             tend = MPI_Wtime();
         }
 
@@ -510,9 +510,9 @@ int main(int argc, char **argv) {
                     correctness = 0;
             }
             if(correctness)
-                printf("Float Max check success!");
+                printf("Float Max check \033[1;32m success!\033[0m");
             else
-                printf("Float Max check fail!");
+                printf("Float Max check \033[1;31m fail\033[0m!");
             tend = MPI_Wtime();
         }
 
@@ -525,9 +525,9 @@ int main(int argc, char **argv) {
                     correctness = 0;
             }
             if(correctness)
-                printf("Float Min check success!");
+                printf("Float Min check \033[1;32m success!\033[0m");
             else
-                printf("Float Min check fail!");
+                printf("Float Min check \033[1;31m fail\033[0m!");
             tend = MPI_Wtime();
         }
 
@@ -540,9 +540,9 @@ int main(int argc, char **argv) {
                     correctness = 0;
             }
             if(correctness)
-                printf("Float Prod check success!");
+                printf("Float Prod check \033[1;32m success!\033[0m");
             else
-                printf("Float Prod check fail!");
+                printf("Float Prod check \033[1;31m fail\033[0m!");
             tend = MPI_Wtime();
         }
     }
@@ -557,9 +557,9 @@ int main(int argc, char **argv) {
                     correctness = 0;
             }
             if(correctness)
-                printf("Double Sum check success!");
+                printf("Double Sum check \033[1;32m success!\033[0m");
             else
-                printf("Double Sum check fail!");
+                printf("Double Sum check \033[1;31m fail\033[0m!");
             tend = MPI_Wtime();
         }
 
@@ -572,9 +572,9 @@ int main(int argc, char **argv) {
                     correctness = 0;
             }
             if(correctness)
-                printf("Double Max check success!");
+                printf("Double Max check \033[1;32m success!\033[0m");
             else
-                printf("Double Max check fail!");
+                printf("Double Max check \033[1;31m fail\033[0m!");
             tend = MPI_Wtime();
         }
 
@@ -587,9 +587,9 @@ int main(int argc, char **argv) {
                     correctness = 0;
             }
             if(correctness)
-                printf("Double Min check success!");
+                printf("Double Min check \033[1;32m success!\033[0m");
             else
-                printf("Double Min check fail!");
+                printf("Double Min check \033[1;31m fail\033[0m!");
             tend = MPI_Wtime();
         }
         if(strcmp(op, "mul") == 0) {
@@ -601,9 +601,9 @@ int main(int argc, char **argv) {
                     correctness = 0;
             }
             if(correctness)
-                printf("Double Prod check success!");
+                printf("Double Prod check \033[1;32m success!\033[0m");
             else
-                 printf("Double Prod check fail!");
+                 printf("Double Prod check \033[1;31m fail\033[0m!");
              tend = MPI_Wtime();
          }
     }

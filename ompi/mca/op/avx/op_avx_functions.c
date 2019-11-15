@@ -39,24 +39,64 @@
             struct ompi_datatype_t **dtype, \
             struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
-    int step = 512 / type_size;                                        \
-    int size = *count/step; \
-    int i; \
-    int round = size*64; \
-    for (i = 0; i < round; i+= 64) { \
-        __m512i vecA =  _mm512_loadu_si512((_in+i));\
-        __m512i vecB =  _mm512_loadu_si512((_out+i));\
+    int types_per_step = 512 / (8 * sizeof(type));          \
+    int left_over = *count; \
+    type* in = (type*)_in; \
+    type* out = (type*)_out; \
+    for (; left_over >= types_per_step; left_over -= types_per_step) { \
+        __m512i vecA =  _mm512_loadu_si512(in);\
+        __m512i vecB =  _mm512_loadu_si512(out);\
+        in += types_per_step; \
         __m512i res = _mm512_##op##_ep##type_sign##type_size(vecA, vecB); \
-        _mm512_storeu_si512((_out+i), res); \
+        _mm512_storeu_si512((out), res); \
+        out += types_per_step; \
     }\
-    uint64_t left_over = *count - (size*step); \
     if(left_over!=0){ \
-        uint64_t left_over64 = 0xFFFFFFFFFFFFFFFF; \
-        left_over = left_over64 >>(64-left_over); \
-        __m512i vecA = _mm512_maskz_loadu_epi##type_size(left_over, (_in+round)); \
-        __m512i vecB = _mm512_maskz_loadu_epi##type_size(left_over, (_out+round)); \
-        __m512i res = _mm512_##op##_ep##type_sign##type_size(vecA, vecB); \
-        _mm512_mask_storeu_epi##type_size((_out+round), left_over, res); \
+        types_per_step >>= 1; \
+        if( left_over >= types_per_step ) {                 \
+            __m256i vecA = _mm256_loadu_si256(in); \
+            __m256i vecB = _mm256_loadu_si256(out); \
+            in += types_per_step;                       \
+            __m256i res =  _mm256_##op##_ep##type_sign##type_size(vecA, vecB); \
+            _mm256_storeu_si256(out, res); \
+            out += types_per_step;                        \
+            left_over -= types_per_step; \
+        }\
+        if( 0 != left_over ) {                        \
+            switch(left_over) {                         \
+                case 31: out[30] = current_func(out[30],in[30]) ;                        \
+                case 30: out[29] = current_func(out[29],in[29]) ;                        \
+                case 29: out[28] = current_func(out[28],in[28]) ;                        \
+                case 28: out[27] = current_func(out[27],in[27]) ;                        \
+                case 27: out[26] = current_func(out[26],in[26]) ;                        \
+                case 26: out[25] = current_func(out[25],in[25]) ;                        \
+                case 25: out[24] = current_func(out[24],in[24]) ;                        \
+                case 24: out[23] = current_func(out[23],in[23]) ;                        \
+                case 23: out[22] = current_func(out[22],in[22]) ;                        \
+                case 22: out[21] = current_func(out[21],in[21]) ;                        \
+                case 21: out[20] = current_func(out[20],in[20]) ;                        \
+                case 20: out[19] = current_func(out[19],in[19]) ;                        \
+                case 19: out[18] = current_func(out[18],in[18]) ;                        \
+                case 18: out[17] = current_func(out[17],in[17]) ;                        \
+                case 17: out[16] = current_func(out[16],in[16]) ;                        \
+                case 16: out[15] = current_func(out[15],in[15]) ;                        \
+                case 15: out[14] = current_func(out[14],in[14]) ;                        \
+                case 14: out[13] = current_func(out[13],in[13]) ;                        \
+                case 13: out[12] = current_func(out[12],in[12]) ;                        \
+                case 12: out[11] = current_func(out[11],in[11]) ;                        \
+                case 11: out[10] = current_func(out[10],in[10]) ;                        \
+                case 10: out[9] = current_func(out[9],in[9]) ;                        \
+                case 9: out[8] = current_func(out[8],in[8]) ;                        \
+                case 8: out[7] = current_func(out[7],in[7]) ;                        \
+                case 7: out[6] = current_func(out[6],in[6]) ;                        \
+                case 6: out[5] = current_func(out[5],in[5]) ;                        \
+                case 5: out[4] = current_func(out[4],in[4]) ;                        \
+                case 4: out[3] = current_func(out[3],in[3]) ;                        \
+                case 3: out[2] = current_func(out[2],in[2]) ;                        \
+                case 2: out[1] = current_func(out[1],in[1]) ;                        \
+                case 1: out[0] = current_func(out[0],in[0]) ;                        \
+            }\
+        }\
     }\
 }
 
@@ -71,24 +111,64 @@
             struct ompi_datatype_t **dtype, \
             struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
-    int step = 512 / type_size; \
-    int size = *count/step; \
-    int i; \
-    int round = size*64; \
-    for (i = 0; i < round; i+=64) { \
-        __m512i vecA =  _mm512_loadu_si512((_in+i));\
-        __m512i vecB =  _mm512_loadu_si512((_out+i));\
+    int types_per_step = 512 / (8 * sizeof(type)); \
+    int left_over = *count; \
+    type* in = (type*)_in; \
+    type* out = (type*)_out; \
+    for (; left_over >= types_per_step; left_over -= types_per_step) { \
+        __m512i vecA =  _mm512_loadu_si512(in);\
+        __m512i vecB =  _mm512_loadu_si512(out);\
+        in += types_per_step;                       \
         __m512i res = _mm512_##op##_si512(vecA, vecB); \
-        _mm512_storeu_si512((_out+i), res); \
+        _mm512_storeu_si512(out, res); \
+        out += types_per_step;                        \
     }\
-    uint64_t left_over = *count - (size*step); \
     if(left_over!=0){ \
-        uint64_t left_over64 = 0xFFFFFFFFFFFFFFFF; \
-        left_over = left_over64 >>(64-left_over); \
-        __m512i vecA = _mm512_maskz_loadu_epi##type_size(left_over, (_in+round)); \
-        __m512i vecB = _mm512_maskz_loadu_epi##type_size(left_over, (_out+round)); \
-        __m512i res =  _mm512_##op##_si512(vecA, vecB); \
-        _mm512_mask_storeu_epi##type_size((_out+round), left_over, res); \
+        types_per_step >>= 1; \
+        if( left_over >= types_per_step ) {                 \
+            __m256i vecA = _mm256_loadu_si256(in); \
+            __m256i vecB = _mm256_loadu_si256(out); \
+            in += types_per_step;                       \
+            __m256i res =  _mm256_##op##_si256(vecA, vecB); \
+            _mm256_storeu_si256(out, res); \
+            out += types_per_step;                        \
+            left_over -= types_per_step; \
+        }\
+        if( 0 != left_over ) {                        \
+            switch(left_over) {                         \
+                case 31: out[30] = current_func(out[30],in[30]) ;                        \
+                case 30: out[29] = current_func(out[29],in[29]) ;                        \
+                case 29: out[28] = current_func(out[28],in[28]) ;                        \
+                case 28: out[27] = current_func(out[27],in[27]) ;                        \
+                case 27: out[26] = current_func(out[26],in[26]) ;                        \
+                case 26: out[25] = current_func(out[25],in[25]) ;                        \
+                case 25: out[24] = current_func(out[24],in[24]) ;                        \
+                case 24: out[23] = current_func(out[23],in[23]) ;                        \
+                case 23: out[22] = current_func(out[22],in[22]) ;                        \
+                case 22: out[21] = current_func(out[21],in[21]) ;                        \
+                case 21: out[20] = current_func(out[20],in[20]) ;                        \
+                case 20: out[19] = current_func(out[19],in[19]) ;                        \
+                case 19: out[18] = current_func(out[18],in[18]) ;                        \
+                case 18: out[17] = current_func(out[17],in[17]) ;                        \
+                case 17: out[16] = current_func(out[16],in[16]) ;                        \
+                case 16: out[15] = current_func(out[15],in[15]) ;                        \
+                case 15: out[14] = current_func(out[14],in[14]) ;                        \
+                case 14: out[13] = current_func(out[13],in[13]) ;                        \
+                case 13: out[12] = current_func(out[12],in[12]) ;                        \
+                case 12: out[11] = current_func(out[11],in[11]) ;                        \
+                case 11: out[10] = current_func(out[10],in[10]) ;                        \
+                case 10: out[9] = current_func(out[9],in[9]) ;                        \
+                case 9: out[8] = current_func(out[8],in[8]) ;                        \
+                case 8: out[7] = current_func(out[7],in[7]) ;                        \
+                case 7: out[6] = current_func(out[6],in[6]) ;                        \
+                case 6: out[5] = current_func(out[5],in[5]) ;                        \
+                case 5: out[4] = current_func(out[4],in[4]) ;                        \
+                case 4: out[3] = current_func(out[3],in[3]) ;                        \
+                case 3: out[2] = current_func(out[2],in[2]) ;                        \
+                case 2: out[1] = current_func(out[1],in[1]) ;                        \
+                case 1: out[0] = current_func(out[0],in[0]) ;                        \
+            }\
+        }\
     }\
 }
 
@@ -151,15 +231,15 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
   }									\
   if( 0 != left_over ) {						\
     switch(left_over) {							\
-    case 7: out[6] += in[6];						\
-    case 6: out[5] += in[5];						\
-    case 5: out[4] += in[4];						\
-    case 4: out[3] += in[3];						\
-    case 3: out[2] += in[2];						\
-    case 2: out[1] += in[1];						\
-    case 1: out[0] += in[0];						\
-    }									\
-  }									\
+        case 7: out[6] = current_func(out[6],in[6]) ;                        \
+        case 6: out[5] = current_func(out[5],in[5]) ;                        \
+        case 5: out[4] = current_func(out[4],in[4]) ;                        \
+        case 4: out[3] = current_func(out[3],in[3]) ;                        \
+        case 3: out[2] = current_func(out[2],in[2]) ;                        \
+        case 2: out[1] = current_func(out[1],in[1]) ;                        \
+        case 1: out[0] = current_func(out[0],in[0]) ;                        \
+    }\
+  }\
 }
 #endif
 
@@ -168,26 +248,36 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
             struct ompi_datatype_t **dtype, \
             struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
-    int step = 8;                                                          \
-    int size = *count/step; \
-    int i; \
-    int round = size*64; \
+    int types_per_step = 512 / (8 * sizeof(double));           \
+    int left_over = *count; \
     double* in = (double*)_in; \
     double* out = (double*)_out; \
-    for (i = 0; i < round; i+=8) { \
-        __m512d vecA =  _mm512_load_pd((in+i));\
-        __m512d vecB =  _mm512_load_pd((out+i));\
+    for (; left_over >= types_per_step; left_over -= types_per_step) {    \
+        __m512d vecA =  _mm512_load_pd(in);\
+        __m512d vecB =  _mm512_load_pd(out);\
+        in += types_per_step;                       \
         __m512d res = _mm512_##op##_pd(vecA, vecB); \
-        _mm512_store_pd((out+i), res); \
+        _mm512_store_pd((out), res); \
+        out += types_per_step;                        \
     }\
-    uint64_t left_over = *count - (size*step); \
     if(left_over!=0){ \
-        uint64_t left_over64 = 0xFFFFFFFFFFFFFFFF; \
-        left_over = left_over64 >>(64-left_over); \
-        __m512d vecA = _mm512_maskz_load_pd(left_over, (in+round)); \
-        __m512d vecB = _mm512_maskz_load_pd(left_over, (out+round)); \
-        __m512d res = _mm512_##op##_pd(vecA, vecB); \
-        _mm512_mask_store_pd((out+round), left_over, res); \
+        types_per_step >>= 1;  /* 256 / (8 * sizeof(double));    */  \
+            if( left_over >= types_per_step ) {                 \
+                __m256 vecA =  _mm256_load_pd(in);                \
+                __m256 vecB =  _mm256_load_pd(out);               \
+                __m256 res = _mm256_##op##_pd(vecA, vecB);            \
+                _mm256_store_pd(out, res);                  \
+                in += types_per_step;                       \
+                out += types_per_step;                      \
+                left_over -= types_per_step;                    \
+            }\
+    }\
+    if( 0 != left_over ) {                        \
+        switch(left_over) {                         \
+            case 3: out[2] = current_func(out[2],in[2]) ;                        \
+            case 2: out[1] = current_func(out[1],in[1]) ;                        \
+            case 1: out[0] = current_func(out[0],in[0]) ;                        \
+        }\
     }\
 }
 
@@ -195,6 +285,8 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
 /*************************************************************************
  * Max
  *************************************************************************/
+#undef current_func
+#define current_func(a, b) ((a) > (b) ? (a) : (b))
     OP_AVX_FUNC(max, i, 8,    int8_t, max)
     OP_AVX_FUNC(max, u, 8,   uint8_t, max)
     OP_AVX_FUNC(max, i, 16,  int16_t, max)
@@ -211,6 +303,8 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
 /*************************************************************************
  * Min
  *************************************************************************/
+#undef current_func
+#define current_func(a, b) ((a) < (b) ? (a) : (b))
     OP_AVX_FUNC(min, i, 8,    int8_t, min)
     OP_AVX_FUNC(min, u, 8,   uint8_t, min)
     OP_AVX_FUNC(min, i, 16,  int16_t, min)
@@ -227,6 +321,8 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
 /*************************************************************************
  * Sum
  ************************************************************************/
+#undef current_func
+#define current_func(a, b) ((a) + (b))
     OP_AVX_FUNC(sum, i, 8,    int8_t, add)
     OP_AVX_FUNC(sum, i, 8,   uint8_t, add)
     OP_AVX_FUNC(sum, i, 16,  int16_t, add)
@@ -243,6 +339,8 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
 /*************************************************************************
  * Product
  *************************************************************************/
+#undef current_func
+#define current_func(a, b) ((a) * (b))
     OP_AVX_FUNC(prod, i, 16,  int16_t, mullo)
     OP_AVX_FUNC(prod, i, 16, uint16_t, mullo)
     OP_AVX_FUNC(prod, i, 32,  int32_t, mullo)
@@ -257,6 +355,8 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
 /*************************************************************************
  * Bitwise AND
  *************************************************************************/
+#undef current_func
+#define current_func(a, b) ((a) & (b))
     OP_AVX_BIT_FUNC(band, 8,    int8_t, and)
     OP_AVX_BIT_FUNC(band, 8,   uint8_t, and)
     OP_AVX_BIT_FUNC(band, 16,  int16_t, and)
@@ -272,6 +372,8 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
 /*************************************************************************
  * Bitwise OR
  *************************************************************************/
+#undef current_func
+#define current_func(a, b) ((a) | (b))
     OP_AVX_BIT_FUNC(bor, 8,    int8_t, or)
     OP_AVX_BIT_FUNC(bor, 8,   uint8_t, or)
     OP_AVX_BIT_FUNC(bor, 16,  int16_t, or)
@@ -287,6 +389,8 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
 /*************************************************************************
  * Bitwise XOR
  *************************************************************************/
+#undef current_func
+#define current_func(a, b) ((a) ^ (b))
     OP_AVX_BIT_FUNC(bxor, 8,    int8_t, xor)
     OP_AVX_BIT_FUNC(bxor, 8,   uint8_t, xor)
     OP_AVX_BIT_FUNC(bxor, 16,  int16_t, xor)
