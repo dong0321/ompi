@@ -136,7 +136,7 @@ static int sve_component_register(void)
 static int sve_component_init_query(bool enable_progress_threads,
                                         bool enable_mpi_thread_multiple)
 {
-    if (mca_op_sve_component.hardware_available && !enable_mpi_thread_multiple) {
+    if (mca_op_sve_component.hardware_available) {
         return OMPI_SUCCESS;
     }
     return OMPI_ERR_NOT_SUPPORTED;
@@ -160,59 +160,16 @@ static struct ompi_op_base_module_1_0_0_t *
     int i=0;
     switch (op->o_f_to_c_index) {
     case OMPI_OP_BASE_FORTRAN_MAX:
-        /* Corresponds to MPI_MAX */
-        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
-            module->opm_fns[i] = ompi_op_sve_functions[OMPI_OP_BASE_FORTRAN_MAX][i];
-            OBJ_RETAIN(module);
-            module->opm_3buff_fns[i] = ompi_op_sve_3buff_functions[OMPI_OP_BASE_FORTRAN_MAX][i];
-            OBJ_RETAIN(module);
-        }
-        break;
     case OMPI_OP_BASE_FORTRAN_MIN:
-        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
-            module->opm_fns[i] = ompi_op_sve_functions[OMPI_OP_BASE_FORTRAN_MIN][i];
-            OBJ_RETAIN(module);
-            module->opm_3buff_fns[i] = ompi_op_sve_3buff_functions[OMPI_OP_BASE_FORTRAN_MIN][i];
-            OBJ_RETAIN(module);
-        }
-        break;
     case OMPI_OP_BASE_FORTRAN_SUM:
-        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
-            module->opm_fns[i] = ompi_op_sve_functions[OMPI_OP_BASE_FORTRAN_SUM][i];
-            OBJ_RETAIN(module);
-            module->opm_3buff_fns[i] = ompi_op_sve_3buff_functions[OMPI_OP_BASE_FORTRAN_SUM][i];
-            OBJ_RETAIN(module);
-        }
-        break;
     case OMPI_OP_BASE_FORTRAN_PROD:
-        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
-            module->opm_fns[i] = ompi_op_sve_functions[OMPI_OP_BASE_FORTRAN_PROD][i];
-            OBJ_RETAIN(module);
-            module->opm_3buff_fns[i] = ompi_op_sve_3buff_functions[OMPI_OP_BASE_FORTRAN_PROD][i];
-            OBJ_RETAIN(module);
-        }
-        break;
     case OMPI_OP_BASE_FORTRAN_BOR:
-        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
-            module->opm_fns[i] = ompi_op_sve_functions[OMPI_OP_BASE_FORTRAN_BOR][i];
-            OBJ_RETAIN(module);
-            module->opm_3buff_fns[i] = ompi_op_sve_3buff_functions[OMPI_OP_BASE_FORTRAN_BOR][i];
-            OBJ_RETAIN(module);
-        }
-        break;
     case OMPI_OP_BASE_FORTRAN_BAND:
-        for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
-            module->opm_fns[i] = ompi_op_sve_functions[OMPI_OP_BASE_FORTRAN_BAND][i];
-            OBJ_RETAIN(module);
-            module->opm_3buff_fns[i] = ompi_op_sve_3buff_functions[OMPI_OP_BASE_FORTRAN_BAND][i];
-            OBJ_RETAIN(module);
-        }
-        break;
     case OMPI_OP_BASE_FORTRAN_BXOR:
         for (i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
-            module->opm_fns[i] = ompi_op_sve_functions[OMPI_OP_BASE_FORTRAN_BXOR][i];
+            module->opm_fns[i] = ompi_op_sve_functions[op->o_f_to_c_index][i];
             OBJ_RETAIN(module);
-            module->opm_3buff_fns[i] = ompi_op_sve_3buff_functions[OMPI_OP_BASE_FORTRAN_BXOR][i];
+            module->opm_3buff_fns[i] = ompi_op_sve_3buff_functions[op->o_f_to_c_index][i];
             OBJ_RETAIN(module);
         }
         break;

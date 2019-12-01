@@ -3,7 +3,7 @@
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
- * Copyright (c) 2019      ARM Ltd.  All rights reserved.
+ * Copyright (c) 2019      Arm Ltd.  All rights reserved.
  *
  * $COPYRIGHT$
  *

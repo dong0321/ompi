@@ -3,7 +3,7 @@
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
- * Copyright (c) 2019      ARM Ltd.  All rights reserved.
+ * Copyright (c) 2019      Arm Ltd.  All rights reserved.
  *
  * $COPYRIGHT$
  *
@@ -38,329 +38,306 @@
  *
  */
 #define OP_SVE_FUNC(name, type_name, type_size, type, op) \
-    static void ompi_op_sve_2buff_##name##_##type_name(void *in, void *out, int *count, \
+    static void ompi_op_sve_2buff_##name##_##type(void *_in, void *_out, int *count, \
             struct ompi_datatype_t **dtype, \
             struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
-    uint64_t i; \
-    uint64_t step = 0; \
+    int types_per_step = svcnt##type_name();                           \
+    int left_over = *count; \
+    type* in = (type*)_in; \
+    type* out = (type*)_out; \
     svbool_t Pg = svptrue_b##type_size(); \
-    switch(type_size) {                                                \
-        case 8:                                                        \
-               step = svcntb();                                        \
-               break;                                                  \
-        case 16:                                                       \
-               step = svcnth();                                        \
-               break;                                                  \
-        case 32:                                                       \
-               step = svcntw();                                        \
-               break;                                                  \
-        case 64:                                                       \
-               step = svcntd();                                        \
-    }    \
-    uint64_t round = *count;                                           \
-    uint64_t remain = *count % step;                                   \
-    for(i=0; i< round; i=i+step)                                       \
-    {                                                                  \
-        sv##type  vsrc = svld1(Pg, (type *)in+i);                    \
-        sv##type  vdst = svld1(Pg, (type *)out+i);                   \
-        vdst=sv##op##_z(Pg,vdst,vsrc);                               \
-        svst1(Pg, (type *)out+i,vdst);                                 \
+    for (; left_over >= types_per_step; left_over -= types_per_step) { \
+        sv##type  vsrc = svld1(Pg, in);                                \
+        sv##type  vdst = svld1(Pg, out);                               \
+        in += types_per_step;                                          \
+        vdst=sv##op##_z(Pg,vdst,vsrc);                                 \
+        svst1(Pg, out,vdst);                                           \
+        out += types_per_step; \
     }                                                                  \
     \
-    if (remain !=0){                                                   \
-        Pg = svwhilelt_b##type_size##_u64(0, remain);                  \
-        sv##type  vsrc = svld1(Pg, (type *)in+i);                    \
-        sv##type  vdst = svld1(Pg, (type *)out+i);                   \
-        vdst=sv##op##_z(Pg,vdst,vsrc);                               \
-        svst1(Pg, (type *)out+i,vdst);                                 \
+    if (left_over !=0){                                                \
+        Pg = svwhilelt_b##type_size##_u64(0, left_over);               \
+        sv##type  vsrc = svld1(Pg, in);                                \
+        sv##type  vdst = svld1(Pg, out);                               \
+        vdst=sv##op##_z(Pg,vdst,vsrc);                                 \
+        svst1(Pg, out,vdst);                                           \
     } \
 }
 
 /*************************************************************************
  * Max
  *************************************************************************/
-    OP_SVE_FUNC(max, int8_t  ,  8,   int8_t, max)
-    OP_SVE_FUNC(max, uint8_t,   8,  uint8_t, max)
-    OP_SVE_FUNC(max, int16_t,  16,  int16_t, max)
-    OP_SVE_FUNC(max, uint16_t, 16, uint16_t, max)
-    OP_SVE_FUNC(max, int32_t,  32,  int32_t, max)
-    OP_SVE_FUNC(max, uint32_t, 32, uint32_t, max)
-    OP_SVE_FUNC(max, int64_t,  64,  int64_t, max)
-    OP_SVE_FUNC(max, uint64_t, 64, uint64_t, max)
+    OP_SVE_FUNC(max, b,  8,   int8_t, max)
+    OP_SVE_FUNC(max, b,   8,  uint8_t, max)
+    OP_SVE_FUNC(max, h,  16,  int16_t, max)
+    OP_SVE_FUNC(max, h, 16, uint16_t, max)
+    OP_SVE_FUNC(max, w,  32,  int32_t, max)
+    OP_SVE_FUNC(max, w, 32, uint32_t, max)
+    OP_SVE_FUNC(max, d,  64,  int64_t, max)
+    OP_SVE_FUNC(max, d, 64, uint64_t, max)
 
     /* Floating point */
 #if defined(HAVE_SHORT_FLOAT)
-    OP_SVE_FUNC(max, short_float, 16, float16_t, max)
+    OP_SVE_FUNC(max, h, 16, float16_t, max)
 #elif defined(HAVE_OPAL_SHORT_FLOAT_T)
-    OP_SVE_FUNC(max, short_float, 16, float16_t, max)
+    OP_SVE_FUNC(max, h, 16, float16_t, max)
 #endif
-    OP_SVE_FUNC(max, float, 32, float32_t, max)
-    OP_SVE_FUNC(max, double, 64, float64_t, max)
+    OP_SVE_FUNC(max, w, 32, float32_t, max)
+    OP_SVE_FUNC(max, d, 64, float64_t, max)
 
 /*************************************************************************
  * Min
  *************************************************************************/
-    OP_SVE_FUNC(min, int8_t  ,  8,   int8_t, min)
-    OP_SVE_FUNC(min, uint8_t,   8,  uint8_t, min)
-    OP_SVE_FUNC(min, int16_t,  16,  int16_t, min)
-    OP_SVE_FUNC(min, uint16_t, 16, uint16_t, min)
-    OP_SVE_FUNC(min, int32_t,  32,  int32_t, min)
-    OP_SVE_FUNC(min, uint32_t, 32, uint32_t, min)
-    OP_SVE_FUNC(min, int64_t,  64,  int64_t, min)
-    OP_SVE_FUNC(min, uint64_t, 64, uint64_t, min)
+    OP_SVE_FUNC(min, b,  8,   int8_t, min)
+    OP_SVE_FUNC(min, b,   8,  uint8_t, min)
+    OP_SVE_FUNC(min, h,  16,  int16_t, min)
+    OP_SVE_FUNC(min, h, 16, uint16_t, min)
+    OP_SVE_FUNC(min, w,  32,  int32_t, min)
+    OP_SVE_FUNC(min, w, 32, uint32_t, min)
+    OP_SVE_FUNC(min, d,  64,  int64_t, min)
+    OP_SVE_FUNC(min, d, 64, uint64_t, min)
 
     /* Floating point */
 #if defined(HAVE_SHORT_FLOAT)
-    OP_SVE_FUNC(min, short_float, 16, float16_t, min)
+    OP_SVE_FUNC(min, h, 16, float16_t, min)
 #elif defined(HAVE_OPAL_SHORT_FLOAT_T)
-    OP_SVE_FUNC(min, short_float, 16, float16_t, min)
+    OP_SVE_FUNC(min, h, 16, float16_t, min)
 #endif
-    OP_SVE_FUNC(min, float, 32, float32_t, min)
-    OP_SVE_FUNC(min, double, 64, float64_t, min)
+    OP_SVE_FUNC(min, w, 32, float32_t, min)
+    OP_SVE_FUNC(min, d, 64, float64_t, min)
 
-/*************************************************************************
+ /*************************************************************************
  * Sum
  ************************************************************************/
-    OP_SVE_FUNC(sum, int8_t  ,  8,   int8_t, add)
-    OP_SVE_FUNC(sum, uint8_t,   8,  uint8_t, add)
-    OP_SVE_FUNC(sum, int16_t,  16,  int16_t, add)
-    OP_SVE_FUNC(sum, uint16_t, 16, uint16_t, add)
-    OP_SVE_FUNC(sum, int32_t,  32,  int32_t, add)
-    OP_SVE_FUNC(sum, uint32_t, 32, uint32_t, add)
-    OP_SVE_FUNC(sum, int64_t,  64,  int64_t, add)
-    OP_SVE_FUNC(sum, uint64_t, 64, uint64_t, add)
+    OP_SVE_FUNC(sum, b,  8,   int8_t, add)
+    OP_SVE_FUNC(sum, b,   8,  uint8_t, add)
+    OP_SVE_FUNC(sum, h,  16,  int16_t, add)
+    OP_SVE_FUNC(sum, h, 16, uint16_t, add)
+    OP_SVE_FUNC(sum, w,  32,  int32_t, add)
+    OP_SVE_FUNC(sum, w, 32, uint32_t, add)
+    OP_SVE_FUNC(sum, d,  64,  int64_t, add)
+    OP_SVE_FUNC(sum, d, 64, uint64_t, add)
+
     /* Floating point */
 #if defined(HAVE_SHORT_FLOAT)
-    OP_SVE_FUNC(sum, short_float, 16, float16_t, add)
+    OP_SVE_FUNC(sum, h, 16, float16_t, add)
 #elif defined(HAVE_OPAL_SHORT_FLOAT_T)
-    OP_SVE_FUNC(sum, short_float, 16, float16_t, add)
+    OP_SVE_FUNC(sum, h, 16, float16_t, add)
 #endif
-    OP_SVE_FUNC(sum, float, 32, float32_t, add)
-    OP_SVE_FUNC(sum, double, 64, float64_t, add)
-
+    OP_SVE_FUNC(sum, w, 32, float32_t, add)
+    OP_SVE_FUNC(sum, d, 64, float64_t, add)
 
 /*************************************************************************
  * Product
  *************************************************************************/
-    OP_SVE_FUNC(prod,   int8_t, 8,    int8_t, mul)
-    OP_SVE_FUNC(prod,  uint8_t, 8,   uint8_t, mul)
-    OP_SVE_FUNC(prod,  int16_t, 16,  int16_t, mul)
-    OP_SVE_FUNC(prod, uint16_t, 16, uint16_t, mul)
-    OP_SVE_FUNC(prod,  int32_t, 32,  int32_t, mul)
-    OP_SVE_FUNC(prod, uint32_t, 32, uint32_t, mul)
-    OP_SVE_FUNC(prod,  int64_t, 64,  int64_t, mul)
-    OP_SVE_FUNC(prod, uint64_t, 64, uint64_t, mul)
+    OP_SVE_FUNC(prod, b,  8,   int8_t, mul)
+    OP_SVE_FUNC(prod, b,   8,  uint8_t, mul)
+    OP_SVE_FUNC(prod, h,  16,  int16_t, mul)
+    OP_SVE_FUNC(prod, h, 16, uint16_t, mul)
+    OP_SVE_FUNC(prod, w,  32,  int32_t, mul)
+    OP_SVE_FUNC(prod, w, 32, uint32_t, mul)
+    OP_SVE_FUNC(prod, d,  64,  int64_t, mul)
+OP_SVE_FUNC(prod, d, 64, uint64_t, mul)
 
     /* Floating point */
 #if defined(HAVE_SHORT_FLOAT)
-    OP_SVE_FUNC(prod, short_float, 16, float16_t, mul)
+OP_SVE_FUNC(prod, h, 16, float16_t, mul)
 #elif defined(HAVE_OPAL_SHORT_FLOAT_T)
-    OP_SVE_FUNC(prod, short_float, 16, float16_t, mul)
+OP_SVE_FUNC(prod, h, 16, float16_t, mul)
 #endif
-    OP_SVE_FUNC(prod, float, 32, float32_t, mul)
-    OP_SVE_FUNC(prod, double, 64, float64_t, mul)
+    OP_SVE_FUNC(prod, w, 32, float32_t, mul)
+OP_SVE_FUNC(prod, d, 64, float64_t, mul)
 
 /*************************************************************************
  * Bitwise AND
  *************************************************************************/
-    OP_SVE_FUNC(band,   int8_t, 8,    int8_t, and)
-    OP_SVE_FUNC(band,  uint8_t, 8,   uint8_t, and)
-    OP_SVE_FUNC(band,  int16_t, 16,  int16_t, and)
-    OP_SVE_FUNC(band, uint16_t, 16, uint16_t, and)
-    OP_SVE_FUNC(band,  int32_t, 32,  int32_t, and)
-    OP_SVE_FUNC(band, uint32_t, 32, uint32_t, and)
-    OP_SVE_FUNC(band,  int64_t, 64,  int64_t, and)
-    OP_SVE_FUNC(band, uint64_t, 64, uint64_t, and)
+    OP_SVE_FUNC(band, b,  8,   int8_t, and)
+    OP_SVE_FUNC(band, b,   8,  uint8_t, and)
+    OP_SVE_FUNC(band, h,  16,  int16_t, and)
+    OP_SVE_FUNC(band, h, 16, uint16_t, and)
+    OP_SVE_FUNC(band, w,  32,  int32_t, and)
+    OP_SVE_FUNC(band, w, 32, uint32_t, and)
+    OP_SVE_FUNC(band, d,  64,  int64_t, and)
+OP_SVE_FUNC(band, d, 64, uint64_t, and)
 
-/*************************************************************************
+ /*************************************************************************
  * Bitwise OR
  *************************************************************************/
-    OP_SVE_FUNC(bor,   int8_t, 8,    int8_t, orr)
-    OP_SVE_FUNC(bor,  uint8_t, 8,   uint8_t, orr)
-    OP_SVE_FUNC(bor,  int16_t, 16,  int16_t, orr)
-    OP_SVE_FUNC(bor, uint16_t, 16, uint16_t, orr)
-    OP_SVE_FUNC(bor,  int32_t, 32,  int32_t, orr)
-    OP_SVE_FUNC(bor, uint32_t, 32, uint32_t, orr)
-    OP_SVE_FUNC(bor,  int64_t, 64,  int64_t, orr)
-    OP_SVE_FUNC(bor, uint64_t, 64, uint64_t, orr)
+    OP_SVE_FUNC(bor, b,  8,   int8_t, orr)
+    OP_SVE_FUNC(bor, b,   8,  uint8_t, orr)
+    OP_SVE_FUNC(bor, h,  16,  int16_t, orr)
+    OP_SVE_FUNC(bor, h, 16, uint16_t, orr)
+    OP_SVE_FUNC(bor, w,  32,  int32_t, orr)
+    OP_SVE_FUNC(bor, w, 32, uint32_t, orr)
+    OP_SVE_FUNC(bor, d,  64,  int64_t, orr)
+OP_SVE_FUNC(bor, d, 64, uint64_t, orr)
 
 /*************************************************************************
  * Bitwise XOR
  *************************************************************************/
-    OP_SVE_FUNC(bxor,   int8_t, 8,    int8_t, eor)
-    OP_SVE_FUNC(bxor,  uint8_t, 8,   uint8_t, eor)
-    OP_SVE_FUNC(bxor,  int16_t, 16,  int16_t, eor)
-    OP_SVE_FUNC(bxor, uint16_t, 16, uint16_t, eor)
-    OP_SVE_FUNC(bxor,  int32_t, 32,  int32_t, eor)
-    OP_SVE_FUNC(bxor, uint32_t, 32, uint32_t, eor)
-    OP_SVE_FUNC(bxor,  int64_t, 64,  int64_t, eor)
-    OP_SVE_FUNC(bxor, uint64_t, 64, uint64_t, eor)
-
+    OP_SVE_FUNC(bxor, b,  8,   int8_t, eor)
+    OP_SVE_FUNC(bxor, b,   8,  uint8_t, eor)
+    OP_SVE_FUNC(bxor, h,  16,  int16_t, eor)
+    OP_SVE_FUNC(bxor, h, 16, uint16_t, eor)
+    OP_SVE_FUNC(bxor, w,  32,  int32_t, eor)
+    OP_SVE_FUNC(bxor, w, 32, uint32_t, eor)
+    OP_SVE_FUNC(bxor, d,  64,  int64_t, eor)
+OP_SVE_FUNC(bxor, d, 64, uint64_t, eor)
 
 /*
  *  This is a three buffer (2 input and 1 output) version of the reduction
  *  routines, needed for some optimizations.
  */
 #define OP_SVE_FUNC_3BUFF(name, type_name, type_size, type, op) \
-        static void ompi_op_sve_3buff_##name##_##type_name(void * restrict in1,   \
-                void * restrict in2, void * restrict out, int *count, \
+        static void ompi_op_sve_3buff_##name##_##type(void * restrict _in1,   \
+                void * restrict _in2, void * restrict _out, int *count, \
                 struct ompi_datatype_t **dtype, \
                 struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
-    uint64_t i; \
-    uint64_t step = 0; \
+    int types_per_step = svcnt##type_name();                           \
+    int left_over = *count; \
+    type* in1 = (type*)_in1; \
+    type* in2 = (type*)_in2; \
+    type* out = (type*)_out; \
     svbool_t Pg = svptrue_b##type_size(); \
-    switch(type_size) {                                                \
-        case 8:                                                        \
-               step = svcntb();                                        \
-               break;                                                  \
-        case 16:                                                       \
-               step = svcnth();                                        \
-               break;                                                  \
-        case 32:                                                       \
-               step = svcntw();                                        \
-               break;                                                  \
-        case 64:                                                       \
-               step = svcntd();                                        \
-    }    \
-    uint64_t round = *count;                                           \
-    uint64_t remain = *count % step;                                   \
-    for(i=0; i< round; i=i+step)                                       \
-    {                                                                  \
-        sv##type  vsrc = svld1(Pg, (type *)in1+i);                     \
-        sv##type  vdst = svld1(Pg, (type *)in2+i);                     \
+    for (; left_over >= types_per_step; left_over -= types_per_step) { \
+        sv##type  vsrc = svld1(Pg, in1);                               \
+        sv##type  vdst = svld1(Pg, in2);                               \
+        in1 += types_per_step; \
+        in2 += types_per_step; \
         vdst=sv##op##_z(Pg,vdst,vsrc);                                 \
-        svst1(Pg, (type *)out+i,vdst);                                 \
+        svst1(Pg, out,vdst);                                           \
+        out += types_per_step; \
     }                                                                  \
-    if (remain !=0){                                                   \
-        Pg = svwhilelt_b##type_size##_u64(0, remain);                  \
-        sv##type  vsrc = svld1(Pg, (type *)in1+i);                     \
-        sv##type  vdst = svld1(Pg, (type *)in2+i);                     \
+    if (left_over !=0){                                                \
+        Pg = svwhilelt_b##type_size##_u64(0, left_over);               \
+        sv##type  vsrc = svld1(Pg, in1);                               \
+        sv##type  vdst = svld1(Pg, in2);                               \
         vdst=sv##op##_z(Pg,vdst,vsrc);                                 \
-        svst1(Pg, (type *)out+i,vdst);                                 \
+        svst1(Pg, out,vdst);                                           \
     } \
 }
-
 
 /*************************************************************************
  * Max
  *************************************************************************/
-    OP_SVE_FUNC_3BUFF(max, int8_t  ,  8,   int8_t, max)
-    OP_SVE_FUNC_3BUFF(max, uint8_t,   8,  uint8_t, max)
-    OP_SVE_FUNC_3BUFF(max, int16_t,  16,  int16_t, max)
-    OP_SVE_FUNC_3BUFF(max, uint16_t, 16, uint16_t, max)
-    OP_SVE_FUNC_3BUFF(max, int32_t,  32,  int32_t, max)
-    OP_SVE_FUNC_3BUFF(max, uint32_t, 32, uint32_t, max)
-    OP_SVE_FUNC_3BUFF(max, int64_t,  64,  int64_t, max)
-    OP_SVE_FUNC_3BUFF(max, uint64_t, 64, uint64_t, max)
+    OP_SVE_FUNC_3BUFF(max, b,  8,   int8_t, max)
+    OP_SVE_FUNC_3BUFF(max, b,   8,  uint8_t, max)
+    OP_SVE_FUNC_3BUFF(max, h,  16,  int16_t, max)
+    OP_SVE_FUNC_3BUFF(max, h, 16, uint16_t, max)
+    OP_SVE_FUNC_3BUFF(max, w,  32,  int32_t, max)
+    OP_SVE_FUNC_3BUFF(max, w, 32, uint32_t, max)
+    OP_SVE_FUNC_3BUFF(max, d,  64,  int64_t, max)
+    OP_SVE_FUNC_3BUFF(max, d, 64, uint64_t, max)
 
     /* Floating point */
 #if defined(HAVE_SHORT_FLOAT)
-    OP_SVE_FUNC_3BUFF(max, short_float, 16, float16_t, max)
+    OP_SVE_FUNC_3BUFF(max, h, 16, float16_t, max)
 #elif defined(HAVE_OPAL_SHORT_FLOAT_T)
-    OP_SVE_FUNC_3BUFF(max, short_float, 16, float16_t, max)
+    OP_SVE_FUNC_3BUFF(max, h, 16, float16_t, max)
 #endif
-    OP_SVE_FUNC_3BUFF(max, float, 32, float32_t, max)
-    OP_SVE_FUNC_3BUFF(max, double, 64, float64_t, max)
+    OP_SVE_FUNC_3BUFF(max, w, 32, float32_t, max)
+    OP_SVE_FUNC_3BUFF(max, d, 64, float64_t, max)
 
 /*************************************************************************
  * Min
  *************************************************************************/
-    OP_SVE_FUNC_3BUFF(min, int8_t  ,  8,   int8_t, min)
-    OP_SVE_FUNC_3BUFF(min, uint8_t,   8,  uint8_t, min)
-    OP_SVE_FUNC_3BUFF(min, int16_t,  16,  int16_t, min)
-    OP_SVE_FUNC_3BUFF(min, uint16_t, 16, uint16_t, min)
-    OP_SVE_FUNC_3BUFF(min, int32_t,  32,  int32_t, min)
-    OP_SVE_FUNC_3BUFF(min, uint32_t, 32, uint32_t, min)
-    OP_SVE_FUNC_3BUFF(min, int64_t,  64,  int64_t, min)
-    OP_SVE_FUNC_3BUFF(min, uint64_t, 64, uint64_t, min)
+    OP_SVE_FUNC_3BUFF(min, b,  8,   int8_t, min)
+    OP_SVE_FUNC_3BUFF(min, b,   8,  uint8_t, min)
+    OP_SVE_FUNC_3BUFF(min, h,  16,  int16_t, min)
+    OP_SVE_FUNC_3BUFF(min, h, 16, uint16_t, min)
+    OP_SVE_FUNC_3BUFF(min, w,  32,  int32_t, min)
+    OP_SVE_FUNC_3BUFF(min, w, 32, uint32_t, min)
+    OP_SVE_FUNC_3BUFF(min, d,  64,  int64_t, min)
+    OP_SVE_FUNC_3BUFF(min, d, 64, uint64_t, min)
 
     /* Floating point */
 #if defined(HAVE_SHORT_FLOAT)
-    OP_SVE_FUNC_3BUFF(min, short_float, 16, float16_t, min)
+    OP_SVE_FUNC_3BUFF(min, h, 16, float16_t, min)
 #elif defined(HAVE_OPAL_SHORT_FLOAT_T)
-    OP_SVE_FUNC_3BUFF(min, short_float, 16, float16_t, min)
+    OP_SVE_FUNC_3BUFF(min, h, 16, float16_t, min)
 #endif
-    OP_SVE_FUNC_3BUFF(min, float, 32, float32_t, min)
-    OP_SVE_FUNC_3BUFF(min, double, 64, float64_t, min)
+    OP_SVE_FUNC_3BUFF(min, w, 32, float32_t, min)
+    OP_SVE_FUNC_3BUFF(min, d, 64, float64_t, min)
 
-/*************************************************************************
+ /*************************************************************************
  * Sum
- *************************************************************************/
-    OP_SVE_FUNC_3BUFF(sum, int8_t  ,  8,   int8_t, add)
-    OP_SVE_FUNC_3BUFF(sum, uint8_t,   8,  uint8_t, add)
-    OP_SVE_FUNC_3BUFF(sum, int16_t,  16,  int16_t, add)
-    OP_SVE_FUNC_3BUFF(sum, uint16_t, 16, uint16_t, add)
-    OP_SVE_FUNC_3BUFF(sum, int32_t,  32,  int32_t, add)
-    OP_SVE_FUNC_3BUFF(sum, uint32_t, 32, uint32_t, add)
-    OP_SVE_FUNC_3BUFF(sum, int64_t,  64,  int64_t, add)
-    OP_SVE_FUNC_3BUFF(sum, uint64_t, 64, uint64_t, add)
+ ************************************************************************/
+    OP_SVE_FUNC_3BUFF(sum, b,  8,   int8_t, add)
+    OP_SVE_FUNC_3BUFF(sum, b,   8,  uint8_t, add)
+    OP_SVE_FUNC_3BUFF(sum, h,  16,  int16_t, add)
+    OP_SVE_FUNC_3BUFF(sum, h, 16, uint16_t, add)
+    OP_SVE_FUNC_3BUFF(sum, w,  32,  int32_t, add)
+    OP_SVE_FUNC_3BUFF(sum, w, 32, uint32_t, add)
+    OP_SVE_FUNC_3BUFF(sum, d,  64,  int64_t, add)
+    OP_SVE_FUNC_3BUFF(sum, d, 64, uint64_t, add)
+
     /* Floating point */
 #if defined(HAVE_SHORT_FLOAT)
-    OP_SVE_FUNC_3BUFF(sum, short_float, 16, float16_t, add)
+    OP_SVE_FUNC_3BUFF(sum, h, 16, float16_t, add)
 #elif defined(HAVE_OPAL_SHORT_FLOAT_T)
-    OP_SVE_FUNC_3BUFF(sum, short_float, 16, float16_t, add)
+    OP_SVE_FUNC_3BUFF(sum, h, 16, float16_t, add)
 #endif
-    OP_SVE_FUNC_3BUFF(sum, float, 32, float32_t, add)
-    OP_SVE_FUNC_3BUFF(sum, double, 64, float64_t, add)
+    OP_SVE_FUNC_3BUFF(sum, w, 32, float32_t, add)
+    OP_SVE_FUNC_3BUFF(sum, d, 64, float64_t, add)
 
 /*************************************************************************
  * Product
  *************************************************************************/
-    OP_SVE_FUNC_3BUFF(prod,   int8_t, 8,    int8_t, mul)
-    OP_SVE_FUNC_3BUFF(prod,  uint8_t, 8,   uint8_t, mul)
-    OP_SVE_FUNC_3BUFF(prod,  int16_t, 16,  int16_t, mul)
-    OP_SVE_FUNC_3BUFF(prod, uint16_t, 16, uint16_t, mul)
-    OP_SVE_FUNC_3BUFF(prod,  int32_t, 32,  int32_t, mul)
-    OP_SVE_FUNC_3BUFF(prod, uint32_t, 32, uint32_t, mul)
-    OP_SVE_FUNC_3BUFF(prod,  int64_t, 64,  int64_t, mul)
-    OP_SVE_FUNC_3BUFF(prod, uint64_t, 64, uint64_t, mul)
+    OP_SVE_FUNC_3BUFF(prod, b,  8,   int8_t, mul)
+    OP_SVE_FUNC_3BUFF(prod, b,   8,  uint8_t, mul)
+    OP_SVE_FUNC_3BUFF(prod, h,  16,  int16_t, mul)
+    OP_SVE_FUNC_3BUFF(prod, h, 16, uint16_t, mul)
+    OP_SVE_FUNC_3BUFF(prod, w,  32,  int32_t, mul)
+    OP_SVE_FUNC_3BUFF(prod, w, 32, uint32_t, mul)
+    OP_SVE_FUNC_3BUFF(prod, d,  64,  int64_t, mul)
+OP_SVE_FUNC_3BUFF(prod, d, 64, uint64_t, mul)
 
     /* Floating point */
 #if defined(HAVE_SHORT_FLOAT)
-    OP_SVE_FUNC_3BUFF(prod, short_float, 16, float16_t, mul)
+OP_SVE_FUNC_3BUFF(prod, h, 16, float16_t, mul)
 #elif defined(HAVE_OPAL_SHORT_FLOAT_T)
-    OP_SVE_FUNC_3BUFF(prod, short_float, 16, float16_t, mul)
+OP_SVE_FUNC_3BUFF(prod, h, 16, float16_t, mul)
 #endif
-    OP_SVE_FUNC_3BUFF(prod, float, 32, float32_t, mul)
-    OP_SVE_FUNC_3BUFF(prod, double, 64, float64_t, mul)
+    OP_SVE_FUNC_3BUFF(prod, w, 32, float32_t, mul)
+OP_SVE_FUNC_3BUFF(prod, d, 64, float64_t, mul)
 
 /*************************************************************************
  * Bitwise AND
  *************************************************************************/
-    OP_SVE_FUNC_3BUFF(band,   int8_t, 8,    int8_t, and)
-    OP_SVE_FUNC_3BUFF(band,  uint8_t, 8,   uint8_t, and)
-    OP_SVE_FUNC_3BUFF(band,  int16_t, 16,  int16_t, and)
-    OP_SVE_FUNC_3BUFF(band, uint16_t, 16, uint16_t, and)
-    OP_SVE_FUNC_3BUFF(band,  int32_t, 32,  int32_t, and)
-    OP_SVE_FUNC_3BUFF(band, uint32_t, 32, uint32_t, and)
-    OP_SVE_FUNC_3BUFF(band,  int64_t, 64,  int64_t, and)
-    OP_SVE_FUNC_3BUFF(band, uint64_t, 64, uint64_t, and)
-
-/*************************************************************************
- * Bitwise OR
- *************************************************************************/
-    OP_SVE_FUNC_3BUFF(bor,   int8_t, 8,    int8_t, orr)
-    OP_SVE_FUNC_3BUFF(bor,  uint8_t, 8,   uint8_t, orr)
-    OP_SVE_FUNC_3BUFF(bor,  int16_t, 16,  int16_t, orr)
-    OP_SVE_FUNC_3BUFF(bor, uint16_t, 16, uint16_t, orr)
-    OP_SVE_FUNC_3BUFF(bor,  int32_t, 32,  int32_t, orr)
-    OP_SVE_FUNC_3BUFF(bor, uint32_t, 32, uint32_t, orr)
-    OP_SVE_FUNC_3BUFF(bor,  int64_t, 64,  int64_t, orr)
-    OP_SVE_FUNC_3BUFF(bor, uint64_t, 64, uint64_t, orr)
+    OP_SVE_FUNC_3BUFF(band, b,  8,   int8_t, and)
+    OP_SVE_FUNC_3BUFF(band, b,   8,  uint8_t, and)
+    OP_SVE_FUNC_3BUFF(band, h,  16,  int16_t, and)
+    OP_SVE_FUNC_3BUFF(band, h, 16, uint16_t, and)
+    OP_SVE_FUNC_3BUFF(band, w,  32,  int32_t, and)
+    OP_SVE_FUNC_3BUFF(band, w, 32, uint32_t, and)
+    OP_SVE_FUNC_3BUFF(band, d,  64,  int64_t, and)
+OP_SVE_FUNC_3BUFF(band, d, 64, uint64_t, and)
 
  /*************************************************************************
+ * Bitwise OR
+ *************************************************************************/
+    OP_SVE_FUNC_3BUFF(bor, b,  8,   int8_t, orr)
+    OP_SVE_FUNC_3BUFF(bor, b,   8,  uint8_t, orr)
+    OP_SVE_FUNC_3BUFF(bor, h,  16,  int16_t, orr)
+    OP_SVE_FUNC_3BUFF(bor, h, 16, uint16_t, orr)
+    OP_SVE_FUNC_3BUFF(bor, w,  32,  int32_t, orr)
+    OP_SVE_FUNC_3BUFF(bor, w, 32, uint32_t, orr)
+    OP_SVE_FUNC_3BUFF(bor, d,  64,  int64_t, orr)
+OP_SVE_FUNC_3BUFF(bor, d, 64, uint64_t, orr)
+
+/*************************************************************************
  * Bitwise XOR
  *************************************************************************/
-    OP_SVE_FUNC_3BUFF(bxor,   int8_t, 8,    int8_t, eor)
-    OP_SVE_FUNC_3BUFF(bxor,  uint8_t, 8,   uint8_t, eor)
-    OP_SVE_FUNC_3BUFF(bxor,  int16_t, 16,  int16_t, eor)
-    OP_SVE_FUNC_3BUFF(bxor, uint16_t, 16, uint16_t, eor)
-    OP_SVE_FUNC_3BUFF(bxor,  int32_t, 32,  int32_t, eor)
-    OP_SVE_FUNC_3BUFF(bxor, uint32_t, 32, uint32_t, eor)
-    OP_SVE_FUNC_3BUFF(bxor,  int64_t, 64,  int64_t, eor)
-    OP_SVE_FUNC_3BUFF(bxor, uint64_t, 64, uint64_t, eor)
+    OP_SVE_FUNC_3BUFF(bxor, b,  8,   int8_t, eor)
+    OP_SVE_FUNC_3BUFF(bxor, b,   8,  uint8_t, eor)
+    OP_SVE_FUNC_3BUFF(bxor, h,  16,  int16_t, eor)
+    OP_SVE_FUNC_3BUFF(bxor, h, 16, uint16_t, eor)
+    OP_SVE_FUNC_3BUFF(bxor, w,  32,  int32_t, eor)
+    OP_SVE_FUNC_3BUFF(bxor, w, 32, uint32_t, eor)
+    OP_SVE_FUNC_3BUFF(bxor, d,  64,  int64_t, eor)
+OP_SVE_FUNC_3BUFF(bxor, d, 64, uint64_t, eor)
 
 /** C integer ***********************************************************/
 #define C_INTEGER(name, ftype)                                              \
@@ -376,12 +353,12 @@
 
 /** Floating point, including all the Fortran reals *********************/
 #if defined(HAVE_SHORT_FLOAT) || defined(HAVE_OPAL_SHORT_FLOAT_T)
-#define SHORT_FLOAT(name, ftype) ompi_op_sve_##ftype##_##name##_short_float
+#define SHORT_FLOAT(name, ftype) ompi_op_sve_##ftype##_##name##_float16_t
 #else
 #define SHORT_FLOAT(name, ftype) NULL
 #endif
-#define FLOAT(name, ftype) ompi_op_sve_##ftype##_##name##_float
-#define DOUBLE(name, ftype) ompi_op_sve_##ftype##_##name##_double
+#define FLOAT(name, ftype) ompi_op_sve_##ftype##_##name##_float32_t
+#define DOUBLE(name, ftype) ompi_op_sve_##ftype##_##name##_float64_t
 
 #define FLOATING_POINT(name, ftype)                                        \
     [OMPI_OP_BASE_TYPE_SHORT_FLOAT] = SHORT_FLOAT(name, ftype),            \
