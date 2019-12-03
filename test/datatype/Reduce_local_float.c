@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
         inout_double[i] = inout_double_for_check[i] = 1.0+2;
 
         in_uint8[i] = 5;
-        inout_uint8[i] = inout_uint8_for_check[i] = 3;
+        inout_uint8[i] = inout_uint8_for_check[i] = -3;
 
         in_uint16[i] = 5;
         inout_uint16[i] = inout_uint16_for_check[i] = 3;

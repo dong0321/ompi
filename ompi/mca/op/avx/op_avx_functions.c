@@ -473,27 +473,67 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
                 struct ompi_datatype_t **dtype, \
                 struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
-    int step = 512 / type_size; \
-    int size = *count/step; \
-    int i; \
-    int round = size*64; \
+    int types_per_step = 512 / (8 * sizeof(type));          \
+    int left_over = *count; \
     type* in1 = (type*)_in1; \
     type* in2 = (type*)_in2; \
     type* out = (type*)_out; \
-    for (i = 0; i < round; i+=64) { \
-        __m512i vecA =  _mm512_loadu_si512((in1+i));\
-        __m512i vecB =  _mm512_loadu_si512((in2+i));\
+    for (; left_over >= types_per_step; left_over -= types_per_step) { \
+        __m512i vecA =  _mm512_loadu_si512(in1);\
+        __m512i vecB =  _mm512_loadu_si512(in2);\
+        in1 += types_per_step; \
+        in2 += types_per_step; \
         __m512i res = _mm512_##op##_ep##type_sign##type_size(vecA, vecB); \
-        _mm512_storeu_si512((out+i), res); \
+        _mm512_storeu_si512((out), res); \
+        out += types_per_step; \
     }\
-    uint64_t left_over = *count - (size*step); \
     if(left_over!=0){ \
-        uint64_t left_over64 = 0xFFFFFFFFFFFFFFFF; \
-        left_over = left_over64 >>(64-left_over); \
-        __m512i vecA = _mm512_maskz_loadu_epi##type_size(left_over, (in1+round)); \
-        __m512i vecB = _mm512_maskz_loadu_epi##type_size(left_over, (in2+round)); \
-        __m512i res = _mm512_##op##_ep##type_sign##type_size(vecA, vecB); \
-        _mm512_mask_storeu_epi##type_size((out+round), left_over, res); \
+        types_per_step >>= 1; \
+        if( left_over >= types_per_step ) {                 \
+            __m256i vecA = _mm256_loadu_si256(in1); \
+            __m256i vecB = _mm256_loadu_si256(in2); \
+            in1 += types_per_step;                       \
+            in2 += types_per_step; \
+            __m256i res =  _mm256_##op##_ep##type_sign##type_size(vecA, vecB); \
+            _mm256_storeu_si256(out, res); \
+            out += types_per_step;                        \
+            left_over -= types_per_step; \
+        }\
+        if( 0 != left_over ) {                        \
+            switch(left_over) {                         \
+            case 31: out[30] = current_func(in1[30],in2[30]) ;                        \
+            case 30: out[29] = current_func(in1[29],in2[29]) ;                        \
+            case 29: out[28] = current_func(in1[28],in2[28]) ;                        \
+            case 28: out[27] = current_func(in1[27],in2[27]) ;                        \
+            case 27: out[26] = current_func(in1[26],in2[26]) ;                        \
+            case 26: out[25] = current_func(in1[25],in2[25]) ;                        \
+            case 25: out[24] = current_func(in1[24],in2[24]) ;                        \
+            case 24: out[23] = current_func(in1[23],in2[23]) ;                        \
+            case 23: out[22] = current_func(in1[22],in2[22]) ;                        \
+            case 22: out[21] = current_func(in1[21],in2[21]) ;                        \
+            case 21: out[20] = current_func(in1[20],in2[20]) ;                        \
+            case 20: out[19] = current_func(in1[19],in2[19]) ;                        \
+            case 19: out[18] = current_func(in1[18],in2[18]) ;                        \
+            case 18: out[17] = current_func(in1[17],in2[17]) ;                        \
+            case 17: out[16] = current_func(in1[16],in2[16]) ;                        \
+            case 16: out[15] = current_func(in1[15],in2[15]) ;                        \
+            case 15: out[14] = current_func(in1[14],in2[14]) ;                        \
+            case 14: out[13] = current_func(in1[13],in2[13]) ;                        \
+            case 13: out[12] = current_func(in1[12],in2[12]) ;                        \
+            case 12: out[11] = current_func(in1[11],in2[11]) ;                        \
+            case 11: out[10] = current_func(in1[10],in2[10]) ;                        \
+            case 10: out[9] = current_func(in1[9],in2[9]) ;                        \
+            case 9: out[8] = current_func(in1[8],in2[8]) ;                        \
+            case 8: out[7] = current_func(in1[7],in2[7]) ;                        \
+            case 7: out[6] = current_func(in1[6],in2[6]) ;                        \
+            case 6: out[5] = current_func(in1[5],in2[5]) ;                        \
+            case 5: out[4] = current_func(in1[4],in2[4]) ;                        \
+            case 4: out[3] = current_func(in1[3],in2[3]) ;                        \
+            case 3: out[2] = current_func(in1[2],in2[2]) ;                        \
+            case 2: out[1] = current_func(in1[1],in2[1]) ;                        \
+            case 1: out[0] = current_func(in1[0],in2[0]) ;                        \
+            } \
+        }\
     }\
 }
 
@@ -563,27 +603,67 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
                 struct ompi_datatype_t **dtype, \
                 struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
-    int step = 512 / type_size; \
-    int size = *count/step; \
-    int i; \
-    int round = size*64; \
+    int types_per_step = 512 / (8 * sizeof(type)); \
+    int left_over = *count; \
     type* in1 = (type*)_in1; \
     type* in2 = (type*)_in2; \
     type* out = (type*)_out; \
-    for (i = 0; i < round; i+=64) { \
-        __m512i vecA =  _mm512_loadu_si512((in1+i));\
-        __m512i vecB =  _mm512_loadu_si512((in2+i));\
+    for (; left_over >= types_per_step; left_over -= types_per_step) { \
+        __m512i vecA =  _mm512_loadu_si512(in1);\
+        __m512i vecB =  _mm512_loadu_si512(in2);\
+        in1 += types_per_step;                       \
+        in2 += types_per_step;                       \
         __m512i res = _mm512_##op##_si512(vecA, vecB); \
-        _mm512_storeu_si512((out+i), res); \
+        _mm512_storeu_si512(out, res); \
+        out += types_per_step;                        \
     }\
-    uint64_t left_over = *count - (size*step); \
     if(left_over!=0){ \
-        uint64_t left_over64 = 0xFFFFFFFFFFFFFFFF; \
-        left_over = left_over64 >>(64-left_over); \
-        __m512i vecA = _mm512_maskz_loadu_epi##type_size(left_over, (in1+round)); \
-        __m512i vecB = _mm512_maskz_loadu_epi##type_size(left_over, (in2+round)); \
-        __m512i res =  _mm512_##op##_si512(vecA, vecB); \
-        _mm512_mask_storeu_epi##type_size((out+round), left_over, res); \
+        types_per_step >>= 1; \
+        if( left_over >= types_per_step ) {                 \
+            __m256i vecA = _mm256_loadu_si256(in1); \
+            __m256i vecB = _mm256_loadu_si256(in2); \
+            in1 += types_per_step;                       \
+            in2 += types_per_step;                       \
+            __m256i res =  _mm256_##op##_si256(vecA, vecB); \
+            _mm256_storeu_si256(out, res); \
+            out += types_per_step;                        \
+            left_over -= types_per_step; \
+        }\
+    }\
+    if( 0 != left_over ) {                        \
+        switch(left_over) {                         \
+            case 31: out[30] = current_func(in1[30],in2[30]) ;                        \
+            case 30: out[29] = current_func(in1[29],in2[29]) ;                        \
+            case 29: out[28] = current_func(in1[28],in2[28]) ;                        \
+            case 28: out[27] = current_func(in1[27],in2[27]) ;                        \
+            case 27: out[26] = current_func(in1[26],in2[26]) ;                        \
+            case 26: out[25] = current_func(in1[25],in2[25]) ;                        \
+            case 25: out[24] = current_func(in1[24],in2[24]) ;                        \
+            case 24: out[23] = current_func(in1[23],in2[23]) ;                        \
+            case 23: out[22] = current_func(in1[22],in2[22]) ;                        \
+            case 22: out[21] = current_func(in1[21],in2[21]) ;                        \
+            case 21: out[20] = current_func(in1[20],in2[20]) ;                        \
+            case 20: out[19] = current_func(in1[19],in2[19]) ;                        \
+            case 19: out[18] = current_func(in1[18],in2[18]) ;                        \
+            case 18: out[17] = current_func(in1[17],in2[17]) ;                        \
+            case 17: out[16] = current_func(in1[16],in2[16]) ;                        \
+            case 16: out[15] = current_func(in1[15],in2[15]) ;                        \
+            case 15: out[14] = current_func(in1[14],in2[14]) ;                        \
+            case 14: out[13] = current_func(in1[13],in2[13]) ;                        \
+            case 13: out[12] = current_func(in1[12],in2[12]) ;                        \
+            case 12: out[11] = current_func(in1[11],in2[11]) ;                        \
+            case 11: out[10] = current_func(in1[10],in2[10]) ;                        \
+            case 10: out[9] = current_func(in1[9],in2[9]) ;                        \
+            case 9: out[8] = current_func(in1[8],in2[8]) ;                        \
+            case 8: out[7] = current_func(in1[7],in2[7]) ;                        \
+            case 7: out[6] = current_func(in1[6],in2[6]) ;                        \
+            case 6: out[5] = current_func(in1[5],in2[5]) ;                        \
+            case 5: out[4] = current_func(in1[4],in2[4]) ;                        \
+            case 4: out[3] = current_func(in1[3],in2[3]) ;                        \
+            case 3: out[2] = current_func(in1[2],in2[2]) ;                        \
+            case 2: out[1] = current_func(in1[1],in2[1]) ;                        \
+            case 1: out[0] = current_func(in1[0],in2[0]) ;                        \
+        } \
     }\
 }
 
@@ -592,27 +672,43 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
                 struct ompi_datatype_t **dtype, \
                 struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
-    int step = 16;                                                          \
-    int size = *count/step; \
-    int i; \
-    int round = size*64; \
-    float* in1 = (float*)_in1; \
-    float* in2 = (float*)_in2; \
-    float* out = (float*)_out; \
-    for (i = 0; i < round; i+=64) { \
-        __m512 vecA =  _mm512_load_ps((in1+i));\
-        __m512 vecB =  _mm512_load_ps((in2+i));\
-        __m512 res = _mm512_##op##_ps(vecA, vecB); \
-        _mm512_store_ps((out+i), res); \
-    }\
-    uint64_t left_over = *count - (size*step); \
-    if(left_over!=0){ \
-        uint64_t left_over64 = 0xFFFFFFFFFFFFFFFF; \
-        left_over = left_over64 >>(64-left_over); \
-        __m512 vecA = _mm512_maskz_load_ps(left_over, (in1+round)); \
-        __m512 vecB = _mm512_maskz_load_ps(left_over, (in2+round)); \
-        __m512 res = _mm512_##op##_ps(vecA, vecB); \
-        _mm512_mask_store_ps((out+round), left_over, res); \
+    int types_per_step = 512 / (8 * sizeof(float));            \
+    int left_over = *count;                        \
+    float* in1 = (float*)_in1;                        \
+    float* in2 = (float*)_in2;                        \
+    float* out = (float*)_out;                        \
+    for (; left_over >= types_per_step; left_over -= types_per_step) {    \
+        __m512 vecA =  _mm512_load_ps(in1);                    \
+        __m512 vecB =  _mm512_load_ps(in2);                    \
+        in1 += types_per_step;                        \
+        in2 += types_per_step;                        \
+        __m512 res = _mm512_##op##_ps(vecA, vecB);                \
+        _mm512_store_ps(out, res);                    \
+        out += types_per_step;                        \
+    }                                    \
+    if( 0 != left_over ) {                        \
+        types_per_step >>= 1;  /* 256 / (8 * sizeof(float));    */    \
+        if( left_over >= types_per_step ) {                    \
+            __m256 vecA =  _mm256_load_ps(in1);                \
+            __m256 vecB =  _mm256_load_ps(in2);                \
+            __m256 res = _mm256_##op##_ps(vecA, vecB);            \
+            _mm256_store_ps(out, res);                    \
+            in1 += types_per_step;                        \
+            in2 += types_per_step;                        \
+            out += types_per_step;                        \
+            left_over -= types_per_step;                    \
+        }                                    \
+    }                                    \
+    if( 0 != left_over ) {                        \
+        switch(left_over) {                            \
+            case 7: out[6] = current_func(in1[6],in2[6]) ;                        \
+            case 6: out[5] = current_func(in1[5],in2[5]) ;                        \
+            case 5: out[4] = current_func(in1[4],in2[4]) ;                        \
+            case 4: out[3] = current_func(in1[3],in2[3]) ;                        \
+            case 3: out[2] = current_func(in1[2],in2[2]) ;                        \
+            case 2: out[1] = current_func(in1[1],in2[1]) ;                        \
+            case 1: out[0] = current_func(in1[0],in2[0]) ;                        \
+        }\
     }\
 }
 
@@ -621,33 +717,48 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
                 struct ompi_datatype_t **dtype, \
                 struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                      \
-    int step = 8;                                                          \
-    int size = *count/step; \
-    int i; \
-    int round = size*64; \
+    int types_per_step = 512 / (8 * sizeof(double));           \
+    int left_over = *count; \
     double* in1 = (double*)_in1; \
     double* in2 = (double*)_in2; \
     double* out = (double*)_out; \
-    for (i = 0; i < round; i+=64) { \
-        __m512d vecA =  _mm512_load_pd((in1+i));\
-        __m512d vecB =  _mm512_load_pd((in2+i));\
+    for (; left_over >= types_per_step; left_over -= types_per_step) {    \
+        __m512d vecA =  _mm512_load_pd((in1));\
+        __m512d vecB =  _mm512_load_pd((in2));\
+        in1 += types_per_step;                        \
+        in2 += types_per_step;                        \
         __m512d res = _mm512_##op##_pd(vecA, vecB); \
-        _mm512_store_pd((out+i), res); \
+        _mm512_store_pd((out), res); \
+        out += types_per_step;                        \
     }\
-    uint64_t left_over = *count - (size*step); \
-    if(left_over!=0){ \
-        uint64_t left_over64 = 0xFFFFFFFFFFFFFFFF; \
-        left_over = left_over64 >>(64-left_over); \
-        __m512d vecA = _mm512_maskz_load_pd(left_over, (in1+round)); \
-        __m512d vecB = _mm512_maskz_load_pd(left_over, (in2+round)); \
-        __m512d res = _mm512_##op##_pd(vecA, vecB); \
-        _mm512_mask_store_pd((out+round), left_over, res); \
+    if( 0 != left_over ) {                        \
+        types_per_step >>= 1;  /* 256 / (8 * sizeof(double));    */    \
+        if( left_over >= types_per_step ) {                    \
+            __m256 vecA =  _mm256_load_ps(in1);                \
+            __m256 vecB =  _mm256_load_ps(in2);                \
+            __m256 res = _mm256_##op##_ps(vecA, vecB);            \
+            _mm256_store_ps(out, res);                    \
+            in1 += types_per_step;                        \
+            in2 += types_per_step;                        \
+            out += types_per_step;                        \
+            left_over -= types_per_step;                    \
+            }                                    \
+    }                                    \
+    if( 0 != left_over ) {                        \
+        switch(left_over) {                            \
+            case 3: out[2] = current_func(in1[2],in2[2]) ;                        \
+            case 2: out[1] = current_func(in1[1],in2[1]) ;                        \
+            case 1: out[0] = current_func(in1[0],in2[0]) ;                        \
+        }\
     }\
 }
 
 /*************************************************************************
  * Max
  *************************************************************************/
+#undef current_func
+#define current_func(a, b) ((a) > (b) ? (a) : (b))
+
     OP_AVX_FUNC_3BUFF(max, i, 8,    int8_t, max)
     OP_AVX_FUNC_3BUFF(max, u, 8,   uint8_t, max)
     OP_AVX_FUNC_3BUFF(max, i, 16,  int16_t, max)
@@ -664,6 +775,8 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
 /*************************************************************************
  * Min
  *************************************************************************/
+#undef current_func
+#define current_func(a, b) ((a) < (b) ? (a) : (b))
     OP_AVX_FUNC_3BUFF(min, i, 8,    int8_t, min)
     OP_AVX_FUNC_3BUFF(min, u, 8,   uint8_t, min)
     OP_AVX_FUNC_3BUFF(min, i, 16,  int16_t, min)
@@ -680,6 +793,9 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
 /*************************************************************************
  * Sum
  *************************************************************************/
+#undef current_func
+#define current_func(a, b) ((a) + (b))
+
     OP_AVX_FUNC_3BUFF(sum, i, 8,    int8_t, add)
     OP_AVX_FUNC_3BUFF(sum, i, 8,   uint8_t, add)
     OP_AVX_FUNC_3BUFF(sum, i, 16,  int16_t, add)
@@ -696,6 +812,8 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
 /*************************************************************************
  * Product
  *************************************************************************/
+#undef current_func
+#define current_func(a, b) ((a) * (b))
     OP_AVX_MUL_3BUFF(prod, i, 8, int8_t, mullo)
     OP_AVX_MUL_3BUFF(prod, i, 8, uint8_t, mullo)
     OP_AVX_FUNC_3BUFF(prod, i, 16,  int16_t, mullo)
@@ -712,6 +830,8 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
 /*************************************************************************
  * Bitwise AND
  *************************************************************************/
+#undef current_func
+#define current_func(a, b) ((a) & (b))
     OP_AVX_BIT_FUNC_3BUFF(band, 8,    int8_t, and)
     OP_AVX_BIT_FUNC_3BUFF(band, 8,   uint8_t, and)
     OP_AVX_BIT_FUNC_3BUFF(band, 16,  int16_t, and)
@@ -727,6 +847,8 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
 /*************************************************************************
  * Bitwise OR
  *************************************************************************/
+#undef current_func
+#define current_func(a, b) ((a) | (b))
     OP_AVX_BIT_FUNC_3BUFF(bor, 8,    int8_t, or)
     OP_AVX_BIT_FUNC_3BUFF(bor, 8,   uint8_t, or)
     OP_AVX_BIT_FUNC_3BUFF(bor, 16,  int16_t, or)
@@ -742,6 +864,8 @@ static void ompi_op_avx_2buff_##op##_float(void *_in, void *_out, int *count, \
 /*************************************************************************
  * Bitwise XOR
  *************************************************************************/
+#undef current_func
+#define current_func(a, b) ((a) ^ (b))
     OP_AVX_BIT_FUNC_3BUFF(bxor, 8,    int8_t, xor)
     OP_AVX_BIT_FUNC_3BUFF(bxor, 8,   uint8_t, xor)
     OP_AVX_BIT_FUNC_3BUFF(bxor, 16,  int16_t, xor)
