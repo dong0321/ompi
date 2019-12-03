@@ -4,6 +4,7 @@
 #include <sys/time.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <unistd.h>
 #ifdef __ARM_FEATURE_SVE
 #include <arm_sve.h>
 #endif /* __ARM_FEATURE_SVE */
@@ -79,10 +80,11 @@ int main(int argc, char **argv) {
     if(*type=='i') {
         if(strcmp(op, "sum") == 0){
             printf("#Local Reduce SUM: %d \n", count);
-            tstart = MPI_Wtime();
             if (elem_size1 == 8)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint8,inout_uint8,count, MPI_INT8_T, MPI_SUM);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint8[i]!=in_uint8[i] + inout_uint8_for_check[i])
@@ -95,7 +97,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 16)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint16,inout_uint16,count, MPI_INT16_T, MPI_SUM);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint16[i]!=in_uint16[i] + inout_uint16_for_check[i])
@@ -108,7 +112,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 32)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint32,inout_uint32,count, MPI_UINT32_T, MPI_SUM);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint32[i]!=in_uint32[i] + inout_uint32_for_check[i])
@@ -121,7 +127,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 64)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint64,inout_uint64,count, MPI_UINT64_T, MPI_SUM);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint64[i]!=in_uint64[i] + inout_uint64_for_check[i])
@@ -132,15 +140,15 @@ int main(int argc, char **argv) {
                 else
                     printf("Integer Size 64 SUM check \033[1;31m fail\033[0m!");
             }
-            tend = MPI_Wtime();
         }
 
         if(strcmp(op, "max") == 0){
             printf("#Local Reduce MAX: %d \n", count);
-            tstart = MPI_Wtime();
             if (elem_size1 == 8)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint8,inout_uint8,count, MPI_INT8_T, MPI_MAX);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint8[i]!=in_uint8[i])
@@ -153,7 +161,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 16)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint16,inout_uint16,count, MPI_INT16_T, MPI_MAX);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint16[i]!=in_uint16[i])
@@ -166,7 +176,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 32)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint32,inout_uint32,count, MPI_UINT32_T, MPI_MAX);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint32[i]!=in_uint32[i])
@@ -179,7 +191,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 64)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint64,inout_uint64,count, MPI_UINT64_T, MPI_MAX);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint64[i]!=in_uint64[i])
@@ -190,15 +204,15 @@ int main(int argc, char **argv) {
                 else
                     printf("Integer Size 64 MAX check \033[1;31m fail\033[0m!");
             }
-            tend = MPI_Wtime();
         }
         //intentionly reversed in and out
         if(strcmp(op, "min") == 0) {
             printf("#Local Reduce MIN: %d \n", count);
-            tstart = MPI_Wtime();
             if (elem_size1 == 8)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(inout_uint8,in_uint8,count, MPI_INT8_T, MPI_MIN);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint8[i]!=in_uint8[i])
@@ -211,7 +225,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 16)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(inout_uint16,in_uint16,count, MPI_INT16_T, MPI_MIN);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint16[i]!=in_uint16[i])
@@ -224,7 +240,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 32)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(inout_uint32,in_uint32,count, MPI_UINT32_T, MPI_MIN);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint32[i]!=in_uint32[i])
@@ -237,7 +255,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 64)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(inout_uint64,in_uint64,count, MPI_UINT64_T, MPI_MIN);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint64[i]!=in_uint64[i])
@@ -248,15 +268,15 @@ int main(int argc, char **argv) {
                 else
                     printf("Integer Size 64 MIN check \033[1;31m fail\033[0m!");
             }
-            tend = MPI_Wtime();
         }
 
         if(strcmp(op, "bor") == 0) {
             printf("#Local Reduce Logical: %d \n", count);
-            tstart = MPI_Wtime();
             if (elem_size1 == 8)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint8,inout_uint8,count, MPI_INT8_T, MPI_BOR);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint8[i]!= (in_uint8[i] | inout_uint8_for_check[i]))
@@ -269,7 +289,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 16)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint16,inout_uint16,count, MPI_INT16_T, MPI_BOR);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint16[i] != (in_uint16[i] | inout_uint16_for_check[i]))
@@ -282,7 +304,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 32)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint32,inout_uint32,count, MPI_UINT32_T, MPI_BOR);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint32[i] != (in_uint32[i] | inout_uint32_for_check[i]))
@@ -295,7 +319,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 64)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint64,inout_uint64,count, MPI_UINT64_T, MPI_BOR);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint64[i] != (in_uint64[i] | inout_uint64_for_check[i]))
@@ -306,15 +332,15 @@ int main(int argc, char **argv) {
                 else
                     printf("Integer Size 64 BOR check \033[1;31m fail\033[0m!");
             }
-            tend = MPI_Wtime();
         }
 
         if(strcmp(op, "bxor") == 0) {
             printf("#Local Reduce Logical: %d \n", count);
-            tstart = MPI_Wtime();
             if (elem_size1 == 8)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint8,inout_uint8,count, MPI_INT8_T, MPI_BXOR);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint8[i]!=(in_uint8[i] ^ inout_uint8_for_check[i]))
@@ -327,7 +353,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 16)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint16,inout_uint16,count, MPI_INT16_T, MPI_BXOR);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint16[i]!=(in_uint16[i] ^ inout_uint16_for_check[i]))
@@ -340,7 +368,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 32)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint32,inout_uint32,count, MPI_UINT32_T, MPI_BXOR);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint32[i]!=(in_uint32[i] ^ inout_uint32_for_check[i]))
@@ -353,7 +383,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 64)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint64,inout_uint64,count, MPI_UINT64_T, MPI_BXOR);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint64[i]!=(in_uint64[i] ^ inout_uint64_for_check[i]))
@@ -364,16 +396,16 @@ int main(int argc, char **argv) {
                 else
                     printf("Integer Size 64 BXOR check \033[1;31m fail\033[0m!");
             }
-            tend = MPI_Wtime();
         }
 
 
         if(strcmp(op, "mul") == 0) {
             printf("#Local Reduce Logical: %d \n", count);
-            tstart = MPI_Wtime();
             if (elem_size1 == 8)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint8,inout_uint8,count, MPI_INT8_T, MPI_PROD);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint8[i]!=in_uint8[i] * inout_uint8_for_check[i])
@@ -386,7 +418,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 16)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint16,inout_uint16,count, MPI_INT16_T, MPI_PROD);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint16[i]!=in_uint16[i] * inout_uint16_for_check[i])
@@ -399,7 +433,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 32)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint32,inout_uint32,count, MPI_UINT32_T, MPI_PROD);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint32[i]!=in_uint32[i] * inout_uint32_for_check[i])
@@ -412,7 +448,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 64)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint64,inout_uint64,count, MPI_UINT64_T, MPI_PROD);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint64[i]!=in_uint64[i] * inout_uint64_for_check[i])
@@ -423,15 +461,15 @@ int main(int argc, char **argv) {
                 else
                     printf("Integer Size 64 PROD check \033[1;31m fail\033[0m!");
             }
-            tend = MPI_Wtime();
         }
 
         if(strcmp(op, "band") == 0) {
             printf("#Local Reduce Logical: %d \n", count);
-            tstart = MPI_Wtime();
             if (elem_size1 == 8)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint8,inout_uint8,count, MPI_INT8_T, MPI_BAND);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint8[i]!=(in_uint8[i] & inout_uint8_for_check[i]) )
@@ -444,7 +482,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 16)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint16,inout_uint16,count, MPI_INT16_T, MPI_BAND);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint16[i]!=(in_uint16[i] & inout_uint16_for_check[i]))
@@ -457,7 +497,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 32)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint32,inout_uint32,count, MPI_UINT32_T, MPI_BAND);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint32[i]!=(in_uint32[i] & inout_uint32_for_check[i]))
@@ -470,7 +512,9 @@ int main(int argc, char **argv) {
             }
             if (elem_size1 == 64)
             {
+                tstart = MPI_Wtime();
                 MPI_Reduce_local(in_uint64,inout_uint64,count, MPI_UINT64_T, MPI_BAND);
+                tend = MPI_Wtime();
                 for (i=0; i<count; i++)
                 {
                     if(inout_uint64[i]!= (in_uint64[i] & inout_uint64_for_check[i]) )
@@ -481,7 +525,6 @@ int main(int argc, char **argv) {
                 else
                     printf("Integer Size 64 BAND check \033[1;31m fail\033[0m!");
             }
-            tend = MPI_Wtime();
         }
     }
 
@@ -489,6 +532,7 @@ int main(int argc, char **argv) {
         if(strcmp(op, "sum") == 0){
             tstart = MPI_Wtime();
             MPI_Reduce_local(in_float,inout_float,count, MPI_FLOAT, MPI_SUM);
+            tend = MPI_Wtime();
             for (i=0; i<count; i++)
             {
                 if(inout_float[i]!=inout_float_for_check[i]+in_float[i])
@@ -498,12 +542,12 @@ int main(int argc, char **argv) {
                 printf("Float Sum check \033[1;32m success!\033[0m");
             else
                 printf("Float Sum check \033[1;31m fail\033[0m!");
-            tend = MPI_Wtime();
         }
 
         if(strcmp(op, "max") == 0){
             tstart = MPI_Wtime();
             MPI_Reduce_local(in_float,inout_float,count, MPI_FLOAT, MPI_MAX);
+            tend = MPI_Wtime();
             for (i=0; i<count; i++)
             {
                 if(inout_float[i]!=in_float[i])
@@ -513,12 +557,12 @@ int main(int argc, char **argv) {
                 printf("Float Max check \033[1;32m success!\033[0m");
             else
                 printf("Float Max check \033[1;31m fail\033[0m!");
-            tend = MPI_Wtime();
         }
 
         if(strcmp(op, "min") == 0) {
             tstart = MPI_Wtime();
             MPI_Reduce_local(inout_float,in_float,count, MPI_FLOAT, MPI_MIN);
+            tend = MPI_Wtime();
             for (i=0; i<count; i++)
             {
                 if(inout_float[i]!=in_float[i])
@@ -528,12 +572,12 @@ int main(int argc, char **argv) {
                 printf("Float Min check \033[1;32m success!\033[0m");
             else
                 printf("Float Min check \033[1;31m fail\033[0m!");
-            tend = MPI_Wtime();
         }
 
         if(strcmp(op, "mul") == 0) {
             tstart = MPI_Wtime();
             MPI_Reduce_local(in_float,inout_float,count, MPI_FLOAT, MPI_PROD);
+            tend = MPI_Wtime();
             for (i=0; i<count; i++)
             {
                 if(inout_float[i]!=in_float[i] * inout_float_for_check[i])
@@ -543,7 +587,6 @@ int main(int argc, char **argv) {
                 printf("Float Prod check \033[1;32m success!\033[0m");
             else
                 printf("Float Prod check \033[1;31m fail\033[0m!");
-            tend = MPI_Wtime();
         }
     }
 
@@ -551,6 +594,7 @@ int main(int argc, char **argv) {
         if(strcmp(op, "sum") == 0){
             tstart = MPI_Wtime();
             MPI_Reduce_local(in_double,inout_double,count, MPI_DOUBLE, MPI_SUM);
+            tend = MPI_Wtime();
             for (i=0; i<count; i++)
             {
                 if(inout_double[i]!=inout_double_for_check[i]+in_double[i])
@@ -560,12 +604,12 @@ int main(int argc, char **argv) {
                 printf("Double Sum check \033[1;32m success!\033[0m");
             else
                 printf("Double Sum check \033[1;31m fail\033[0m!");
-            tend = MPI_Wtime();
         }
 
         if(strcmp(op, "max") == 0){
             tstart = MPI_Wtime();
             MPI_Reduce_local(in_double,inout_double,count, MPI_DOUBLE, MPI_MAX);
+            tend = MPI_Wtime();
             for (i=0; i<count; i++)
             {
                 if(inout_double[i]!=in_double[i])
@@ -575,12 +619,12 @@ int main(int argc, char **argv) {
                 printf("Double Max check \033[1;32m success!\033[0m");
             else
                 printf("Double Max check \033[1;31m fail\033[0m!");
-            tend = MPI_Wtime();
         }
 
         if(strcmp(op, "min") == 0) {
             tstart = MPI_Wtime();
             MPI_Reduce_local(inout_double,in_double,count, MPI_DOUBLE, MPI_MIN);
+            tend = MPI_Wtime();
             for (i=0; i<count; i++)
             {
                 if(inout_double[i]!=in_double[i])
@@ -590,11 +634,11 @@ int main(int argc, char **argv) {
                 printf("Double Min check \033[1;32m success!\033[0m");
             else
                 printf("Double Min check \033[1;31m fail\033[0m!");
-            tend = MPI_Wtime();
         }
         if(strcmp(op, "mul") == 0) {
             tstart = MPI_Wtime();
             MPI_Reduce_local(in_double,inout_double,count, MPI_DOUBLE, MPI_PROD);
+            tend = MPI_Wtime();
             for (i=0; i<count; i++)
             {
                 if(inout_double[i]!=inout_double_for_check[i]*in_double[i])
@@ -603,9 +647,8 @@ int main(int argc, char **argv) {
             if(correctness)
                 printf("Double Prod check \033[1;32m success!\033[0m");
             else
-                 printf("Double Prod check \033[1;31m fail\033[0m!");
-             tend = MPI_Wtime();
-         }
+                printf("Double Prod check \033[1;31m fail\033[0m!");
+        }
     }
     /*
        printf("\n ================\n");
@@ -646,16 +689,28 @@ int main(int argc, char **argv) {
        if((i+1)%8==0)
        printf("\n");
        }
-    printf("\n ================\n");
-    for (i=0; i<count; i++)
-    {
-        printf(" float: %f", inout_double[i]);
-        if((i+1)%8==0)
-            printf("\n");
-    }
-*/
-    printf("\n#Local Reduce time %.6f seconds\n", tend-tstart);
+       printf("\n ================\n");
+       for (i=0; i<count; i++)
+       {
+       printf(" float: %f", inout_double[i]);
+       if((i+1)%8==0)
+       printf("\n");
+       }
+       */
+    //tstart = MPI_Wtime();  
+    //memcpy(in_uint8,inout_uint8, count);
+    //memcpy(in_float, inout_float, count);
+    //memcpy(in_double, inout_double, count);
+    tend = MPI_Wtime();
+    printf("PERF count  %d  time %.6f seconds\n",count, tend-tstart);
     MPI_Finalize();
+#define L1size sysconf(_SC_LEVEL1_DCACHE_SIZE)
+#define L2size sysconf(_SC_LEVEL2_CACHE_SIZE)
+#define L3size sysconf(_SC_LEVEL2_CACHE_SIZE)
+    void cache_flush(){
+        char *cache = (char*)calloc(L1size+L2size+L3size, sizeof(char));
+        free(cache);
+    }
     return 0;
 }
 
