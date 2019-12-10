@@ -188,7 +188,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id,
                 }
 
                 /* send this process's info to hnp */
-                if (0 > (rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                if (0 > (rc = orte_rml.send_buffer_nb(
                                 ORTE_PROC_MY_HNP, alert,
                                 ORTE_RML_TAG_PLM,
                                 orte_rml_send_callback, NULL))) {

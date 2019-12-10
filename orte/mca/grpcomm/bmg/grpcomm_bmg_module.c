@@ -21,15 +21,14 @@
 
 #include "opal/dss/dss.h"
 #include "opal/class/opal_list.h"
+#include "opal/mca/compress/compress.h"
 
 #include "orte/mca/errmgr/errmgr.h"
-#include "orte/mca/regx/regx.h"
 #include "orte/mca/rml/base/base.h"
 #include "orte/mca/rml/base/rml_contact.h"
 #include "orte/mca/routed/base/base.h"
 #include "orte/mca/rml/rml.h"
 #include "orte/mca/state/state.h"
-#include "orte/util/compress.h"
 #include "orte/util/name_fns.h"
 #include "orte/util/proc_info.h"
 #include "orte/mca/routed/routed.h"
@@ -155,7 +154,7 @@ static int rbcast(opal_buffer_t *buf)
                     "%s grpcomm:bmg: broadcast message in %d daemons to %s",
                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), nprocs,
                     ORTE_NAME_PRINT(&daemon)));
-        if(0 > (rc = orte_rml.send_buffer_nb(orte_coll_conduit, &daemon, buf,
+        if(0 > (rc = orte_rml.send_buffer_nb(&daemon, buf,
                         ORTE_RML_TAG_RBCAST, orte_rml_send_callback, NULL))) {
             ORTE_ERROR_LOG(rc);
         }
@@ -221,7 +220,7 @@ static void rbcast_recv(int status, orte_process_name_t* sender,
             return;
         }
         /* decompress the data */
-        if (orte_util_uncompress_block(&cmpdata, cmplen,packed_data, inlen)) {
+        if (opal_compress.decompress_block(&cmpdata, cmplen,packed_data, inlen)) {
             /* the data has been uncompressed */
             opal_dss.load(&datbuf, cmpdata, cmplen);
             data = &datbuf;

@@ -210,7 +210,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id,
                 }
 
                 /* send this process's info to hnp */
-                if (0 > (rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                if (0 > (rc = orte_rml.send_buffer_nb(
                                 ORTE_PROC_MY_HNP, alert,
                                 ORTE_RML_TAG_PLM,
                                 orte_rml_send_callback, NULL))) {
@@ -417,7 +417,7 @@ static int fd_heartbeat_request(orte_errmgr_detector_t* detector) {
         if (OPAL_SUCCESS != (ret = opal_dss.pack(buffer, &orte_process_info.my_name.vpid, 1,OPAL_VPID))) {
             ORTE_ERROR_LOG(ret);
         }
-        if (0 > (ret = orte_rml.send_buffer_nb(orte_mgmt_conduit, &daemon, buffer,
+        if (0 > (ret = orte_rml.send_buffer_nb(&daemon, buffer,
                         ORTE_RML_TAG_HEARTBEAT_REQUEST, orte_rml_send_callback, NULL))) {
             ORTE_ERROR_LOG(ret);
         }
@@ -534,7 +534,7 @@ static int fd_heartbeat_send(orte_errmgr_detector_t* detector) {
         ORTE_ERROR_LOG(ret);
     }
     /* send the heartbeat with eager send */
-    if (0 > (ret  = orte_rml.send_buffer_nb(orte_mgmt_conduit,
+    if (0 > (ret  = orte_rml.send_buffer_nb(
                     &daemon,
                     buffer,ORTE_RML_TAG_HEARTBEAT,
                     orte_rml_send_callback, NULL))) {

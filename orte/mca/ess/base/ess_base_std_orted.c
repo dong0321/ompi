@@ -445,27 +445,6 @@ int orte_ess_base_orted_setup(void)
         goto error;
     }
 
-    /* get a conduit for our use - we never route IO over fabric */
-    OBJ_CONSTRUCT(&transports, opal_list_t);
-    orte_set_attribute(&transports, ORTE_RML_TRANSPORT_TYPE,
-                       ORTE_ATTR_LOCAL, orte_mgmt_transport, OPAL_STRING);
-    if (ORTE_RML_CONDUIT_INVALID == (orte_mgmt_conduit = orte_rml.open_conduit(&transports))) {
-        ret = ORTE_ERR_OPEN_CONDUIT_FAIL;
-        error = "orte_rml_open_mgmt_conduit";
-        goto error;
-    }
-    OPAL_LIST_DESTRUCT(&transports);
-
-    OBJ_CONSTRUCT(&transports, opal_list_t);
-    orte_set_attribute(&transports, ORTE_RML_TRANSPORT_TYPE,
-                       ORTE_ATTR_LOCAL, orte_coll_transport, OPAL_STRING);
-    if (ORTE_RML_CONDUIT_INVALID == (orte_coll_conduit = orte_rml.open_conduit(&transports))) {
-        ret = ORTE_ERR_OPEN_CONDUIT_FAIL;
-        error = "orte_rml_open_coll_conduit";
-        goto error;
-    }
-    OPAL_LIST_DESTRUCT(&transports);
-
     /*
      * Group communications
      */
@@ -614,9 +593,6 @@ int orte_ess_base_orted_finalize(void)
         orte_errmgr.finalize();
     }
     //(void) mca_base_framework_close(&orte_errmgr_base_framework);
-    /* release the conduits */
-    orte_rml.close_conduit(orte_mgmt_conduit);
-    orte_rml.close_conduit(orte_coll_conduit);
 
     /* close frameworks */
     (void) mca_base_framework_close(&orte_filem_base_framework);

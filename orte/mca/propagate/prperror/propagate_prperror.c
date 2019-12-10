@@ -321,7 +321,7 @@ static int orte_propagate_prperror(orte_jobid_t *job, orte_process_name_t *sourc
                 }
 
                 /* send this process's info to hnp */
-                if (0 > (rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                if (0 > (rc = orte_rml.send_buffer_nb(
                                 ORTE_PROC_MY_HNP, alert,
                                 ORTE_RML_TAG_PLM,
                                 orte_rml_send_callback, NULL))) {
