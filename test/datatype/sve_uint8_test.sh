@@ -9,7 +9,7 @@ do
     echo ""
     echo ""
     echo -e "Test \e[1;33m SVE full vector instruction for loop \e[m Total_num_bits = 2048*N "
-    for (( i=1; i<11; i++ ))
+    for (( i=1; i<31; i++ ))
     do
         for val in 1024 4096 16384 65536 262144 1048576 4194304 16777216 33554432
         do
