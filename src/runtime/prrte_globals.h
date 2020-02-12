@@ -564,6 +564,11 @@ extern char *prrte_stacktrace_output_filename;
 extern char *prrte_net_private_ipv4;
 extern char *prrte_set_max_sys_limits;
 
+/* Detector enable/disable flag */
+PRRTE_EXPORT extern bool prrte_errmgr_detector_enable_flag;
+PRRTE_EXPORT extern double prrte_errmgr_heartbeat_period;
+PRRTE_EXPORT extern double prrte_errmgr_heartbeat_timeout;
+
 END_C_DECLS
 
 #endif /* PRRTE_RUNTIME_PRRTE_GLOBALS_H */

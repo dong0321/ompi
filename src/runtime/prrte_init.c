@@ -305,6 +305,11 @@ int prrte_init(int* pargc, char*** pargv, prrte_proc_type_t flags)
         goto error;
     }
 
+    if (PRRTE_PROC_IS_MASTER || PRRTE_PROC_IS_DAEMON) {
+        if(NULL != prrte_errmgr.enable_detector){
+           prrte_errmgr.enable_detector(prrte_errmgr_detector_enable_flag);
+        }
+    }
     /* start listening - will be ignored if no listeners
      * were registered */
     if (PRRTE_SUCCESS != (ret = prrte_start_listening())) {

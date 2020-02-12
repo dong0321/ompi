@@ -37,6 +37,13 @@
 #include <unistd.h>
 #endif
 
+#include "src/mca/propagate/base/base.h"
+#if PRRTE_ENABLE_FT_CR == 1
+#include "src/mca/snapc/base/base.h"
+#include "src/mca/sstore/base/base.h"
+#endif
+#include "src/util/proc_info.h"
+
 #include "src/dss/dss.h"
 #include "src/event/event-internal.h"
 #include "src/hwloc/hwloc-internal.h"
@@ -208,6 +215,12 @@ int prrte_ess_base_prted_setup(void)
     if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_errmgr_base_framework, 0))) {
         PRRTE_ERROR_LOG(ret);
         error = "prrte_errmgr_base_open";
+        goto error;
+    }
+    /* open the propagate */
+    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_propagate_base_framework, 0))) {
+        PRRTE_ERROR_LOG(ret);
+        error = "prrte_propagate_base_open";
         goto error;
     }
     /* some environments allow remote launches - e.g., ssh - so
@@ -419,6 +432,13 @@ int prrte_ess_base_prted_setup(void)
         goto error;
     }
 
+    /* select the propagate */
+    if (PRRTE_SUCCESS != (ret = prrte_propagate_base_select())) {
+        PRRTE_ERROR_LOG(ret);
+        error = "prrte_propagate_base_select";
+        goto error;
+    }
+
     /*
      * Group communications
      */
@@ -557,6 +577,15 @@ int prrte_ess_base_prted_finalize(void)
     }
     /* shutdown the pmix server */
     pmix_server_finalize();
+
+    if ( NULL != prrte_propagate.finalize ) {
+        prrte_propagate.finalize();
+    }
+    (void) prrte_mca_base_framework_close(&prrte_propagate_base_framework);
+
+    if ( NULL != prrte_errmgr.finalize ) {
+        prrte_errmgr.finalize();
+    }
 
     /* close frameworks */
     (void) prrte_mca_base_framework_close(&prrte_filem_base_framework);
