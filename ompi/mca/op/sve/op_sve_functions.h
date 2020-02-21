@@ -19,7 +19,7 @@
 #endif
 
 #include "ompi/mca/op/op.h"
-#include "ompi/mca/op/arm_sve_op/op_sve.h"
+#include "ompi/mca/op/sve/op_sve.h"
 
 BEGIN_C_DECLS
 

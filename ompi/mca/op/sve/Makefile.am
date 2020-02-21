@@ -41,7 +41,7 @@ sources = \
 # MCA_BUILD_ompi_<framework>_<component>_DSO AM_CONDITIONAL to indicate
 # which way this component should be built.
 
-if MCA_BUILD_ompi_op_arm_sve_op_DSO
+if MCA_BUILD_ompi_op_sve_DSO
 component_noinst =
 component_install = mca_op_sve.la
 else

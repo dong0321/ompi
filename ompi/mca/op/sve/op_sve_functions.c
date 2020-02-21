@@ -22,8 +22,8 @@
 #include "ompi/op/op.h"
 #include "ompi/mca/op/op.h"
 #include "ompi/mca/op/base/base.h"
-#include "ompi/mca/op/arm_sve_op/op_sve.h"
-#include "ompi/mca/op/arm_sve_op/op_sve_functions.h"
+#include "ompi/mca/op/sve/op_sve.h"
+#include "ompi/mca/op/sve/op_sve_functions.h"
 
 #ifdef __ARM_FEATURE_SVE
 #include <arm_sve.h>
