@@ -57,32 +57,8 @@
     }                                                                  \
     \
     while( left_over > 0 ) {                        \
-        int how_much = (left_over > 32) ? 32 : left_over; \
+        int how_much = (left_over > 8) ? 8 : left_over; \
         switch(left_over) {                         \
-            case 32: out[31] = current_func(out[31],in[31]) ;                        \
-            case 31: out[30] = current_func(out[30],in[30]) ;                        \
-            case 30: out[29] = current_func(out[29],in[29]) ;                        \
-            case 29: out[28] = current_func(out[28],in[28]) ;                        \
-            case 28: out[27] = current_func(out[27],in[27]) ;                        \
-            case 27: out[26] = current_func(out[26],in[26]) ;                        \
-            case 26: out[25] = current_func(out[25],in[25]) ;                        \
-            case 25: out[24] = current_func(out[24],in[24]) ;                        \
-            case 24: out[23] = current_func(out[23],in[23]) ;                        \
-            case 23: out[22] = current_func(out[22],in[22]) ;                        \
-            case 22: out[21] = current_func(out[21],in[21]) ;                        \
-            case 21: out[20] = current_func(out[20],in[20]) ;                        \
-            case 20: out[19] = current_func(out[19],in[19]) ;                        \
-            case 19: out[18] = current_func(out[18],in[18]) ;                        \
-            case 18: out[17] = current_func(out[17],in[17]) ;                        \
-            case 17: out[16] = current_func(out[16],in[16]) ;                        \
-            case 16: out[15] = current_func(out[15],in[15]) ;                        \
-            case 15: out[14] = current_func(out[14],in[14]) ;                        \
-            case 14: out[13] = current_func(out[13],in[13]) ;                        \
-            case 13: out[12] = current_func(out[12],in[12]) ;                        \
-            case 12: out[11] = current_func(out[11],in[11]) ;                        \
-            case 11: out[10] = current_func(out[10],in[10]) ;                        \
-            case 10: out[9] = current_func(out[9],in[9]) ;                        \
-            case 9: out[8] = current_func(out[8],in[8]) ;                        \
             case 8: out[7] = current_func(out[7],in[7]) ;                        \
             case 7: out[6] = current_func(out[6],in[6]) ;                        \
             case 6: out[5] = current_func(out[5],in[5]) ;                        \
