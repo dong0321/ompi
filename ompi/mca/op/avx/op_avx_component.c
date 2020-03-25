@@ -2,6 +2,8 @@
  * Copyright (c) 2019-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
+ * Copyright (c) 2020      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,7 +49,7 @@ static uint32_t has_intel_AVX_features(void)
     uint32_t flags = 0;
 
     flags |= _may_i_use_cpu_feature(_FEATURE_AVX512F)  ? OMPI_OP_AVX_HAS_AVX512F_FLAG   : 0;
-    flags |= _may_i_use_cpu_feature(_FEATURE_AVX512BW) ? OMPI_OP_AVX_HAS_AVX512FBW_FLAG : 0;
+    flags |= _may_i_use_cpu_feature(_FEATURE_AVX512BW) ? OMPI_OP_AVX_HAS_AVX512BW_FLAG : 0;
     flags |= _may_i_use_cpu_feature(_FEATURE_AVX2)     ? OMPI_OP_AVX_HAS_AVX2_FLAG      : 0;
     flags |= _may_i_use_cpu_feature(_FEATURE_AVX)      ? OMPI_OP_AVX_HAS_AVX_FLAG       : 0;
     flags |= _may_i_use_cpu_feature(_FEATURE_SSE4_1)   ? OMPI_OP_AVX_HAS_SSE4_1_FLAG    : 0;
@@ -185,15 +187,6 @@ avx_component_register(void)
     mca_op_avx_component.flags &= requested_flags;
     return OMPI_SUCCESS;
 }
-#define OMPI_OP_AVX_HAS_AVX512BW_FLAG  0x00000200
-#define OMPI_OP_AVX_HAS_AVX512F_FLAG   0x00000100
-#define OMPI_OP_AVX_HAS_AVX2_FLAG      0x00000020
-#define OMPI_OP_AVX_HAS_AVX_FLAG       0x00000010
-#define OMPI_OP_AVX_HAS_SSE4_1_FLAG    0x00000008
-#define OMPI_OP_AVX_HAS_SSE3_FLAG      0x00000004
-#define OMPI_OP_AVX_HAS_SSE2_FLAG      0x00000002
-#define OMPI_OP_AVX_HAS_SSE_FLAG       0x00000001
-
 
 /*
  * Query whether this component wants to be used in this process.

@@ -2,6 +2,8 @@
  * Copyright (c) 2019-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
+ * Copyright (c) 2020      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -120,9 +122,16 @@ static void ompi_op_avx_2buff_##name##_##type(const void *_in, void *_out, int *
 }
 
 #if defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+#define OP_AVX512_FUNC(name, type_sign, type_size, type, op)                   \
+        OP_AVX_FUNC(name, type_sign, type_size, type, op)
+#else
+#define OP_AVX512_FUNC(name, type_sign, type_size, type, op)
+#endif
+
+#if defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
 #define OP_AVX_AVX512_MUL(name, type_sign, type_size, type, op)         \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX512F_FLAG | OMPI_OP_AVX_HAS_AVX512BW_FLAG) ) {  \
-        types_per_step = (256 / 8) / sizeof(type);                      \
+        int types_per_step = (256 / 8) / sizeof(type);                  \
         for (; left_over >= types_per_step; left_over -= types_per_step) { \
             __m256i vecA_tmp =  _mm256_loadu_si256((__m256i*)in);       \
             __m256i vecB_tmp =  _mm256_loadu_si256((__m256i*)out);      \
@@ -150,7 +159,7 @@ static void ompi_op_avx_2buff_##name##_##type(const void *_in, void *_out, int *
                                               struct ompi_datatype_t **dtype, \
                                               struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                       \
-    int types_per_step, left_over = *count;                             \
+    int left_over = *count;                                             \
     type *in = (type*)_in, *out = (type*)_out;                          \
     OP_AVX_AVX512_MUL(name, type_sign, type_size, type, op);            \
     while( left_over > 0 ) {                                            \
@@ -434,8 +443,8 @@ static void ompi_op_avx_2buff_##op##_double(const void *_in, void *_out, int *co
     OP_AVX_FUNC(max, u, 16, uint16_t, max)
     OP_AVX_FUNC(max, i, 32,  int32_t, max)
     OP_AVX_FUNC(max, u, 32, uint32_t, max)
-    OP_AVX_FUNC(max, i, 64,  int64_t, max)
-    OP_AVX_FUNC(max, u, 64, uint64_t, max)
+    OP_AVX512_FUNC(max, i, 64,  int64_t, max)
+    OP_AVX512_FUNC(max, u, 64, uint64_t, max)
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC(max)
@@ -452,8 +461,8 @@ static void ompi_op_avx_2buff_##op##_double(const void *_in, void *_out, int *co
     OP_AVX_FUNC(min, u, 16, uint16_t, min)
     OP_AVX_FUNC(min, i, 32,  int32_t, min)
     OP_AVX_FUNC(min, u, 32, uint32_t, min)
-    OP_AVX_FUNC(min, i, 64,  int64_t, min)
-    OP_AVX_FUNC(min, u, 64, uint64_t, min)
+    OP_AVX512_FUNC(min, i, 64,  int64_t, min)
+    OP_AVX512_FUNC(min, u, 64, uint64_t, min)
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC(min)
@@ -464,14 +473,14 @@ static void ompi_op_avx_2buff_##op##_double(const void *_in, void *_out, int *co
  ************************************************************************/
 #undef current_func
 #define current_func(a, b) ((a) + (b))
-    OP_AVX_FUNC(sum, i, 8,    int8_t, add)
-    OP_AVX_FUNC(sum, i, 8,   uint8_t, add)
-    OP_AVX_FUNC(sum, i, 16,  int16_t, add)
-    OP_AVX_FUNC(sum, i, 16, uint16_t, add)
+    OP_AVX_FUNC(sum, i, 8,    int8_t, adds)
+    OP_AVX_FUNC(sum, u, 8,   uint8_t, adds)
+    OP_AVX_FUNC(sum, i, 16,  int16_t, adds)
+    OP_AVX_FUNC(sum, u, 16, uint16_t, adds)
     OP_AVX_FUNC(sum, i, 32,  int32_t, add)
     OP_AVX_FUNC(sum, i, 32, uint32_t, add)
-    OP_AVX_FUNC(sum, i, 64,  int64_t, add)
-    OP_AVX_FUNC(sum, i, 64, uint64_t, add)
+    OP_AVX512_FUNC(sum, i, 64,  int64_t, add)
+    OP_AVX512_FUNC(sum, i, 64, uint64_t, add)
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC(add)
@@ -488,8 +497,8 @@ static void ompi_op_avx_2buff_##op##_double(const void *_in, void *_out, int *co
     OP_AVX_FUNC(prod, i, 16, uint16_t, mullo)
     OP_AVX_FUNC(prod, i, 32,  int32_t, mullo)
     OP_AVX_FUNC(prod, i ,32, uint32_t, mullo)
-    OP_AVX_FUNC(prod, i, 64,  int64_t, mullo)
-    OP_AVX_FUNC(prod, i, 64, uint64_t, mullo)
+    OP_AVX512_FUNC(prod, i, 64,  int64_t, mullo)
+    OP_AVX512_FUNC(prod, i, 64, uint64_t, mullo)
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC(mul)
@@ -638,9 +647,16 @@ static void ompi_op_avx_3buff_##name##_##type(const void * restrict _in1, \
 }
 
 #if defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+#define OP_AVX512_FUNC_3(name, type_sign, type_size, type, op)            \
+        OP_AVX_FUNC_3(name, type_sign, type_size, type, op)
+#else
+#define OP_AVX512_FUNC_3(name, type_sign, type_size, type, op)
+#endif
+
+#if defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
 #define OP_AVX_AVX512_MUL_3(name, type_sign, type_size, type, op)       \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX512F_FLAG | OMPI_OP_AVX_HAS_AVX512BW_FLAG) ) { \
-        types_per_step = (256 / 8) / sizeof(type);                      \
+        int types_per_step = (256 / 8) / sizeof(type);                  \
         for (; left_over >= types_per_step; left_over -= types_per_step) { \
             __m256i vecA_tmp =  _mm256_loadu_si256((__m256i*)in1);      \
             __m256i vecB_tmp =  _mm256_loadu_si256((__m256i*)in2);      \
@@ -672,7 +688,7 @@ static void ompi_op_avx_3buff_##name##_##type(const void * restrict _in1, \
                                               struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                       \
     type *in1 = (type*)_in1, *in2 = (type*)_in2, *out = (type*)_out;    \
-    int types_per_step, left_over = *count;                             \
+    int left_over = *count;                                             \
     OP_AVX_AVX512_MUL_3(name, type_sign, type_size, type, op);          \
     while( left_over > 0 ) {                                            \
         int how_much = (left_over > 8) ? 8 : left_over;                 \
@@ -963,8 +979,8 @@ static void ompi_op_avx_3buff_##op##_double(const void *_in1, const void *_in2, 
     OP_AVX_FUNC_3(max, u, 16, uint16_t, max)
     OP_AVX_FUNC_3(max, i, 32,  int32_t, max)
     OP_AVX_FUNC_3(max, u, 32, uint32_t, max)
-    OP_AVX_FUNC_3(max, i, 64,  int64_t, max)
-    OP_AVX_FUNC_3(max, u, 64, uint64_t, max)
+    OP_AVX512_FUNC_3(max, i, 64,  int64_t, max)
+    OP_AVX512_FUNC_3(max, u, 64, uint64_t, max)
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC_3(max)
@@ -981,8 +997,8 @@ static void ompi_op_avx_3buff_##op##_double(const void *_in1, const void *_in2, 
     OP_AVX_FUNC_3(min, u, 16, uint16_t, min)
     OP_AVX_FUNC_3(min, i, 32,  int32_t, min)
     OP_AVX_FUNC_3(min, u, 32, uint32_t, min)
-    OP_AVX_FUNC_3(min, i, 64,  int64_t, min)
-    OP_AVX_FUNC_3(min, u, 64, uint64_t, min)
+    OP_AVX512_FUNC_3(min, i, 64,  int64_t, min)
+    OP_AVX512_FUNC_3(min, u, 64, uint64_t, min)
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC_3(min)
@@ -1000,8 +1016,8 @@ static void ompi_op_avx_3buff_##op##_double(const void *_in1, const void *_in2, 
     OP_AVX_FUNC_3(sum, i, 16, uint16_t, add)
     OP_AVX_FUNC_3(sum, i, 32,  int32_t, add)
     OP_AVX_FUNC_3(sum, i, 32, uint32_t, add)
-    OP_AVX_FUNC_3(sum, i, 64,  int64_t, add)
-    OP_AVX_FUNC_3(sum, i, 64, uint64_t, add)
+    OP_AVX512_FUNC_3(sum, i, 64,  int64_t, add)
+    OP_AVX512_FUNC_3(sum, i, 64, uint64_t, add)
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC_3(add)
@@ -1018,8 +1034,8 @@ static void ompi_op_avx_3buff_##op##_double(const void *_in1, const void *_in2, 
     OP_AVX_FUNC_3(prod, i, 16, uint16_t, mullo)
     OP_AVX_FUNC_3(prod, i, 32,  int32_t, mullo)
     OP_AVX_FUNC_3(prod, i ,32, uint32_t, mullo)
-    OP_AVX_FUNC_3(prod, i, 64,  int64_t, mullo)
-    OP_AVX_FUNC_3(prod, i, 64, uint64_t, mullo)
+    OP_AVX512_FUNC_3(prod, i, 64,  int64_t, mullo)
+    OP_AVX512_FUNC_3(prod, i, 64, uint64_t, mullo)
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC_3(mul)
@@ -1084,7 +1100,9 @@ static void ompi_op_avx_3buff_##op##_double(const void *_in1, const void *_in2, 
     [OMPI_OP_BASE_TYPE_INT16_T] = ompi_op_avx_##ftype##_##name##_int16_t,   \
     [OMPI_OP_BASE_TYPE_UINT16_T] = ompi_op_avx_##ftype##_##name##_uint16_t, \
     [OMPI_OP_BASE_TYPE_INT32_T] = ompi_op_avx_##ftype##_##name##_int32_t,   \
-    [OMPI_OP_BASE_TYPE_UINT32_T] = ompi_op_avx_##ftype##_##name##_uint32_t, \
+    [OMPI_OP_BASE_TYPE_UINT32_T] = ompi_op_avx_##ftype##_##name##_uint32_t
+
+#define C_INTEGER64(name, ftype)                                            \
     [OMPI_OP_BASE_TYPE_INT64_T] = ompi_op_avx_##ftype##_##name##_int64_t,   \
     [OMPI_OP_BASE_TYPE_UINT64_T] = ompi_op_avx_##ftype##_##name##_uint64_t
 
@@ -1118,21 +1136,25 @@ ompi_op_base_handler_fn_t ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_OP_MAX][OMP
     /* Corresponds to MPI_MAX */
     [OMPI_OP_BASE_FORTRAN_MAX] = {
         C_INTEGER(max, 2buff),
+        C_INTEGER64(max, 2buff),
         FLOATING_POINT(max, 2buff),
     },
     /* Corresponds to MPI_MIN */
     [OMPI_OP_BASE_FORTRAN_MIN] = {
         C_INTEGER(min, 2buff),
+        C_INTEGER64(min, 2buff),
         FLOATING_POINT(min, 2buff),
     },
     /* Corresponds to MPI_SUM */
     [OMPI_OP_BASE_FORTRAN_SUM] = {
         C_INTEGER(sum, 2buff),
+        C_INTEGER64(sum, 2buff),
         FLOATING_POINT(add, 2buff),
     },
     /* Corresponds to MPI_PROD */
     [OMPI_OP_BASE_FORTRAN_PROD] = {
         C_INTEGER(prod, 2buff),
+        C_INTEGER64(prod, 2buff),
         FLOATING_POINT(mul, 2buff),
     },
     /* Corresponds to MPI_LAND */
@@ -1141,7 +1163,8 @@ ompi_op_base_handler_fn_t ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_OP_MAX][OMP
     },
     /* Corresponds to MPI_BAND */
     [OMPI_OP_BASE_FORTRAN_BAND] = {
-        C_INTEGER(band, 2buff),
+        C_INTEGER  (band, 2buff),
+        C_INTEGER64(band, 2buff),
     },
     /* Corresponds to MPI_LOR */
     [OMPI_OP_BASE_FORTRAN_LOR] = {
@@ -1149,7 +1172,8 @@ ompi_op_base_handler_fn_t ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_OP_MAX][OMP
     },
     /* Corresponds to MPI_BOR */
     [OMPI_OP_BASE_FORTRAN_BOR] = {
-        C_INTEGER(bor, 2buff),
+        C_INTEGER  (bor, 2buff),
+        C_INTEGER64(bor, 2buff),
     },
     /* Corresponds to MPI_LXOR */
     [OMPI_OP_BASE_FORTRAN_LXOR] = {
@@ -1157,7 +1181,8 @@ ompi_op_base_handler_fn_t ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_OP_MAX][OMP
     },
     /* Corresponds to MPI_BXOR */
     [OMPI_OP_BASE_FORTRAN_BXOR] = {
-        C_INTEGER(bxor, 2buff),
+        C_INTEGER  (bxor, 2buff),
+        C_INTEGER64(bxor, 2buff),
     },
     /* Corresponds to MPI_REPLACE */
     [OMPI_OP_BASE_FORTRAN_REPLACE] = {
@@ -1181,21 +1206,25 @@ ompi_op_base_3buff_handler_fn_t ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN
     /* Corresponds to MPI_MAX */
     [OMPI_OP_BASE_FORTRAN_MAX] = {
         C_INTEGER(max, 3buff),
+        C_INTEGER64(max, 3buff),
         FLOATING_POINT(max, 3buff),
     },
     /* Corresponds to MPI_MIN */
     [OMPI_OP_BASE_FORTRAN_MIN] = {
         C_INTEGER(min, 3buff),
+        C_INTEGER64(min, 3buff),
         FLOATING_POINT(min, 3buff),
     },
     /* Corresponds to MPI_SUM */
     [OMPI_OP_BASE_FORTRAN_SUM] = {
         C_INTEGER(sum, 3buff),
+        C_INTEGER64(sum, 3buff),
         FLOATING_POINT(add, 3buff),
     },
     /* Corresponds to MPI_PROD */
     [OMPI_OP_BASE_FORTRAN_PROD] = {
         C_INTEGER(prod, 3buff),
+        C_INTEGER64(prod, 3buff),
         FLOATING_POINT(mul, 3buff),
     },
     /* Corresponds to MPI_LAND */
@@ -1204,7 +1233,8 @@ ompi_op_base_3buff_handler_fn_t ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN
     },
     /* Corresponds to MPI_BAND */
     [OMPI_OP_BASE_FORTRAN_BAND] = {
-        C_INTEGER(and, 3buff),
+        C_INTEGER  (and, 3buff),
+        C_INTEGER64(and, 3buff),
     },
     /* Corresponds to MPI_LOR */
     [OMPI_OP_BASE_FORTRAN_LOR] = {
@@ -1212,7 +1242,8 @@ ompi_op_base_3buff_handler_fn_t ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN
     },
     /* Corresponds to MPI_BOR */
     [OMPI_OP_BASE_FORTRAN_BOR] = {
-        C_INTEGER(or, 3buff),
+        C_INTEGER  (or, 3buff),
+        C_INTEGER64(or, 3buff),
     },
     /* Corresponds to MPI_LXOR */
     [OMPI_OP_BASE_FORTRAN_LXOR] = {
@@ -1220,7 +1251,8 @@ ompi_op_base_3buff_handler_fn_t ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN
     },
     /* Corresponds to MPI_BXOR */
     [OMPI_OP_BASE_FORTRAN_BXOR] = {
-        C_INTEGER(xor, 3buff),
+        C_INTEGER  (xor, 3buff),
+        C_INTEGER64(xor, 3buff),
     },
     /* Corresponds to MPI_REPLACE */
     [OMPI_OP_BASE_FORTRAN_REPLACE] = {
