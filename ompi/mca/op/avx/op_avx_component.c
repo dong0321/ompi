@@ -26,7 +26,6 @@
 #include "ompi/mca/op/op.h"
 #include "ompi/mca/op/base/base.h"
 #include "ompi/mca/op/avx/op_avx.h"
-#include "ompi/mca/op/avx/op_avx_functions.h"
 
 static int avx_component_open(void);
 static int avx_component_close(void);
@@ -175,13 +174,12 @@ static int avx_component_close(void)
 static int
 avx_component_register(void)
 {
-    int32_t requested_flags;
-    requested_flags = mca_op_avx_component.flags = has_intel_AVX_features();
+    int32_t requested_flags = has_intel_AVX_features();
     (void) mca_base_component_var_register(&mca_op_avx_component.super.opc_version,
                                            "support",
                                            "Level of SSE/MMX/AVX support to be used (combination of processor capabilities as follow SSE 0x01, SSE2 0x02, SSE3 0x04, SSE4.1 0x08, AVX 0x010, AVX2 0x020, AVX512F 0x100, AVX512BW 0x200) capped by the local architecture capabilities",
                                            MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
-                                           OPAL_INFO_LVL_9,
+                                           OPAL_INFO_LVL_6,
                                            MCA_BASE_VAR_SCOPE_LOCAL,
                                            &mca_op_avx_component.flags);
     mca_op_avx_component.flags &= requested_flags;
@@ -200,7 +198,18 @@ avx_component_init_query(bool enable_progress_threads,
     return OMPI_SUCCESS;
 }
 
-
+#if OMPI_MCA_OP_HAVE_AVX512
+ extern ompi_op_base_handler_fn_t ompi_op_avx_functions_avx512[OMPI_OP_BASE_FORTRAN_OP_MAX][OMPI_OP_BASE_TYPE_MAX];
+ extern ompi_op_base_3buff_handler_fn_t ompi_op_avx_3buff_functions_avx512[OMPI_OP_BASE_FORTRAN_OP_MAX][OMPI_OP_BASE_TYPE_MAX];
+#endif
+#if OMPI_MCA_OP_HAVE_AVX2
+ extern ompi_op_base_handler_fn_t ompi_op_avx_functions_avx2[OMPI_OP_BASE_FORTRAN_OP_MAX][OMPI_OP_BASE_TYPE_MAX];
+ extern ompi_op_base_3buff_handler_fn_t ompi_op_avx_3buff_functions_avx2[OMPI_OP_BASE_FORTRAN_OP_MAX][OMPI_OP_BASE_TYPE_MAX];
+#endif
+#if OMPI_MCA_OP_HAVE_AVX
+ extern ompi_op_base_handler_fn_t ompi_op_avx_functions_avx[OMPI_OP_BASE_FORTRAN_OP_MAX][OMPI_OP_BASE_TYPE_MAX];
+ extern ompi_op_base_3buff_handler_fn_t ompi_op_avx_3buff_functions_avx[OMPI_OP_BASE_FORTRAN_OP_MAX][OMPI_OP_BASE_TYPE_MAX];
+#endif
 /*
  * Query whether this component can be used for a specific op
  */
@@ -225,10 +234,38 @@ avx_component_op_query(struct ompi_op_t *op, int *priority)
     case OMPI_OP_BASE_FORTRAN_BXOR:
         module = OBJ_NEW(ompi_op_base_module_t);
         for (int i = 0; i < OMPI_OP_BASE_TYPE_MAX; ++i) {
-            module->opm_fns[i] = ompi_op_avx_functions[op->o_f_to_c_index][i];
-            OBJ_RETAIN(module);
-            module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions[op->o_f_to_c_index][i];
-            OBJ_RETAIN(module);
+#if OMPI_MCA_OP_HAVE_AVX512
+            if( mca_op_avx_component.flags & OMPI_OP_AVX_HAS_AVX512F_FLAG ) {
+                module->opm_fns[i] = ompi_op_avx_functions_avx512[op->o_f_to_c_index][i];
+                module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions_avx512[op->o_f_to_c_index][i];
+            }
+#endif
+#if OMPI_MCA_OP_HAVE_AVX2
+            if( mca_op_avx_component.flags & OMPI_OP_AVX_HAS_AVX2_FLAG ) {
+                if( NULL == module->opm_fns[i] ) {
+                    module->opm_fns[i] = ompi_op_avx_functions_avx2[op->o_f_to_c_index][i];
+                }
+                if( NULL == module->opm_3buff_fns[i] ) {
+                    module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions_avx2[op->o_f_to_c_index][i];
+                }
+            }
+#endif
+#if OMPI_MCA_OP_HAVE_AVX
+            if( mca_op_avx_component.flags & OMPI_OP_AVX_HAS_AVX_FLAG ) {
+                if( NULL == module->opm_fns[i] ) {
+                    module->opm_fns[i] = ompi_op_avx_functions_avx[op->o_f_to_c_index][i];
+                }
+                if( NULL == module->opm_3buff_fns[i] ) {
+                    module->opm_3buff_fns[i] = ompi_op_avx_3buff_functions_avx[op->o_f_to_c_index][i];
+                }
+            }
+#endif
+            if( NULL != module->opm_fns[i] ) {
+                OBJ_RETAIN(module);
+            }
+            if( NULL != module->opm_3buff_fns[i] ) {
+                OBJ_RETAIN(module);
+            }
         }
         break;
     case OMPI_OP_BASE_FORTRAN_LAND:

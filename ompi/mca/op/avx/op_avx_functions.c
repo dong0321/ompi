@@ -22,9 +22,30 @@
 #include "ompi/mca/op/op.h"
 #include "ompi/mca/op/base/base.h"
 #include "ompi/mca/op/avx/op_avx.h"
-#include "ompi/mca/op/avx/op_avx_functions.h"
 
 #include <immintrin.h>
+
+#if defined(GENERATE_AVX512_CODE)
+#define PREPEND _avx512
+#elif defined(GENERATE_AVX2_CODE)
+#define PREPEND _avx2
+#elif defined(GENERATE_AVX_CODE)
+#define PREPEND _avx
+#else
+#error This file should not be compiled in this conditions
+#endif
+
+/*
+ * Concatenate preprocessor tokens A and B without expanding macro definitions
+ * (however, if invoked from a macro, macro arguments are expanded).
+ */
+#define OP_CONCAT_NX(A, B) A ## B
+
+/*
+ * Concatenate preprocessor tokens A and B after macro-expanding them.
+ */
+#define OP_CONCAT(A, B) OP_CONCAT_NX(A, B)
+
 /*
  * Since all the functions in this file are essentially identical, we
  * use a macro to substitute in names and types.  The core operation
@@ -40,10 +61,10 @@
 #define OMPI_OP_AVX_HAS_FLAGS(_flag) \
   (((_flag) & mca_op_avx_component.flags) == (_flag))
 
-#if defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+#if defined(GENERATE_AVX512_CODE) && defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
 #define OP_AVX_AVX512_FUNC(name, type_sign, type_size, type, op)               \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX512F_FLAG|OMPI_OP_AVX_HAS_AVX512BW_FLAG) ) { \
-        types_per_step = (512 / 8) / sizeof(type);                             \
+        int types_per_step = (512 / 8) / sizeof(type);                         \
         for( ; left_over >= types_per_step; left_over -= types_per_step ) {    \
             __m512i vecA =  _mm512_loadu_si512((__m512*)in);                   \
             in += types_per_step;                                              \
@@ -58,10 +79,10 @@
 #define OP_AVX_AVX512_FUNC(name, type_sign, type_size, type, op) {}
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512) */
 
-#if defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2)
+#if defined(GENERATE_AVX2_CODE) && defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2)
 #define OP_AVX_AVX2_FUNC(name, type_sign, type_size, type, op)                 \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX2_FLAG | OMPI_OP_AVX_HAS_AVX_FLAG) ) {  \
-        types_per_step = (256 / 8) / sizeof(type);  /* AVX2 */                 \
+        int types_per_step = (256 / 8) / sizeof(type);  /* AVX2 */             \
         for( ; left_over >= types_per_step; left_over -= types_per_step ) {    \
             __m256i vecA = _mm256_loadu_si256((__m256i*)in);                   \
             in += types_per_step;                                              \
@@ -76,10 +97,10 @@
 #define OP_AVX_AVX2_FUNC(name, type_sign, type_size, type, op) {}
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2) */
 
-#if defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX)
+#if defined(GENERATE_SSE3_CODE) && defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX)
 #define OP_AVX_SSE4_1_FUNC(name, type_sign, type_size, type, op)               \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_SSE3_FLAG | OMPI_OP_AVX_HAS_SSE4_1_FLAG) ) { \
-        types_per_step = (128 / 8) / sizeof(type);  /* AVX */                  \
+        int types_per_step = (128 / 8) / sizeof(type);  /* AVX */              \
         for( ; left_over >= types_per_step; left_over -= types_per_step ) {    \
             __m128i vecA = _mm_lddqu_si128((__m128i*)in);                      \
             in += types_per_step;                                              \
@@ -94,11 +115,11 @@
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX) */
 
 #define OP_AVX_FUNC(name, type_sign, type_size, type, op)                      \
-static void ompi_op_avx_2buff_##name##_##type(const void *_in, void *_out, int *count, \
-                                              struct ompi_datatype_t **dtype,  \
-                                              struct ompi_op_base_module_1_0_0_t *module) \
+static void OP_CONCAT(ompi_op_avx_2buff_##name##_##type,PREPEND)(const void *_in, void *_out, int *count, \
+                                                                 struct ompi_datatype_t **dtype, \
+                                                                 struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                              \
-    int types_per_step, left_over = *count;                                    \
+    int left_over = *count;                                                    \
     type *in = (type*)_in, *out = (type*)_out;                                 \
     OP_AVX_AVX512_FUNC(name, type_sign, type_size, type, op);                  \
     OP_AVX_AVX2_FUNC(name, type_sign, type_size, type, op);                    \
@@ -121,14 +142,7 @@ static void ompi_op_avx_2buff_##name##_##type(const void *_in, void *_out, int *
     }                                                                          \
 }
 
-#if defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
-#define OP_AVX512_FUNC(name, type_sign, type_size, type, op)                   \
-        OP_AVX_FUNC(name, type_sign, type_size, type, op)
-#else
-#define OP_AVX512_FUNC(name, type_sign, type_size, type, op)
-#endif
-
-#if defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+#if defined(GENERATE_AVX512_CODE) && defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
 #define OP_AVX_AVX512_MUL(name, type_sign, type_size, type, op)         \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX512F_FLAG | OMPI_OP_AVX_HAS_AVX512BW_FLAG) ) {  \
         int types_per_step = (256 / 8) / sizeof(type);                  \
@@ -155,9 +169,9 @@ static void ompi_op_avx_2buff_##name##_##type(const void *_in, void *_out, int *
 
 /* special case for int8 mul */
 #define OP_AVX_MUL(name, type_sign, type_size, type, op)                \
-static void ompi_op_avx_2buff_##name##_##type(const void *_in, void *_out, int *count, \
-                                              struct ompi_datatype_t **dtype, \
-                                              struct ompi_op_base_module_1_0_0_t *module) \
+static void OP_CONCAT( ompi_op_avx_2buff_##name##_##type, PREPEND)(const void *_in, void *_out, int *count, \
+                                                                   struct ompi_datatype_t **dtype, \
+                                                                   struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                       \
     int left_over = *count;                                             \
     type *in = (type*)_in, *out = (type*)_out;                          \
@@ -186,7 +200,7 @@ static void ompi_op_avx_2buff_##name##_##type(const void *_in, void *_out, int *
  *  Support ops: or, xor, and of 512 bits (representing integer data)
  *
  */
-#if defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+#if defined(GENERATE_AVX512_CODE) && defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
 #define OP_AVX_AVX512_BIT_FUNC(name, type_size, type, op)               \
     if( OMPI_OP_AVX_HAS_FLAGS( OMPI_OP_AVX_HAS_AVX512F_FLAG) ) {        \
         types_per_step = (512 / 8) / sizeof(type);                      \
@@ -204,7 +218,7 @@ static void ompi_op_avx_2buff_##name##_##type(const void *_in, void *_out, int *
 #define OP_AVX_AVX512_BIT_FUNC(name, type_size, type, op) {}
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512) */
 
-#if defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2)
+#if defined(GENERATE_AVX2_CODE) && defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2)
 #define OP_AVX_AVX2_BIT_FUNC(name, type_size, type, op)                 \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX2_FLAG | OMPI_OP_AVX_HAS_AVX_FLAG) ) { \
         types_per_step = (256 / 8) / sizeof(type);                      \
@@ -222,7 +236,7 @@ static void ompi_op_avx_2buff_##name##_##type(const void *_in, void *_out, int *
 #define OP_AVX_AVX2_BIT_FUNC(name, type_size, type, op) {}
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2) */
 
-#if defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX)
+#if defined(GENERATE_SSE3_CODE) && defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX)
 #define OP_AVX_SSE3_BIT_FUNC(name, type_size, type, op)                 \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_SSE3_FLAG) ) {            \
         types_per_step = (128 / 8) / sizeof(type);                      \
@@ -240,9 +254,9 @@ static void ompi_op_avx_2buff_##name##_##type(const void *_in, void *_out, int *
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX) */
 
 #define OP_AVX_BIT_FUNC(name, type_size, type, op)                      \
-static void ompi_op_avx_2buff_##name##_##type(const void *_in, void *_out, int *count, \
-                                              struct ompi_datatype_t **dtype, \
-                                              struct ompi_op_base_module_1_0_0_t *module) \
+static void OP_CONCAT(ompi_op_avx_2buff_##name##_##type,PREPEND)(const void *_in, void *_out, int *count, \
+                                                       struct ompi_datatype_t **dtype, \
+                                                       struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                       \
     int types_per_step, left_over = *count;                             \
     type *in = (type*)_in, *out = (type*)_out;                          \
@@ -267,7 +281,7 @@ static void ompi_op_avx_2buff_##name##_##type(const void *_in, void *_out, int *
     }                                                                   \
 }
 
-#if defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+#if defined(GENERATE_AVX512_CODE) && defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
 #define OP_AVX_AVX512_FLOAT_FUNC(op)                                    \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX512F_FLAG) ) {         \
         types_per_step = (512 / 8) / sizeof(float);                     \
@@ -285,7 +299,7 @@ static void ompi_op_avx_2buff_##name##_##type(const void *_in, void *_out, int *
 #define OP_AVX_AVX512_FLOAT_FUNC(op) {}
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512) */
 
-#if defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2)
+#if defined(GENERATE_AVX2_CODE) && defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2)
 #define OP_AVX_AVX_FLOAT_FUNC(op)                                       \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX_FLAG) ) {             \
         types_per_step = (256 / 8) / sizeof(float);                     \
@@ -303,7 +317,7 @@ static void ompi_op_avx_2buff_##name##_##type(const void *_in, void *_out, int *
 #define OP_AVX_AVX_FLOAT_FUNC(op) {}
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2) */
 
-#if defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX)
+#if defined(GENERATE_AVX_CODE) && defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX)
 #define OP_AVX_SSE_FLOAT_FUNC(op)                                       \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_SSE_FLAG) ) {             \
         types_per_step = (128 / 8) / sizeof(float);                     \
@@ -321,9 +335,9 @@ static void ompi_op_avx_2buff_##name##_##type(const void *_in, void *_out, int *
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX) */
 
 #define OP_AVX_FLOAT_FUNC(op) \
-static void ompi_op_avx_2buff_##op##_float(const void *_in, void *_out, int *count, \
-                                           struct ompi_datatype_t **dtype, \
-                                           struct ompi_op_base_module_1_0_0_t *module) \
+static void OP_CONCAT(ompi_op_avx_2buff_##op##_float,PREPEND)(const void *_in, void *_out, int *count, \
+                                                              struct ompi_datatype_t **dtype, \
+                                                              struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                       \
     int types_per_step, left_over = *count;                             \
     float *in = (float*)_in, *out = (float*)_out;                       \
@@ -348,7 +362,7 @@ static void ompi_op_avx_2buff_##op##_float(const void *_in, void *_out, int *cou
     }                                                                   \
 }
 
-#if defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+#if defined(GENERATE_AVX512_CODE) && defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
 #define OP_AVX_AVX512_DOUBLE_FUNC(op)                                   \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX512F_FLAG) ) {         \
         types_per_step = (512 / 8)  / sizeof(double);                   \
@@ -366,7 +380,7 @@ static void ompi_op_avx_2buff_##op##_float(const void *_in, void *_out, int *cou
 #define OP_AVX_AVX512_DOUBLE_FUNC(op) {}
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512) */
 
-#if defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2)
+#if defined(GENERATE_AVX2_CODE) && defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2)
 #define OP_AVX_AVX_DOUBLE_FUNC(op)                                      \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX_FLAG) ) {             \
         types_per_step = (256 / 8)  / sizeof(double);                   \
@@ -384,7 +398,7 @@ static void ompi_op_avx_2buff_##op##_float(const void *_in, void *_out, int *cou
 #define OP_AVX_AVX_DOUBLE_FUNC(op) {}
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2) */
 
-#if defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX)
+#if defined(GENERATE_AVX_CODE) && defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX)
 #define OP_AVX_SSE2_DOUBLE_FUNC(op)                                     \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_SSE2_FLAG) ) {            \
         types_per_step = (128 / 8)  / sizeof(double);                   \
@@ -402,9 +416,9 @@ static void ompi_op_avx_2buff_##op##_float(const void *_in, void *_out, int *cou
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX) */
 
 #define OP_AVX_DOUBLE_FUNC(op) \
-static void ompi_op_avx_2buff_##op##_double(const void *_in, void *_out, int *count, \
-                                            struct ompi_datatype_t **dtype, \
-                                            struct ompi_op_base_module_1_0_0_t *module) \
+static void OP_CONCAT(ompi_op_avx_2buff_##op##_double,PREPEND)(const void *_in, void *_out, int *count, \
+                                                               struct ompi_datatype_t **dtype, \
+                                                               struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                       \
     int types_per_step = (512 / 8)  / sizeof(double);                   \
     int left_over = *count;                                             \
@@ -443,8 +457,10 @@ static void ompi_op_avx_2buff_##op##_double(const void *_in, void *_out, int *co
     OP_AVX_FUNC(max, u, 16, uint16_t, max)
     OP_AVX_FUNC(max, i, 32,  int32_t, max)
     OP_AVX_FUNC(max, u, 32, uint32_t, max)
-    OP_AVX512_FUNC(max, i, 64,  int64_t, max)
-    OP_AVX512_FUNC(max, u, 64, uint64_t, max)
+#if defined(GENERATE_AVX512_CODE) && defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+    OP_AVX_FUNC(max, i, 64,  int64_t, max)
+    OP_AVX_FUNC(max, u, 64, uint64_t, max)
+#endif
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC(max)
@@ -461,8 +477,10 @@ static void ompi_op_avx_2buff_##op##_double(const void *_in, void *_out, int *co
     OP_AVX_FUNC(min, u, 16, uint16_t, min)
     OP_AVX_FUNC(min, i, 32,  int32_t, min)
     OP_AVX_FUNC(min, u, 32, uint32_t, min)
-    OP_AVX512_FUNC(min, i, 64,  int64_t, min)
-    OP_AVX512_FUNC(min, u, 64, uint64_t, min)
+#if defined(GENERATE_AVX512_CODE) && defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+    OP_AVX_FUNC(min, i, 64,  int64_t, min)
+    OP_AVX_FUNC(min, u, 64, uint64_t, min)
+#endif
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC(min)
@@ -479,8 +497,8 @@ static void ompi_op_avx_2buff_##op##_double(const void *_in, void *_out, int *co
     OP_AVX_FUNC(sum, u, 16, uint16_t, adds)
     OP_AVX_FUNC(sum, i, 32,  int32_t, add)
     OP_AVX_FUNC(sum, i, 32, uint32_t, add)
-    OP_AVX512_FUNC(sum, i, 64,  int64_t, add)
-    OP_AVX512_FUNC(sum, i, 64, uint64_t, add)
+    OP_AVX_FUNC(sum, i, 64,  int64_t, add)
+    OP_AVX_FUNC(sum, i, 64, uint64_t, add)
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC(add)
@@ -497,8 +515,10 @@ static void ompi_op_avx_2buff_##op##_double(const void *_in, void *_out, int *co
     OP_AVX_FUNC(prod, i, 16, uint16_t, mullo)
     OP_AVX_FUNC(prod, i, 32,  int32_t, mullo)
     OP_AVX_FUNC(prod, i ,32, uint32_t, mullo)
-    OP_AVX512_FUNC(prod, i, 64,  int64_t, mullo)
-    OP_AVX512_FUNC(prod, i, 64, uint64_t, mullo)
+#if defined(GENERATE_AVX512_CODE) && defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+    OP_AVX_FUNC(prod, i, 64,  int64_t, mullo)
+    OP_AVX_FUNC(prod, i, 64, uint64_t, mullo)
+#endif
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC(mul)
@@ -559,10 +579,10 @@ static void ompi_op_avx_2buff_##op##_double(const void *_in, void *_out, int *co
  *  This is a three buffer (2 input and 1 output) version of the reduction
  *  routines, needed for some optimizations.
  */
-#if defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+#if defined(GENERATE_AVX512_CODE) && defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
 #define OP_AVX_AVX512_FUNC_3(name, type_sign, type_size, type, op)      \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX512F_FLAG|OMPI_OP_AVX_HAS_AVX512BW_FLAG) ) {   \
-        types_per_step = (512 / 8) / sizeof(type);                      \
+        int types_per_step = (512 / 8) / sizeof(type);                  \
         for (; left_over >= types_per_step; left_over -= types_per_step) { \
             __m512i vecA =  _mm512_loadu_si512(in1);                    \
             __m512i vecB =  _mm512_loadu_si512(in2);                    \
@@ -578,10 +598,10 @@ static void ompi_op_avx_2buff_##op##_double(const void *_in, void *_out, int *co
 #define OP_AVX_AVX512_FUNC_3(name, type_sign, type_size, type, op) {}
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512) */
 
-#if defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2)
+#if defined(GENERATE_AVX2_CODE) && defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2)
 #define OP_AVX_AVX2_FUNC_3(name, type_sign, type_size, type, op)        \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX2_FLAG | OMPI_OP_AVX_HAS_AVX_FLAG) ) { \
-        types_per_step = (256 / 8) / sizeof(type);                      \
+        int types_per_step = (256 / 8) / sizeof(type);                  \
         for( ; left_over >= types_per_step; left_over -= types_per_step ) { \
             __m256i vecA = _mm256_loadu_si256((__m256i*)in1);           \
             __m256i vecB = _mm256_loadu_si256((__m256i*)in2);           \
@@ -597,10 +617,10 @@ static void ompi_op_avx_2buff_##op##_double(const void *_in, void *_out, int *co
 #define OP_AVX_AVX2_FUNC_3(name, type_sign, type_size, type, op) {}
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2) */
 
-#if defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX)
+#if defined(GENERATE_SSE3_CODE) && defined(OMPI_MCA_OP_HAVE_SSE41) && (1 == OMPI_MCA_OP_HAVE_SSE41) && defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX)
 #define OP_AVX_SSE4_1_FUNC_3(name, type_sign, type_size, type, op)      \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_SSE3_FLAG | OMPI_OP_AVX_HAS_SSE4_1_FLAG) ) {       \
-        types_per_step = (128 / 8) / sizeof(type);                      \
+        int types_per_step = (128 / 8) / sizeof(type);                  \
         for( ; left_over >= types_per_step; left_over -= types_per_step ) { \
             __m128i vecA = _mm_lddqu_si128((__m128i*)in1);              \
             __m128i vecB = _mm_lddqu_si128((__m128i*)in2);              \
@@ -616,14 +636,14 @@ static void ompi_op_avx_2buff_##op##_double(const void *_in, void *_out, int *co
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX) */
 
 #define OP_AVX_FUNC_3(name, type_sign, type_size, type, op)               \
-static void ompi_op_avx_3buff_##name##_##type(const void * restrict _in1, \
-                                              const void * restrict _in2, \
-                                              void * restrict _out, int *count, \
-                                              struct ompi_datatype_t **dtype, \
-                                              struct ompi_op_base_module_1_0_0_t *module) \
+static void OP_CONCAT(ompi_op_avx_3buff_##name##_##type,PREPEND)(const void * restrict _in1, \
+                                                                 const void * restrict _in2, \
+                                                                 void * restrict _out, int *count, \
+                                                                 struct ompi_datatype_t **dtype, \
+                                                                 struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                       \
     type *in1 = (type*)_in1, *in2 = (type*)_in2, *out = (type*)_out;    \
-    int types_per_step, left_over = *count;                             \
+    int left_over = *count;                                             \
     OP_AVX_AVX512_FUNC_3(name, type_sign, type_size, type, op);         \
     OP_AVX_AVX2_FUNC_3(name, type_sign, type_size, type, op);           \
     OP_AVX_SSE4_1_FUNC_3(name, type_sign, type_size, type, op);         \
@@ -646,14 +666,7 @@ static void ompi_op_avx_3buff_##name##_##type(const void * restrict _in1, \
     }                                                                   \
 }
 
-#if defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
-#define OP_AVX512_FUNC_3(name, type_sign, type_size, type, op)            \
-        OP_AVX_FUNC_3(name, type_sign, type_size, type, op)
-#else
-#define OP_AVX512_FUNC_3(name, type_sign, type_size, type, op)
-#endif
-
-#if defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+#if defined(GENERATE_AVX512_CODE) && defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
 #define OP_AVX_AVX512_MUL_3(name, type_sign, type_size, type, op)       \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX512F_FLAG | OMPI_OP_AVX_HAS_AVX512BW_FLAG) ) { \
         int types_per_step = (256 / 8) / sizeof(type);                  \
@@ -681,11 +694,11 @@ static void ompi_op_avx_3buff_##name##_##type(const void * restrict _in1, \
 
 /* special case for int8 mul */
 #define OP_AVX_MUL_3(name, type_sign, type_size, type, op)              \
-static void ompi_op_avx_3buff_##name##_##type(const void * restrict _in1, \
-                                              const void * restrict _in2, \
-                                              void * restrict _out, int *count, \
-                                              struct ompi_datatype_t **dtype, \
-                                              struct ompi_op_base_module_1_0_0_t *module) \
+static void OP_CONCAT(ompi_op_avx_3buff_##name##_##type,PREPEND)(const void * restrict _in1, \
+                                                                 const void * restrict _in2, \
+                                                                 void * restrict _out, int *count, \
+                                                                 struct ompi_datatype_t **dtype, \
+                                                                 struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                       \
     type *in1 = (type*)_in1, *in2 = (type*)_in2, *out = (type*)_out;    \
     int left_over = *count;                                             \
@@ -709,7 +722,7 @@ static void ompi_op_avx_3buff_##name##_##type(const void * restrict _in1, \
     }                                                                   \
 }
 
-#if defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+#if defined(GENERATE_AVX512_CODE) && defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
 #define OP_AVX_AVX512_BIT_FUNC_3(name, type_size, type, op)             \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX512F_FLAG) ) {         \
         types_per_step = (512 / 8) / sizeof(type);                      \
@@ -728,7 +741,7 @@ static void ompi_op_avx_3buff_##name##_##type(const void * restrict _in1, \
 #define OP_AVX_AVX512_BIT_FUNC_3(name, type_size, type, op) {}
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512) */
 
-#if defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2)
+#if defined(GENERATE_AVX2_CODE) && defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2)
 #define OP_AVX_AVX2_BIT_FUNC_3(name, type_size, type, op)               \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX2_FLAG | OMPI_OP_AVX_HAS_AVX_FLAG) ) { \
         types_per_step = (256 / 8) / sizeof(type);                      \
@@ -747,7 +760,7 @@ static void ompi_op_avx_3buff_##name##_##type(const void * restrict _in1, \
 #define OP_AVX_AVX2_BIT_FUNC_3(name, type_size, type, op) {}
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2) */
 
-#if defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX)
+#if defined(GENERATE_SSE3_CODE) && defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX)
 #define OP_AVX_SSE3_BIT_FUNC_3(name, type_size, type, op)               \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_SSE3_FLAG) ) {            \
         types_per_step = (128 / 8) / sizeof(type);                      \
@@ -766,10 +779,10 @@ static void ompi_op_avx_3buff_##name##_##type(const void * restrict _in1, \
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX) */
 
 #define OP_AVX_BIT_FUNC_3(name, type_size, type, op)                    \
-static void ompi_op_avx_3buff_##op##_##type(const void *_in1, const void *_in2, \
-                                            void *_out, int *count,     \
-                                            struct ompi_datatype_t **dtype, \
-                                            struct ompi_op_base_module_1_0_0_t *module) \
+static void OP_CONCAT(ompi_op_avx_3buff_##op##_##type,PREPEND)(const void *_in1, const void *_in2, \
+                                                               void *_out, int *count, \
+                                                               struct ompi_datatype_t **dtype, \
+                                                               struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                       \
     int types_per_step, left_over = *count;                             \
     type *in1 = (type*)_in1, *in2 = (type*)_in2, *out = (type*)_out;    \
@@ -795,7 +808,7 @@ static void ompi_op_avx_3buff_##op##_##type(const void *_in1, const void *_in2, 
     }                                                                   \
 }
 
-#if defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+#if defined(GENERATE_AVX512_CODE) && defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
 #define OP_AVX_AVX512_FLOAT_FUNC_3(op)                                  \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX512F_FLAG) ) {         \
         types_per_step = (512 / 8) / sizeof(float);                     \
@@ -814,7 +827,7 @@ static void ompi_op_avx_3buff_##op##_##type(const void *_in1, const void *_in2, 
 #define OP_AVX_AVX512_FLOAT_FUNC_3(op) {}
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512) */
 
-#if defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2)
+#if defined(GENERATE_AVX2_CODE) && defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2)
 #define OP_AVX_AVX_FLOAT_FUNC_3(op)                                     \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX_FLAG) ) {             \
         types_per_step = (256 / 8) / sizeof(float);                     \
@@ -833,7 +846,7 @@ static void ompi_op_avx_3buff_##op##_##type(const void *_in1, const void *_in2, 
 #define OP_AVX_AVX_FLOAT_FUNC_3(op) {}
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2) */
 
-#if defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX)
+#if defined(GENERATE_AVX_CODE) && defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX)
 #define OP_AVX_SSE_FLOAT_FUNC_3(op)                  \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_SSE_FLAG) ) {             \
         types_per_step = (128 / 8) / sizeof(float);                     \
@@ -852,10 +865,10 @@ static void ompi_op_avx_3buff_##op##_##type(const void *_in1, const void *_in2, 
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX) */
 
 #define OP_AVX_FLOAT_FUNC_3(op)                                         \
-static void ompi_op_avx_3buff_##op##_float(const void *_in1, const void *_in2, \
-                                           void *_out, int *count,             \
-                                           struct ompi_datatype_t **dtype, \
-                                           struct ompi_op_base_module_1_0_0_t *module) \
+static void OP_CONCAT(ompi_op_avx_3buff_##op##_float,PREPEND)(const void *_in1, const void *_in2, \
+                                                              void *_out, int *count, \
+                                                              struct ompi_datatype_t **dtype, \
+                                                              struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                       \
     int types_per_step, left_over = *count;                             \
     float *in1 = (float*)_in1, *in2 = (float*)_in2, *out = (float*)_out; \
@@ -881,7 +894,7 @@ static void ompi_op_avx_3buff_##op##_float(const void *_in1, const void *_in2, \
     }                                                                   \
 }
 
-#if defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+#if defined(GENERATE_AVX512_CODE) && defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
 #define OP_AVX_AVX512_DOUBLE_FUNC_3(op)                                 \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX512F_FLAG) ) {         \
         types_per_step = (512 / 8) / sizeof(double);                    \
@@ -900,7 +913,7 @@ static void ompi_op_avx_3buff_##op##_float(const void *_in1, const void *_in2, \
 #define OP_AVX_AVX512_DOUBLE_FUNC_3(op) {}
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512) */
 
-#if defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2)
+#if defined(GENERATE_AVX2_CODE) && defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2)
 #define OP_AVX_AVX_DOUBLE_FUNC_3(op)                                    \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_AVX_FLAG) ) {             \
         types_per_step = (256 / 8) / sizeof(double);                    \
@@ -919,7 +932,7 @@ static void ompi_op_avx_3buff_##op##_float(const void *_in1, const void *_in2, \
 #define OP_AVX_AVX_DOUBLE_FUNC_3(op) {}
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX2) && (1 == OMPI_MCA_OP_HAVE_AVX2) */
 
-#if defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX)
+#if defined(GENERATE_AVX_CODE) && defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX)
 #define OP_AVX_SSE2_DOUBLE_FUNC_3(op)                                   \
     if( OMPI_OP_AVX_HAS_FLAGS(OMPI_OP_AVX_HAS_SSE2_FLAG) ) {            \
         types_per_step = (128 / 8) / sizeof(double);                    \
@@ -938,10 +951,10 @@ static void ompi_op_avx_3buff_##op##_float(const void *_in1, const void *_in2, \
 #endif  /* defined(OMPI_MCA_OP_HAVE_AVX) && (1 == OMPI_MCA_OP_HAVE_AVX) */
 
 #define OP_AVX_DOUBLE_FUNC_3(op)                                        \
-static void ompi_op_avx_3buff_##op##_double(const void *_in1, const void *_in2, \
-                                            void *_out, int *count,     \
-                                            struct ompi_datatype_t **dtype, \
-                                            struct ompi_op_base_module_1_0_0_t *module) \
+static void OP_CONCAT(ompi_op_avx_3buff_##op##_double,PREPEND)(const void *_in1, const void *_in2, \
+                                                               void *_out, int *count, \
+                                                               struct ompi_datatype_t **dtype, \
+                                                               struct ompi_op_base_module_1_0_0_t *module) \
 {                                                                       \
     int types_per_step, left_over = *count;                             \
     double *in1 = (double*)_in1, *in2 = (double*)_in2, *out = (double*)_out; \
@@ -979,8 +992,10 @@ static void ompi_op_avx_3buff_##op##_double(const void *_in1, const void *_in2, 
     OP_AVX_FUNC_3(max, u, 16, uint16_t, max)
     OP_AVX_FUNC_3(max, i, 32,  int32_t, max)
     OP_AVX_FUNC_3(max, u, 32, uint32_t, max)
-    OP_AVX512_FUNC_3(max, i, 64,  int64_t, max)
-    OP_AVX512_FUNC_3(max, u, 64, uint64_t, max)
+#if defined(GENERATE_AVX512_CODE) && defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+    OP_AVX_FUNC_3(max, i, 64,  int64_t, max)
+    OP_AVX_FUNC_3(max, u, 64, uint64_t, max)
+#endif
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC_3(max)
@@ -997,8 +1012,10 @@ static void ompi_op_avx_3buff_##op##_double(const void *_in1, const void *_in2, 
     OP_AVX_FUNC_3(min, u, 16, uint16_t, min)
     OP_AVX_FUNC_3(min, i, 32,  int32_t, min)
     OP_AVX_FUNC_3(min, u, 32, uint32_t, min)
-    OP_AVX512_FUNC_3(min, i, 64,  int64_t, min)
-    OP_AVX512_FUNC_3(min, u, 64, uint64_t, min)
+#if defined(GENERATE_AVX512_CODE) && defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+    OP_AVX_FUNC_3(min, i, 64,  int64_t, min)
+    OP_AVX_FUNC_3(min, u, 64, uint64_t, min)
+#endif
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC_3(min)
@@ -1016,8 +1033,8 @@ static void ompi_op_avx_3buff_##op##_double(const void *_in1, const void *_in2, 
     OP_AVX_FUNC_3(sum, i, 16, uint16_t, add)
     OP_AVX_FUNC_3(sum, i, 32,  int32_t, add)
     OP_AVX_FUNC_3(sum, i, 32, uint32_t, add)
-    OP_AVX512_FUNC_3(sum, i, 64,  int64_t, add)
-    OP_AVX512_FUNC_3(sum, i, 64, uint64_t, add)
+    OP_AVX_FUNC_3(sum, i, 64,  int64_t, add)
+    OP_AVX_FUNC_3(sum, i, 64, uint64_t, add)
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC_3(add)
@@ -1034,8 +1051,10 @@ static void ompi_op_avx_3buff_##op##_double(const void *_in1, const void *_in2, 
     OP_AVX_FUNC_3(prod, i, 16, uint16_t, mullo)
     OP_AVX_FUNC_3(prod, i, 32,  int32_t, mullo)
     OP_AVX_FUNC_3(prod, i ,32, uint32_t, mullo)
-    OP_AVX512_FUNC_3(prod, i, 64,  int64_t, mullo)
-    OP_AVX512_FUNC_3(prod, i, 64, uint64_t, mullo)
+#if defined(GENERATE_AVX512_CODE) && defined(OMPI_MCA_OP_HAVE_AVX512) && (1 == OMPI_MCA_OP_HAVE_AVX512)
+    OP_AVX_FUNC_3(prod, i, 64,  int64_t, mullo)
+    OP_AVX_FUNC_3(prod, i, 64, uint64_t, mullo)
+#endif
 
     /* Floating point */
     OP_AVX_FLOAT_FUNC_3(mul)
@@ -1092,24 +1111,33 @@ static void ompi_op_avx_3buff_##op##_double(const void *_in1, const void *_in2, 
     // not defined - OP_AVX_FLOAT_FUNC_3(xor)
     // not defined - OP_AVX_DOUBLE_FUNC_3(xor)
 
-
 /** C integer ***********************************************************/
-#define C_INTEGER(name, ftype)                                              \
-    [OMPI_OP_BASE_TYPE_INT8_T] = ompi_op_avx_##ftype##_##name##_int8_t,     \
-    [OMPI_OP_BASE_TYPE_UINT8_T] = ompi_op_avx_##ftype##_##name##_uint8_t,   \
-    [OMPI_OP_BASE_TYPE_INT16_T] = ompi_op_avx_##ftype##_##name##_int16_t,   \
-    [OMPI_OP_BASE_TYPE_UINT16_T] = ompi_op_avx_##ftype##_##name##_uint16_t, \
-    [OMPI_OP_BASE_TYPE_INT32_T] = ompi_op_avx_##ftype##_##name##_int32_t,   \
-    [OMPI_OP_BASE_TYPE_UINT32_T] = ompi_op_avx_##ftype##_##name##_uint32_t
+#define C_INTEGER_8_16_32(name, ftype)                                                         \
+    [OMPI_OP_BASE_TYPE_INT8_T]   = OP_CONCAT(ompi_op_avx_##ftype##_##name##_int8_t,PREPEND),   \
+    [OMPI_OP_BASE_TYPE_UINT8_T]  = OP_CONCAT(ompi_op_avx_##ftype##_##name##_uint8_t,PREPEND),  \
+    [OMPI_OP_BASE_TYPE_INT16_T]  = OP_CONCAT(ompi_op_avx_##ftype##_##name##_int16_t,PREPEND),  \
+    [OMPI_OP_BASE_TYPE_UINT16_T] = OP_CONCAT(ompi_op_avx_##ftype##_##name##_uint16_t,PREPEND), \
+    [OMPI_OP_BASE_TYPE_INT32_T]  = OP_CONCAT(ompi_op_avx_##ftype##_##name##_int32_t,PREPEND),  \
+    [OMPI_OP_BASE_TYPE_UINT32_T] = OP_CONCAT(ompi_op_avx_##ftype##_##name##_uint32_t,PREPEND)
 
-#define C_INTEGER64(name, ftype)                                            \
-    [OMPI_OP_BASE_TYPE_INT64_T] = ompi_op_avx_##ftype##_##name##_int64_t,   \
-    [OMPI_OP_BASE_TYPE_UINT64_T] = ompi_op_avx_##ftype##_##name##_uint64_t
+#define C_INTEGER(name, ftype)                                                                 \
+    C_INTEGER_8_16_32(name, ftype),                                                            \
+    [OMPI_OP_BASE_TYPE_INT64_T]  = OP_CONCAT(ompi_op_avx_##ftype##_##name##_int64_t,PREPEND),  \
+    [OMPI_OP_BASE_TYPE_UINT64_T] = OP_CONCAT(ompi_op_avx_##ftype##_##name##_uint64_t,PREPEND)
 
+#if defined(GENERATE_AVX512_CODE)
+#define C_INTEGER_OPTIONAL(name, ftype)                                                        \
+    C_INTEGER_8_16_32(name, ftype),                                                            \
+    [OMPI_OP_BASE_TYPE_INT64_T]  = OP_CONCAT(ompi_op_avx_##ftype##_##name##_int64_t,PREPEND),  \
+    [OMPI_OP_BASE_TYPE_UINT64_T] = OP_CONCAT(ompi_op_avx_##ftype##_##name##_uint64_t,PREPEND)
+#else
+#define C_INTEGER_OPTIONAL(name, ftype)                                                        \
+    C_INTEGER_8_16_32(name, ftype)
+#endif
 
 /** Floating point, including all the Fortran reals *********************/
-#define FLOAT(name, ftype) ompi_op_avx_##ftype##_##name##_float
-#define DOUBLE(name, ftype) ompi_op_avx_##ftype##_##name##_double
+#define FLOAT(name, ftype) OP_CONCAT(ompi_op_avx_##ftype##_##name##_float,PREPEND)
+#define DOUBLE(name, ftype) OP_CONCAT(ompi_op_avx_##ftype##_##name##_double,PREPEND)
 
 #define FLOATING_POINT(name, ftype)                                         \
     [OMPI_OP_BASE_TYPE_SHORT_FLOAT] = NULL,                                 \
@@ -1126,7 +1154,7 @@ static void ompi_op_avx_3buff_##op##_double(const void *_in1, const void *_in2, 
         (OMPI_OP_FLAGS_INTRINSIC | OMPI_OP_FLAGS_ASSOC | \
          OMPI_OP_FLAGS_FLOAT_ASSOC | OMPI_OP_FLAGS_COMMUTE)
 
-ompi_op_base_handler_fn_t ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_OP_MAX][OMPI_OP_BASE_TYPE_MAX] =
+ompi_op_base_handler_fn_t OP_CONCAT(ompi_op_avx_functions, PREPEND)[OMPI_OP_BASE_FORTRAN_OP_MAX][OMPI_OP_BASE_TYPE_MAX] =
 {
     /* Corresponds to MPI_OP_NULL */
     [OMPI_OP_BASE_FORTRAN_NULL] = {
@@ -1135,26 +1163,22 @@ ompi_op_base_handler_fn_t ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_OP_MAX][OMP
     },
     /* Corresponds to MPI_MAX */
     [OMPI_OP_BASE_FORTRAN_MAX] = {
-        C_INTEGER(max, 2buff),
-        C_INTEGER64(max, 2buff),
+        C_INTEGER_OPTIONAL(max, 2buff),
         FLOATING_POINT(max, 2buff),
     },
     /* Corresponds to MPI_MIN */
     [OMPI_OP_BASE_FORTRAN_MIN] = {
-        C_INTEGER(min, 2buff),
-        C_INTEGER64(min, 2buff),
+        C_INTEGER_OPTIONAL(min, 2buff),
         FLOATING_POINT(min, 2buff),
     },
     /* Corresponds to MPI_SUM */
     [OMPI_OP_BASE_FORTRAN_SUM] = {
         C_INTEGER(sum, 2buff),
-        C_INTEGER64(sum, 2buff),
         FLOATING_POINT(add, 2buff),
     },
     /* Corresponds to MPI_PROD */
     [OMPI_OP_BASE_FORTRAN_PROD] = {
-        C_INTEGER(prod, 2buff),
-        C_INTEGER64(prod, 2buff),
+        C_INTEGER_OPTIONAL(prod, 2buff),
         FLOATING_POINT(mul, 2buff),
     },
     /* Corresponds to MPI_LAND */
@@ -1163,8 +1187,7 @@ ompi_op_base_handler_fn_t ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_OP_MAX][OMP
     },
     /* Corresponds to MPI_BAND */
     [OMPI_OP_BASE_FORTRAN_BAND] = {
-        C_INTEGER  (band, 2buff),
-        C_INTEGER64(band, 2buff),
+        C_INTEGER(band, 2buff),
     },
     /* Corresponds to MPI_LOR */
     [OMPI_OP_BASE_FORTRAN_LOR] = {
@@ -1172,8 +1195,7 @@ ompi_op_base_handler_fn_t ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_OP_MAX][OMP
     },
     /* Corresponds to MPI_BOR */
     [OMPI_OP_BASE_FORTRAN_BOR] = {
-        C_INTEGER  (bor, 2buff),
-        C_INTEGER64(bor, 2buff),
+        C_INTEGER(bor, 2buff),
     },
     /* Corresponds to MPI_LXOR */
     [OMPI_OP_BASE_FORTRAN_LXOR] = {
@@ -1181,8 +1203,7 @@ ompi_op_base_handler_fn_t ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_OP_MAX][OMP
     },
     /* Corresponds to MPI_BXOR */
     [OMPI_OP_BASE_FORTRAN_BXOR] = {
-        C_INTEGER  (bxor, 2buff),
-        C_INTEGER64(bxor, 2buff),
+        C_INTEGER(bxor, 2buff),
     },
     /* Corresponds to MPI_REPLACE */
     [OMPI_OP_BASE_FORTRAN_REPLACE] = {
@@ -1196,7 +1217,7 @@ ompi_op_base_handler_fn_t ompi_op_avx_functions[OMPI_OP_BASE_FORTRAN_OP_MAX][OMP
 
 };
 
-ompi_op_base_3buff_handler_fn_t ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN_OP_MAX][OMPI_OP_BASE_TYPE_MAX] =
+ompi_op_base_3buff_handler_fn_t OP_CONCAT(ompi_op_avx_3buff_functions, PREPEND)[OMPI_OP_BASE_FORTRAN_OP_MAX][OMPI_OP_BASE_TYPE_MAX] =
 {
     /* Corresponds to MPI_OP_NULL */
     [OMPI_OP_BASE_FORTRAN_NULL] = {
@@ -1205,26 +1226,22 @@ ompi_op_base_3buff_handler_fn_t ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN
     },
     /* Corresponds to MPI_MAX */
     [OMPI_OP_BASE_FORTRAN_MAX] = {
-        C_INTEGER(max, 3buff),
-        C_INTEGER64(max, 3buff),
+        C_INTEGER_OPTIONAL(max, 3buff),
         FLOATING_POINT(max, 3buff),
     },
     /* Corresponds to MPI_MIN */
     [OMPI_OP_BASE_FORTRAN_MIN] = {
-        C_INTEGER(min, 3buff),
-        C_INTEGER64(min, 3buff),
+        C_INTEGER_OPTIONAL(min, 3buff),
         FLOATING_POINT(min, 3buff),
     },
     /* Corresponds to MPI_SUM */
     [OMPI_OP_BASE_FORTRAN_SUM] = {
         C_INTEGER(sum, 3buff),
-        C_INTEGER64(sum, 3buff),
         FLOATING_POINT(add, 3buff),
     },
     /* Corresponds to MPI_PROD */
     [OMPI_OP_BASE_FORTRAN_PROD] = {
-        C_INTEGER(prod, 3buff),
-        C_INTEGER64(prod, 3buff),
+        C_INTEGER_OPTIONAL(prod, 3buff),
         FLOATING_POINT(mul, 3buff),
     },
     /* Corresponds to MPI_LAND */
@@ -1233,8 +1250,7 @@ ompi_op_base_3buff_handler_fn_t ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN
     },
     /* Corresponds to MPI_BAND */
     [OMPI_OP_BASE_FORTRAN_BAND] = {
-        C_INTEGER  (and, 3buff),
-        C_INTEGER64(and, 3buff),
+        C_INTEGER(and, 3buff),
     },
     /* Corresponds to MPI_LOR */
     [OMPI_OP_BASE_FORTRAN_LOR] = {
@@ -1242,8 +1258,7 @@ ompi_op_base_3buff_handler_fn_t ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN
     },
     /* Corresponds to MPI_BOR */
     [OMPI_OP_BASE_FORTRAN_BOR] = {
-        C_INTEGER  (or, 3buff),
-        C_INTEGER64(or, 3buff),
+        C_INTEGER(or, 3buff),
     },
     /* Corresponds to MPI_LXOR */
     [OMPI_OP_BASE_FORTRAN_LXOR] = {
@@ -1251,8 +1266,7 @@ ompi_op_base_3buff_handler_fn_t ompi_op_avx_3buff_functions[OMPI_OP_BASE_FORTRAN
     },
     /* Corresponds to MPI_BXOR */
     [OMPI_OP_BASE_FORTRAN_BXOR] = {
-        C_INTEGER  (xor, 3buff),
-        C_INTEGER64(xor, 3buff),
+        C_INTEGER(xor, 3buff),
     },
     /* Corresponds to MPI_REPLACE */
     [OMPI_OP_BASE_FORTRAN_REPLACE] = {

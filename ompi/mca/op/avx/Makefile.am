@@ -21,7 +21,7 @@
 # files so that they will be picked up in the distribution tarball.
 
 sources = op_avx_component.c op_avx.h
-sources_extended = op_avx_functions.c op_avx_functions.h
+sources_extended = op_avx_functions.c
 
 # Open MPI components can be compiled two ways:
 #
@@ -39,7 +39,37 @@ sources_extended = op_avx_functions.c op_avx_functions.h
 # MCA_BUILD_ompi_<framework>_<component>_DSO AM_CONDITIONAL to indicate
 # which way this component should be built.
 
-component_noinst = liblocal_ops.la
+# We need to support all processors from early AVX to full AVX512 support, based on
+# a decision made at runtime. So, we generate all combinations of capabilities, and
+# we will select the most suitable (based on the processor flags) during the
+# component initialization.
+specialized_op_libs =
+if MCA_BUILD_ompi_op_has_avx_support
+specialized_op_libs += liblocal_ops_avx.la
+liblocal_ops_avx_la_SOURCES = $(sources_extended)
+liblocal_ops_avx_la_CFLAGS = @MCA_BUILD_OP_AVX_FLAGS@
+liblocal_ops_avx_la_CPPFLAGS = -DGENERATE_AVX_CODE
+if MCA_BUILD_ompi_op_has_sse3_support
+liblocal_ops_avx_la_CPPFLAGS += -DGENERATE_SSE3_CODE
+endif
+if MCA_BUILD_ompi_op_has_sse41_support
+liblocal_ops_avx_la_CPPFLAGS += -DGENERATE_SSE41_CODE
+endif
+endif
+if MCA_BUILD_ompi_op_has_avx2_support
+specialized_op_libs += liblocal_ops_avx2.la
+liblocal_ops_avx2_la_SOURCES = $(sources_extended)
+liblocal_ops_avx2_la_CFLAGS = @MCA_BUILD_OP_AVX2_FLAGS@
+liblocal_ops_avx2_la_CPPFLAGS = -DGENERATE_SSE3_CODE -DGENERATE_SSE41_CODE -DGENERATE_AVX_CODE -DGENERATE_AVX2_CODE
+endif
+if MCA_BUILD_ompi_op_has_avx512_support
+specialized_op_libs += liblocal_ops_avx512.la
+liblocal_ops_avx512_la_SOURCES = $(sources_extended)
+liblocal_ops_avx512_la_CFLAGS = @MCA_BUILD_OP_AVX512_FLAGS@
+liblocal_ops_avx512_la_CPPFLAGS = -DGENERATE_SSE3_CODE -DGENERATE_SSE41_CODE -DGENERATE_AVX_CODE -DGENERATE_AVX2_CODE -DGENERATE_AVX512_CODE
+endif
+
+component_noinst = $(specialized_op_libs)
 if MCA_BUILD_ompi_op_avx_DSO
 component_install = mca_op_avx.la
 else
@@ -55,7 +85,7 @@ endif
 mcacomponentdir = $(ompilibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_op_avx_la_SOURCES = $(sources)
-mca_op_avx_la_LIBADD = liblocal_ops.la
+mca_op_avx_la_LIBADD = $(specialized_op_libs)
 mca_op_avx_la_LDFLAGS = -module -avoid-version
 
 
@@ -66,12 +96,6 @@ mca_op_avx_la_LDFLAGS = -module -avoid-version
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_op_avx_la_SOURCES = $(sources)
-libmca_op_avx_la_LIBADD = liblocal_ops.la
+libmca_op_avx_la_LIBADD = $(specialized_op_libs)
 libmca_op_avx_la_LDFLAGS = -module -avoid-version
-
-# In case we need additional flags to compile a MPI_Op with
-# full support for the hardware capabilities, we better build
-# the required files as an independent library that we pull in.
-liblocal_ops_la_SOURCES = $(sources_extended)
-liblocal_ops_la_CFLAGS  = @op_avx_CPPFLAGS@
 
