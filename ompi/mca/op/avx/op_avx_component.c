@@ -142,8 +142,11 @@ ompi_op_avx_component_t mca_op_avx_component = {
  */
 static int avx_component_open(void)
 {
-    mca_op_avx_component.flags = has_intel_AVX_features();
-    /* A first level check to see what level of AVX is available on the
+    /* We checked the flags during register, so if they are set to
+     * zero either the architecture is not suitable or the user disabled
+     * AVX support.
+     *
+     * A first level check to see what level of AVX is available on the
      * hardware.
      *
      * Note that if this function returns non-OMPI_SUCCESS, then this
@@ -174,7 +177,7 @@ static int avx_component_close(void)
 static int
 avx_component_register(void)
 {
-    int32_t requested_flags = has_intel_AVX_features();
+    int32_t requested_flags = mca_op_avx_component.flags = has_intel_AVX_features();
     (void) mca_base_component_var_register(&mca_op_avx_component.super.opc_version,
                                            "support",
                                            "Level of SSE/MMX/AVX support to be used (combination of processor capabilities as follow SSE 0x01, SSE2 0x02, SSE3 0x04, SSE4.1 0x08, AVX 0x010, AVX2 0x020, AVX512F 0x100, AVX512BW 0x200) capped by the local architecture capabilities",
