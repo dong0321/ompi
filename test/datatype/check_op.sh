@@ -1,7 +1,8 @@
 #!/bin/bash
 
 echo "ompi version with AVX512 -- Usage: arg1: count of elements, args2: 'i'|'u'|'f'|'d' : datatype: signed, unsigned, float, double. args3 size of type. args4 operation"
-echo "mpirun -mca op_sve_hardware_available 0 -mca op_avx_hardware_available 0 -np 1 Reduce_local_float 1048576  i 8 max"
+echo "make sure to use -u -t -s !"
+echo "mpirun -np 1 reduce_local -u 1024 -t i -s 16  sum -v"
 
 Orange="\033[0;33m"
 Blue="\033[0;34m"
@@ -17,8 +18,8 @@ for op in max min sum mul band bor bxor; do
         for size in 0 1 7 15 31 63 127 130; do
             foo=$((1024 * 1024 + $size))
             echo -e "Test \e[1;33m __mm512 instruction for loop \e[m Total_num_bits = $foo * $type_size "
-            echo "mpirun -np 1 reduce_local $foo i $type_size $op"
-            mpirun -np 1 reduce_local $foo i $type_size $op
+            echo "mpirun -np 1 reduce_local -u $foo -t i -s $type_size $op -v"
+            mpirun -np 1 reduce_local -u $foo -t i -s $type_size $op -v
         done
         echo -e "\n\n"
     done
@@ -35,8 +36,8 @@ for op in max min sum mul band bor bxor; do
         for size in 0 1 7 15 31 63 127 130; do
             foo=$((1024 * 1024 + $size))
             echo -e "Test \e[1;33m __mm512 instruction for loop \e[m Total_num_bits = $foo * $type_size"
-            echo "mpirun -np 1 reduce_local $foo u $type_size $op"
-            mpirun -np 1 reduce_local $foo u $type_size $op 
+            echo "mpirun -np 1 reduce_local -u $foo -t u -s $type_size $op -v"
+            mpirun -np 1 reduce_local -u $foo -t u -s $type_size $op -v
         done
     done
 done
@@ -49,7 +50,8 @@ for op in max min sum mul; do
     for size in 1024 127 130; do
         foo=$((1024 * 1024 + $size))
         echo -e "Test \e[1;33m __mm512 instruction for loop \e[m Total_num_bits = $foo * 32"
-        mpirun -np 1 reduce_local $foo f 32 $op
+        echo "mpirun -np 1 reduce_local -u $foo -t f -s 32 $op -v"
+        mpirun -np 1 reduce_local -u $foo -t f -s 32 $op -v
     done
 done
 
@@ -59,7 +61,8 @@ for op in max min sum mul; do
     for size in 1024 127 130; do
         foo=$((1024 * 1024 + $size))
         echo -e "Test \e[1;33m __mm512 instruction for loop \e[m Total_num_bits = $foo * 64"
-        mpirun -np 1 reduce_local $foo d 64 $op
+        echo "mpirun -np 1 reduce_local -u $foo -t d -s 64 $op -v"
+        mpirun -np 1 reduce_local -u $foo -t d -s 64 $op -v
     done
 done
 

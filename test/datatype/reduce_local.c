@@ -671,7 +671,7 @@ int main(int argc, char **argv)
                     *inout_uint8_for_check = (uint8_t*)inout_check_buf;
                 for( i = 0; i < count; i++ ) {
                     in_uint8[i] = 5;
-                    inout_uint8[i] = inout_uint8_for_check[i] = -3;
+                    inout_uint8[i] = inout_uint8_for_check[i] = 3;
                 }
                 mpi_type = "MPI_UINT8_T";
 
@@ -794,7 +794,7 @@ int main(int argc, char **argv)
                     *inout_uint16_for_check = (uint16_t*)inout_check_buf;
                 for( i = 0; i < count; i++ ) {
                     in_uint16[i] = 5;
-                    inout_uint16[i] = inout_uint16_for_check[i] = -3;
+                    inout_uint16[i] = inout_uint16_for_check[i] = 3;
                 }
                 mpi_type = "MPI_UINT16_T";
 
