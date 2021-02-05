@@ -32,6 +32,10 @@ opal_pack_general_checksum( opal_convertor_t* pConvertor,
                             struct iovec* iov, uint32_t* out_size,
                             size_t* max_data );
 OPAL_DECLSPEC int32_t
+opal_pack_single_checksum( opal_convertor_t* pConvertor,
+                           struct iovec* iov, uint32_t* out_size,
+                           size_t* max_data );
+OPAL_DECLSPEC int32_t
 opal_unpack_general( opal_convertor_t* pConvertor,
                      struct iovec* iov, uint32_t* out_size,
                      size_t* max_data );
@@ -59,6 +63,10 @@ int32_t
 opal_pack_homogeneous_contig_with_gaps_checksum( opal_convertor_t* pConv,
                                              struct iovec* iov, uint32_t* out_size,
                                              size_t* max_data );
+OPAL_DECLSPEC int32_t
+opal_pack_single( opal_convertor_t* pConvertor,
+                  struct iovec* iov, uint32_t* out_size,
+                  size_t* max_data );
 int32_t
 opal_generic_simple_pack( opal_convertor_t* pConvertor,
                           struct iovec* iov, uint32_t* out_size,

@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <math.h>
 
-#if 0 && OPEN_MPI
+#if 1 && OPEN_MPI
 extern void ompi_datatype_dump( MPI_Datatype ddt );
 #define MPI_DDT_DUMP(ddt) ompi_datatype_dump( (ddt) )
 #else
@@ -509,7 +509,7 @@ int main( int argc, char* argv[] )
     MPI_Datatype ddt;
 
     run_tests |= DO_PACK | DO_UNPACK;
-    
+    run_tests = DO_INDEXED_GAP | DO_OPTIMIZED_INDEXED_GAP | DO_PACK | DO_UNPACK;
     MPI_Init (&argc, &argv);
 
     MPI_Comm_rank (MPI_COMM_WORLD, &rank);
