@@ -42,6 +42,8 @@
 #include "opal/datatype/opal_datatype_unpack.h"
 #include "opal/datatype/opal_datatype_prototypes.h"
 
+#define vector_length 512/8
+
 #if defined(CHECKSUM)
 #define opal_unpack_general_function            opal_unpack_general_checksum
 #define opal_unpack_homogeneous_contig_function opal_unpack_homogeneous_contig_checksum
@@ -201,8 +203,16 @@ opal_unpack_partial_datatype( opal_convertor_t* pConvertor, dt_elem_desc_t* pEle
 #endif
 
     /* Then unpack the data into the user memory */
-    UNPACK_PREDEFINED_DATATYPE( pConvertor, pElem, count_desc,
-                                temporary_buffer, *user_buffer, data_length );
+    if (pElem->elem.blocklen < vector_length/2)
+    {
+        UNPACK_PREDEFINED_DATATYPE_AVX( pConvertor, pElem, count_desc,
+                temporary_buffer, *user_buffer, data_length );
+    }
+    else
+    {
+        UNPACK_PREDEFINED_DATATYPE( pConvertor, pElem, count_desc,
+                temporary_buffer, *user_buffer, data_length );
+    }
 
     /* reload the length as it is reset by the macro */
     data_length = opal_datatype_basicDatatypes[pElem->elem.common.type]->size;
