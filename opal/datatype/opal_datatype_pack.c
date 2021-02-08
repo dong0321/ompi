@@ -31,6 +31,8 @@
 #if OPAL_ENABLE_DEBUG
 #include "opal/util/output.h"
 
+#define vector_length 512/8
+
 #define DO_DEBUG(INST)  if( opal_ddt_pack_debug ) { INST }
 #else
 #define DO_DEBUG(INST)
@@ -292,8 +294,16 @@ opal_generic_simple_pack_function( opal_convertor_t* pConvertor,
         while( 1 ) {
             while( pElem->elem.common.flags & OPAL_DATATYPE_FLAG_DATA ) {
                 /* we have a basic datatype (working on full blocks) */
-                PACK_PREDEFINED_DATATYPE( pConvertor, pElem, count_desc,
-                                          conv_ptr, iov_ptr, iov_len_local );
+                if (pElem->elem.blocklen < vector_length/2)
+                {
+                    PACK_PREDEFINED_DATATYPE_AVX( pConvertor, pElem, count_desc,
+                            conv_ptr, iov_ptr, iov_len_local );
+                }
+                else
+                {
+                    PACK_PREDEFINED_DATATYPE( pConvertor, pElem, count_desc,
+                                              conv_ptr, iov_ptr, iov_len_local );
+                }
                 if( 0 != count_desc )  /* completed? */
                     goto complete_loop;
                 conv_ptr = pConvertor->pBaseBuf + pStack->disp;
